@@ -17,7 +17,7 @@
 
 package inet.examples.ieee802154;
 
-import inet.applications.generic.IPvXTrafGen;
+import inet.applications.generic.PRRTrafGen;
 import inet.node.inet.WirelessHost;
 import inet.linklayer.ieee802154.Ieee802154NarrowbandNic;
 import inet.routing.gpsr.GPSR;
@@ -46,7 +46,7 @@ module IEEE802154ExampleHost extends WirelessHost
         *.networkProtocolModule = "^.generic.gnp";
 
     submodules:
-        trafficgen: IPvXTrafGen {
+        trafficgen: PRRTrafGen {
             @display("p=188,287");
         }
 
