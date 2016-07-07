@@ -53,16 +53,8 @@ void PRRTrafGen::initialize(int stage)
         continueSendingDummyPackets = par("continueSendingDummyPackets");
 
         // subscribe to sink signal
-        std::string path = this->getFullPath();
-        std::size_t hostStart = path.find("host[");
-        if(hostStart != std::string::npos) {
-            std::size_t hostEnd = path.find("]",hostStart);
-            if(hostEnd != std::string::npos) {
-                std::stringstream s;
-                s << "rcvdPkFrom-host[" << path.substr(hostStart+5,hostEnd-hostStart-5) << "].wlan[0]";
-                getSimulation()->getSystemModule()->subscribe(s.str().c_str(), this);
-            }
-        }
+        std::string signalName = extractHostName(this->getFullPath());
+        getSimulation()->getSystemModule()->subscribe(signalName.c_str(), this);
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
         shutdownTimer = new cMessage("shutdownTimer");
@@ -142,6 +134,20 @@ void PRRTrafGen::sendPacket()
     }
 }
 
+std::string PRRTrafGen::extractHostName(const std::string& sourceName) {
+    std::string signalName = "";
+    std::size_t hostStart = sourceName.find("host[");
+    if (hostStart != std::string::npos) {
+        std::size_t hostEnd = sourceName.find("]", hostStart);
+        if (hostEnd != std::string::npos) {
+            std::stringstream s;
+            s << "rcvdPkFrom-host[" << sourceName.substr(hostStart + 5, hostEnd - hostStart - 5) << "]";
+            signalName = s.str();
+        }
+    }
+    return signalName;
+}
+
 void PRRTrafGen::processPacket(cPacket *msg)
 {
     // Throw away dummy packets
@@ -155,13 +161,12 @@ void PRRTrafGen::processPacket(cPacket *msg)
     if (ctrl != nullptr) {
         auto it = rcvdPkFromSignals.find(ctrl->getSourceAddress());
         if(it == rcvdPkFromSignals.end()) {
-            char signalName[32];
-            sprintf(signalName, "rcvdPkFrom-%s", ctrl->getSourceAddress().str().c_str());
-            auto signal = registerSignal(signalName);
+            std::string signalName = extractHostName(ctrl->getSourceAddress().str());
+            auto signal = registerSignal(signalName.c_str());
 
             cProperty *statisticTemplate =
                 getProperties()->get("statisticTemplate", "rcvdPkFrom");
-            getSimulation()->getActiveEnvir()->addResultRecorders(this, signal, signalName, statisticTemplate);
+            getSimulation()->getActiveEnvir()->addResultRecorders(this, signal, signalName.c_str(), statisticTemplate);
 
             rcvdPkFromSignals[ctrl->getSourceAddress()] = signal;
             it = rcvdPkFromSignals.find(ctrl->getSourceAddress());
