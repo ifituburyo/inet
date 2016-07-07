@@ -603,6 +603,9 @@ void Radio::refreshDisplay() const
     // avoid a big modification, we reuse those methods.
     if (hasGUI() && (displayInterferenceRange || displayCommunicationRange)) {
         cModule *host = findContainingNode(const_cast<Radio*>(this));
+        while(host->getParentModule() && host->getParentModule()->getId() != 1) {
+            host = host->getParentModule();
+        }
         cDisplayString& displayString = host->getDisplayString();
         if (displayInterferenceRange) {
             m maxInterferenceRage = check_and_cast<const RadioMedium *>(medium)->getMediumLimitCache()->getMaxInterferenceRange(this);
