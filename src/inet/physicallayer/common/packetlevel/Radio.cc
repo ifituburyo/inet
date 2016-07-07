@@ -604,6 +604,9 @@ void Radio::updateDisplayString()
     // avoid a big modification, we reuse those methods.
     if (hasGUI() && (displayInterferenceRange || displayCommunicationRange)) {
         cModule *host = findContainingNode(this);
+        while(host->getParentModule() && host->getParentModule()->getId() != 1) {
+            host = host->getParentModule();
+        }
         cDisplayString& displayString = host->getDisplayString();
         if (displayInterferenceRange) {
             m maxInterferenceRage = check_and_cast<const RadioMedium *>(medium)->getMediumLimitCache()->getMaxInterferenceRange(this);
