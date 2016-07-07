@@ -80,6 +80,9 @@ class INET_API PRRTrafGen : public IPvXTrafGen, public cIListener
   public:
     PRRTrafGen();
     virtual ~PRRTrafGen();
+
+private:
+    std::string extractHostName(const std::string& sourceName);
 };
 
 } // namespace inet
