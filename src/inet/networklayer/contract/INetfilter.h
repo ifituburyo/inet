@@ -146,14 +146,17 @@ class INET_API NetfilterBase : public INetfilter {
     std::multimap<int, IHook *> hooks;
 
   public:
-    virtual void registerHook(int priority, INetfilter::IHook *hook) override
-    {
+    virtual ~NetfilterBase() {
+        for (auto hook: hooks)
+            check_and_cast<HookBase *>(hook.second)->unregisteredFrom(this);
+    }
+
+    virtual void registerHook(int priority, INetfilter::IHook *hook) override {
         hooks.insert(std::pair<int, INetfilter::IHook *>(priority, hook));
         check_and_cast<HookBase *>(hook)->registeredTo(this);
     }
 
-    virtual void unregisterHook(INetfilter::IHook *hook) override
-    {
+    virtual void unregisterHook(INetfilter::IHook *hook) override {
         for (auto iter = hooks.begin(); iter != hooks.end(); iter++) {
             if (iter->second == hook) {
                 hooks.erase(iter);
