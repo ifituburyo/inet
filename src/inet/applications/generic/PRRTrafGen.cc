@@ -30,8 +30,14 @@ Define_Module(PRRTrafGen);
 
 simsignal_t PRRTrafGen::sinkRcvdPkSignal = registerSignal("sinkRcvdPk");
 simsignal_t PRRTrafGen::sentDummyPkSignal = registerSignal("sentDummyPk");
+simsignal_t PRRTrafGen::intermediatePRRSignal = registerSignal("intermediatePRR");
 int PRRTrafGen::initializedCount = 0;
 int PRRTrafGen::finishedCount = 0;
+int PRRTrafGen::receivedCurrentInterval = 0;
+int PRRTrafGen::sentCurrentInterval = 0;
+int PRRTrafGen::receivedPreviousInterval = 0;
+int PRRTrafGen::sentPreviousInterval = 0;
+cMessage *PRRTrafGen::intermediatePRRTimer = 0;
 
 PRRTrafGen::PRRTrafGen()
 {
@@ -40,6 +46,11 @@ PRRTrafGen::PRRTrafGen()
 PRRTrafGen::~PRRTrafGen()
 {
     cancelAndDelete(shutdownTimer);
+
+    if(intermediatePRRTimer != nullptr) {
+        cancelAndDelete(intermediatePRRTimer);
+        intermediatePRRTimer = nullptr;
+    }
 }
 
 void PRRTrafGen::initialize(int stage)
@@ -51,6 +62,7 @@ void PRRTrafGen::initialize(int stage)
         warmUpDuration = par("warmUpDuration");
         coolDownDuration = par("coolDownDuration");
         continueSendingDummyPackets = par("continueSendingDummyPackets");
+        intermediatePRRInterval = par("intermediatePRRInterval");
 
         // subscribe to sink signal
         std::string signalName = extractHostName(this->getFullPath());
@@ -58,17 +70,24 @@ void PRRTrafGen::initialize(int stage)
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
         shutdownTimer = new cMessage("shutdownTimer");
+
+        if(intermediatePRRTimer == nullptr) { // only one node shall handle these events
+            intermediatePRRTimer = new cMessage("intermediatePRRTimer");
+            scheduleAt(simTime()+intermediatePRRInterval, intermediatePRRTimer);
+        }
     }
 }
 
 void PRRTrafGen::receiveSignal(cComponent *prev, simsignal_t t, cObject *obj DETAILS_ARG) {
     unsigned int num = atoi(((cPacket*)obj)->getName()+strlen("appData-"));
+
     if(packetReceived.size() < num+1) {
         packetReceived.resize(num+1,false);
     }
 
-    if(!packetReceived[num]) {
+    if(!packetReceived[num]) { // handle duplicates
         packetReceived[num] = true;
+        receivedCurrentInterval++;
         emit(sinkRcvdPkSignal, obj);
     }
 }
@@ -91,6 +110,14 @@ void PRRTrafGen::handleMessage(cMessage *msg)
 {
     if(msg == shutdownTimer) {
         endSimulation();
+    }
+    else if(msg == intermediatePRRTimer) {
+        emit(intermediatePRRSignal, (receivedPreviousInterval + receivedCurrentInterval) / (double)(sentPreviousInterval + sentCurrentInterval));
+        receivedPreviousInterval = receivedCurrentInterval;
+        sentPreviousInterval = sentCurrentInterval;
+        receivedCurrentInterval = 0;
+        sentCurrentInterval = 0;
+        scheduleAt(simTime()+intermediatePRRInterval, intermediatePRRTimer);
     }
     else {
         IPvXTrafGen::handleMessage(msg);
@@ -118,6 +145,8 @@ void PRRTrafGen::sendPacket()
     controlInfo->setDestinationAddress(destAddr);
     controlInfo->setTransportProtocol(protocol);
     payload->setControlInfo(check_and_cast<cObject *>(controlInfo));
+
+    sentCurrentInterval++;
 
     if(!dummy) {
         EV_INFO << "Sending packet: ";
