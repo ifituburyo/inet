@@ -49,12 +49,13 @@ class INET_API PRRTrafGen : public IPvXTrafGen, public cIListener
     cMessage *shutdownTimer = nullptr;
 
     simtime_t intermediatePRRInterval;
+    double intermediatePRRAlpha;
     static simsignal_t intermediatePRRSignal;
     static cMessage *intermediatePRRTimer;
     static int sentCurrentInterval;
     static int receivedCurrentInterval;
-    static int sentPreviousInterval;
-    static int receivedPreviousInterval;
+    static double sentPerIntervalSmooth;
+    static double receivedPerIntervalSmooth;
 
   protected:
     virtual void initialize(int stage) override;

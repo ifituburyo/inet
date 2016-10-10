@@ -35,8 +35,8 @@ int PRRTrafGen::initializedCount = 0;
 int PRRTrafGen::finishedCount = 0;
 int PRRTrafGen::receivedCurrentInterval = 0;
 int PRRTrafGen::sentCurrentInterval = 0;
-int PRRTrafGen::receivedPreviousInterval = 0;
-int PRRTrafGen::sentPreviousInterval = 0;
+double PRRTrafGen::receivedPerIntervalSmooth = 0;
+double PRRTrafGen::sentPerIntervalSmooth = 0;
 cMessage *PRRTrafGen::intermediatePRRTimer = 0;
 
 PRRTrafGen::PRRTrafGen()
@@ -63,6 +63,7 @@ void PRRTrafGen::initialize(int stage)
         coolDownDuration = par("coolDownDuration");
         continueSendingDummyPackets = par("continueSendingDummyPackets");
         intermediatePRRInterval = par("intermediatePRRInterval");
+        intermediatePRRAlpha = par("intermediatePRRAlpha");
 
         // subscribe to sink signal
         std::string signalName = extractHostName(this->getFullPath());
@@ -112,9 +113,9 @@ void PRRTrafGen::handleMessage(cMessage *msg)
         endSimulation();
     }
     else if(msg == intermediatePRRTimer) {
-        emit(intermediatePRRSignal, (receivedPreviousInterval + receivedCurrentInterval) / (double)(sentPreviousInterval + sentCurrentInterval));
-        receivedPreviousInterval = receivedCurrentInterval;
-        sentPreviousInterval = sentCurrentInterval;
+        sentPerIntervalSmooth = intermediatePRRAlpha * sentCurrentInterval + (1-intermediatePRRAlpha) * sentPerIntervalSmooth;
+        receivedPerIntervalSmooth = intermediatePRRAlpha * receivedCurrentInterval + (1-intermediatePRRAlpha) * receivedPerIntervalSmooth;
+        emit(intermediatePRRSignal, receivedPerIntervalSmooth / sentPerIntervalSmooth);
         receivedCurrentInterval = 0;
         sentCurrentInterval = 0;
         scheduleAt(simTime()+intermediatePRRInterval, intermediatePRRTimer);
