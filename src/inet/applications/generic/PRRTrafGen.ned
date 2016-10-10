@@ -32,7 +32,7 @@ simple PRRTrafGen extends IPvXTrafGen
         double coolDownDuration @unit("s") = default(10s);
         bool continueSendingDummyPackets = default(true);
         double intermediatePRRInterval @unit("s") = default(1s);
-        double intermediatePRRAlpha @unit("s") = default(0.9);
+        double intermediatePRRAlpha = default(0.2);
         
         @signal[sinkRcvdPk](type=cPacket);
         @signal[sentDummyPk](type=cPacket);

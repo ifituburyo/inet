@@ -68,6 +68,8 @@ void PRRTrafGen::initialize(int stage)
         // subscribe to sink signal
         std::string signalName = extractHostName(this->getFullPath());
         getSimulation()->getSystemModule()->subscribe(signalName.c_str(), this);
+
+        getSimulation()->getSystemModule()->subscribe("frameDropped", this);
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
         shutdownTimer = new cMessage("shutdownTimer");
@@ -115,6 +117,8 @@ void PRRTrafGen::handleMessage(cMessage *msg)
     else if(msg == intermediatePRRTimer) {
         sentPerIntervalSmooth = intermediatePRRAlpha * sentCurrentInterval + (1-intermediatePRRAlpha) * sentPerIntervalSmooth;
         receivedPerIntervalSmooth = intermediatePRRAlpha * receivedCurrentInterval + (1-intermediatePRRAlpha) * receivedPerIntervalSmooth;
+        std::cout.precision(3);
+        std::cout << std::fixed << receivedCurrentInterval << " " << sentCurrentInterval << " " << receivedCurrentInterval/(double)sentCurrentInterval << " " <<  receivedPerIntervalSmooth << " " << sentPerIntervalSmooth << " " << receivedPerIntervalSmooth / sentPerIntervalSmooth << std::endl;
         emit(intermediatePRRSignal, receivedPerIntervalSmooth / sentPerIntervalSmooth);
         receivedCurrentInterval = 0;
         sentCurrentInterval = 0;
