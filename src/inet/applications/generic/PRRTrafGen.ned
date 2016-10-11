@@ -36,7 +36,7 @@ simple PRRTrafGen extends IPvXTrafGen
         
         @signal[sinkRcvdPk](type=cPacket);
         @signal[sentDummyPk](type=cPacket);
-        @signal[intermediatePRR](type=double);
+        @signal[intermediatePRR](type=string);
         @signal[rcvdPkFrom-*](type=cPacket);
         @statisticTemplate[rcvdPkFrom](record=count);
         @statistic[sinkRcvdPk](title="own packets received by sink"; source=sinkRcvdPk; record=count,vector(packetBytes); interpolationmode=none);

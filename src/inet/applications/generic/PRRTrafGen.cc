@@ -35,9 +35,14 @@ int PRRTrafGen::initializedCount = 0;
 int PRRTrafGen::finishedCount = 0;
 int PRRTrafGen::receivedCurrentInterval = 0;
 int PRRTrafGen::sentCurrentInterval = 0;
+int PRRTrafGen::droppedCurrentInterval = 0;
 double PRRTrafGen::receivedPerIntervalSmooth = 0;
 double PRRTrafGen::sentPerIntervalSmooth = 0;
 cMessage *PRRTrafGen::intermediatePRRTimer = 0;
+
+double lastV = 0;
+double lastMean = 0;
+int cnt = 0;
 
 PRRTrafGen::PRRTrafGen()
 {
@@ -68,8 +73,6 @@ void PRRTrafGen::initialize(int stage)
         // subscribe to sink signal
         std::string signalName = extractHostName(this->getFullPath());
         getSimulation()->getSystemModule()->subscribe(signalName.c_str(), this);
-
-        getSimulation()->getSystemModule()->subscribe("frameDropped", this);
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
         shutdownTimer = new cMessage("shutdownTimer");
@@ -81,18 +84,32 @@ void PRRTrafGen::initialize(int stage)
     }
 }
 
+void PRRTrafGen::messageDeliveredOrDropped(cPacket* pkt, bool dropped) {
+    unsigned int num = atoi(pkt->getName()+strlen("appData-"));
+
+    if(packetReceivedOrDropped.size() < num+1) {
+        packetReceivedOrDropped.resize(num+1,false);
+    }
+
+    if(!packetReceivedOrDropped[num]) { // handle duplicates
+        packetReceivedOrDropped[num] = true;
+        if(!dropped) {
+            receivedCurrentInterval++;
+            emit(sinkRcvdPkSignal, pkt);
+        }
+        else {
+            droppedCurrentInterval++;
+        }
+    }
+}
+
 void PRRTrafGen::receiveSignal(cComponent *prev, simsignal_t t, cObject *obj DETAILS_ARG) {
-    unsigned int num = atoi(((cPacket*)obj)->getName()+strlen("appData-"));
+    messageDeliveredOrDropped((cPacket*)obj,false);
+}
 
-    if(packetReceived.size() < num+1) {
-        packetReceived.resize(num+1,false);
-    }
-
-    if(!packetReceived[num]) { // handle duplicates
-        packetReceived[num] = true;
-        receivedCurrentInterval++;
-        emit(sinkRcvdPkSignal, obj);
-    }
+void PRRTrafGen::handleDroppedPacket(cPacket *msg) {
+    messageDeliveredOrDropped(msg,true);
+    delete msg;
 }
 
 bool PRRTrafGen::isEnabled()
@@ -115,13 +132,24 @@ void PRRTrafGen::handleMessage(cMessage *msg)
         endSimulation();
     }
     else if(msg == intermediatePRRTimer) {
+        cnt++;
+        double val = sentCurrentInterval;
+        double mean = lastMean + (val - lastMean) / cnt;
+        double v = lastV + (val - lastMean)*(val - mean);
+        double var = v / (cnt-1);
         sentPerIntervalSmooth = intermediatePRRAlpha * sentCurrentInterval + (1-intermediatePRRAlpha) * sentPerIntervalSmooth;
         receivedPerIntervalSmooth = intermediatePRRAlpha * receivedCurrentInterval + (1-intermediatePRRAlpha) * receivedPerIntervalSmooth;
         std::cout.precision(3);
-        std::cout << std::fixed << receivedCurrentInterval << " " << sentCurrentInterval << " " << receivedCurrentInterval/(double)sentCurrentInterval << " " <<  receivedPerIntervalSmooth << " " << sentPerIntervalSmooth << " " << receivedPerIntervalSmooth / sentPerIntervalSmooth << std::endl;
-        emit(intermediatePRRSignal, receivedPerIntervalSmooth / sentPerIntervalSmooth);
+        std::cout << std::fixed << var << " " << mean << " " << val << std::endl;
+        //droppedCurrentInterval << " " << receivedCurrentInterval << " " << sentCurrentInterval << " " << receivedCurrentInterval/(double)sentCurrentInterval << " " <<  receivedPerIntervalSmooth << " " << sentPerIntervalSmooth << " " << receivedPerIntervalSmooth / sentPerIntervalSmooth << std::endl;
+        std::stringstream stream;
+        stream << receivedCurrentInterval << "," << droppedCurrentInterval;
+        emit(intermediatePRRSignal, stream.str().c_str());
+        lastMean = mean;
+        lastV = v;
         receivedCurrentInterval = 0;
         sentCurrentInterval = 0;
+        droppedCurrentInterval = 0;
         scheduleAt(simTime()+intermediatePRRInterval, intermediatePRRTimer);
     }
     else {

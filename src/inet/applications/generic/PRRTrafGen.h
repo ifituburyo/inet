@@ -54,6 +54,7 @@ class INET_API PRRTrafGen : public IPvXTrafGen, public cIListener
     static cMessage *intermediatePRRTimer;
     static int sentCurrentInterval;
     static int receivedCurrentInterval;
+    static int droppedCurrentInterval;
     static double sentPerIntervalSmooth;
     static double receivedPerIntervalSmooth;
 
@@ -84,11 +85,15 @@ class INET_API PRRTrafGen : public IPvXTrafGen, public cIListener
 
     virtual void receiveSignal(cComponent *prev, simsignal_t t, cObject *obj DETAILS_ARG) override;
 
-    std::vector<bool> packetReceived;
+    std::vector<bool> packetReceivedOrDropped;
+
+    void messageDeliveredOrDropped(cPacket* pkt, bool dropped);
 
   public:
     PRRTrafGen();
     virtual ~PRRTrafGen();
+
+    void handleDroppedPacket(cPacket *msg);
 
 private:
     std::string extractHostName(const std::string& sourceName);
