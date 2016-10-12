@@ -834,6 +834,11 @@ void CSMA::handleSelfMessage(cMessage *msg)
  */
 void CSMA::handleLowerPacket(cPacket *msg)
 {
+    if (msg->hasBitError()) {
+        delete msg;
+        return;
+    }
+
     CSMAFrame *macPkt = static_cast<CSMAFrame *>(msg);
     const MACAddress& src = macPkt->getSrcAddr();
     const MACAddress& dest = macPkt->getDestAddr();
