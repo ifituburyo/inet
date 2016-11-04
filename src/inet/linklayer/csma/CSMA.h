@@ -303,9 +303,9 @@ class INET_API CSMA : public MACProtocolBase, public IMACProtocol
     // FSM functions
     void fsmError(t_mac_event event, cMessage *msg);
     void executeMac(t_mac_event event, cMessage *msg);
-    void updateStatusIdle(t_mac_event event, cMessage *msg);
+    virtual void updateStatusIdle(t_mac_event event, cMessage *msg);
     void updateStatusBackoff(t_mac_event event, cMessage *msg);
-    void updateStatusCCA(t_mac_event event, cMessage *msg);
+    virtual void updateStatusCCA(t_mac_event event, cMessage *msg);
     void updateStatusTransmitFrame(t_mac_event event, cMessage *msg);
     void updateStatusWaitAck(t_mac_event event, cMessage *msg);
     void updateStatusSIFS(t_mac_event event, cMessage *msg);
@@ -315,7 +315,7 @@ class INET_API CSMA : public MACProtocolBase, public IMACProtocol
     void updateMacState(t_mac_states newMacState);
 
     void attachSignal(CSMAFrame *mac, simtime_t_cref startTime);
-    void manageMissingAck(t_mac_event event, cMessage *msg);
+    virtual void manageMissingAck(t_mac_event event, cMessage *msg);
     void startTimer(t_mac_timer timer);
 
     virtual simtime_t scheduleBackoff();
