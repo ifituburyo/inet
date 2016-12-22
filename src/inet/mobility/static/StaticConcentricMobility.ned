@@ -32,6 +32,7 @@ simple StaticConcentricMobility extends MobilityBase
         int numHosts;
         double initialZ @unit(m) = default(0m);
         double distance @unit(m) = default(100m);
+        double jitter @unit(m) = default(0m);
 
         @class(StaticConcentricMobility);
 }
