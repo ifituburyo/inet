@@ -75,6 +75,14 @@ void StaticConcentricMobility::setInitialPosition()
     }
 
     lastPosition.z = par("initialZ");
+
+    double jitter = par("jitter");
+    if(jitter > 0) {
+        lastPosition.x += (this->dblrand()-0.5)*jitter;
+        lastPosition.y += (this->dblrand()-0.5)*jitter;
+        lastPosition.z += (this->dblrand()-0.5)*jitter;
+    }
+
     recordScalar("x", lastPosition.x);
     recordScalar("y", lastPosition.y);
     recordScalar("z", lastPosition.z);
