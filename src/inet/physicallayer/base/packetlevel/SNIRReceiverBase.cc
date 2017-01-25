@@ -52,6 +52,11 @@ const ReceptionIndication *SNIRReceiverBase::computeReceptionIndication(const IS
 {
     auto indication = const_cast<ReceptionIndication *>(ReceiverBase::computeReceptionIndication(snir));
     indication->setMinSNIR(snir->getMin());
+
+    IScalarSignal const* scalarSignal = dynamic_cast<IScalarSignal const*>(snir->getReception());
+    if(scalarSignal) {
+        indication->setMinRSSI(scalarSignal->getPower());
+    }
     return indication;
 }
 
