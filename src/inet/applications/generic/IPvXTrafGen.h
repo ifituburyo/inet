@@ -20,6 +20,7 @@
 #define __INET_IPVXTRAFGEN_H
 
 #include <vector>
+#include <random>
 
 #include "inet/common/INETDefs.h"
 
@@ -57,6 +58,9 @@ class INET_API IPvXTrafGen : public cSimpleModule, public ILifecycle
     int numReceived = 0;
     static simsignal_t sentPkSignal;
     static simsignal_t rcvdPkSignal;
+
+    std::mt19937* gen;
+    std::exponential_distribution<>* d;
 
   protected:
     virtual void scheduleNextPacket(simtime_t previous);

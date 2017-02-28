@@ -59,6 +59,10 @@ void IPvXTrafGen::initialize(int stage)
         packetLengthPar = &par("packetLength");
         sendIntervalPar = &par("sendInterval");
 
+
+        this->gen = new std::mt19937(getRNG(0)->intRand(-1));
+        this->d = new std::exponential_distribution<>(1/sendIntervalPar->doubleValue());
+
         numSent = 0;
         numReceived = 0;
         WATCH(numSent);
@@ -145,7 +149,7 @@ void IPvXTrafGen::scheduleNextPacket(simtime_t previous)
         timer->setKind(START);
     }
     else {
-        next = previous + sendIntervalPar->doubleValue();
+        next = previous + (*d)(*gen);
         timer->setKind(NEXT);
     }
     if (stopTime < SIMTIME_ZERO || next < stopTime)

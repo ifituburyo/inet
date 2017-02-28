@@ -119,6 +119,8 @@ void PRRTrafGen::sendPacket()
     controlInfo->setTransportProtocol(protocol);
     payload->setControlInfo(check_and_cast<cObject *>(controlInfo));
 
+    std::cout << "trace " << extractHostName(this->getFullPath()) << ": " << simTime() << std::endl;
+
     if(!dummy) {
         EV_INFO << "Sending packet: ";
         printPacket(payload);
