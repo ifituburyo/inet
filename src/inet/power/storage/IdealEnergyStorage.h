@@ -48,6 +48,8 @@ class INET_API IdealEnergyStorage : public EnergyStorageBase
 
     virtual void setPowerGeneration(int energyGeneratorId, W generatedPower) override;
     virtual void setPowerConsumption(int energyConsumerId, W consumedPower) override;
+
+    virtual J getEnergyBalance() { return energyBalance; }
 };
 
 } // namespace power
