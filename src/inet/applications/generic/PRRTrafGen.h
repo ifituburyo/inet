@@ -24,14 +24,14 @@
 #include "inet/common/INETDefs.h"
 
 #include "inet/networklayer/common/L3Address.h"
-#include "inet/applications/generic/IPvXTrafGen.h"
+#include "inet/applications/generic/IpvxTrafGen.h"
 
 namespace inet {
 
 /**
  * IP traffic generator application for measuring PRR.
  */
-class INET_API PRRTrafGen : public IPvXTrafGen, public cIListener
+class INET_API PRRTrafGen : public IpvxTrafGen, public cIListener
 {
   protected:
     // statistic

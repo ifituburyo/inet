@@ -19,7 +19,7 @@
 
 package inet.applications.generic;
 
-simple PRRTrafGen extends IPvXTrafGen
+simple PRRTrafGen extends IpvxTrafGen
 {
     parameters:
         // After the startTime, the generator starts sending dummy packets that do
