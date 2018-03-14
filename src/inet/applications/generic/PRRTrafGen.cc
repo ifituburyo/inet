@@ -18,18 +18,20 @@
 
 #include "PRRTrafGen.h"
 
+#include "inet/common/ProtocolTag_m.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
 #include "inet/networklayer/contract/IL3AddressType.h"
-#include "inet/networklayer/contract/INetworkProtocolControlInfo.h"
 
 namespace inet {
 
 Define_Module(PRRTrafGen);
 
-simsignal_t PRRTrafGen::sinkRcvdPkSignal = registerSignal("sinkRcvdPk");
-simsignal_t PRRTrafGen::sentDummyPkSignal = registerSignal("sentDummyPk");
+omnetpp::simsignal_t PRRTrafGen::sinkRcvdPkSignal = registerSignal("sinkRcvdPk");
+omnetpp::simsignal_t PRRTrafGen::sentDummyPkSignal = registerSignal("sentDummyPk");
 int PRRTrafGen::initializedCount = 0;
 int PRRTrafGen::finishedCount = 0;
 
@@ -44,9 +46,9 @@ PRRTrafGen::~PRRTrafGen()
 
 void PRRTrafGen::initialize(int stage)
 {
-    IPvXTrafGen::initialize(stage);
+    IpvxTrafGen::initialize(stage);
 
-    if (stage == INITSTAGE_LOCAL) {
+    if (stage == inet::INITSTAGE_LOCAL) {
         initializedCount++;
         warmUpDuration = par("warmUpDuration");
         coolDownDuration = par("coolDownDuration");
@@ -56,13 +58,13 @@ void PRRTrafGen::initialize(int stage)
         std::string signalName = extractHostName(this->getFullPath());
         getSimulation()->getSystemModule()->subscribe(signalName.c_str(), this);
     }
-    else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        shutdownTimer = new cMessage("shutdownTimer");
+    else if (stage == inet::INITSTAGE_APPLICATION_LAYER) {
+        shutdownTimer = new omnetpp::cMessage("shutdownTimer");
     }
 }
 
-void PRRTrafGen::receiveSignal(cComponent *prev, simsignal_t t, cObject *obj DETAILS_ARG) {
-    unsigned int num = atoi(((cPacket*)obj)->getName()+strlen("appData-"));
+void PRRTrafGen::receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, omnetpp::cObject *obj, omnetpp::cObject *details) {
+    unsigned int num = atoi(((omnetpp::cPacket*)obj)->getName()+strlen("appData-"));
     if(packetReceived.size() < num+1) {
         packetReceived.resize(num+1,false);
     }
@@ -80,20 +82,20 @@ bool PRRTrafGen::isEnabled()
         finishedCount++;
 
         if(finishedCount >= initializedCount) {
-            scheduleAt(simTime()+coolDownDuration, shutdownTimer);
+            scheduleAt(omnetpp::simTime() + coolDownDuration, shutdownTimer);
         }
     }
 
     return (numPackets == -1 || numSent < numPackets || continueSendingDummyPackets);
 }
 
-void PRRTrafGen::handleMessage(cMessage *msg)
+void PRRTrafGen::handleMessage(omnetpp::cMessage *msg)
 {
     if(msg == shutdownTimer) {
         endSimulation();
     }
     else {
-        IPvXTrafGen::handleMessage(msg);
+        IpvxTrafGen::handleMessage(msg);
     }
 }
 
@@ -103,52 +105,48 @@ void PRRTrafGen::sendPacket()
     char msgName[32];
     sprintf(msgName, "appData-%d", numSent);
 
-    cPacket *payload = new cPacket(msgName);
-    payload->setByteLength(packetLengthPar->longValue());
-
-    simtime_t now = simTime();
+    auto packet = new inet::Packet(msgName);
+    const auto& payload = inet::makeShared<inet::ByteCountChunk>(inet::B(*packetLengthPar));
+    auto now = omnetpp::simTime();
     bool dummy = now < startTime+warmUpDuration || (numPackets != -1 && numSent >= numPackets);
-    payload->addPar("dummy") = dummy;
+    packet->addPar("dummy") = dummy;
+    packet->insertAtEnd(payload);
 
-    L3Address destAddr = chooseDestAddr();
+    auto destAddr = chooseDestAddr();
 
-    IL3AddressType *addressType = destAddr.getAddressType();
-    INetworkProtocolControlInfo *controlInfo = addressType->createNetworkProtocolControlInfo();
-    //controlInfo->setSourceAddress();
-    controlInfo->setDestinationAddress(destAddr);
-    controlInfo->setTransportProtocol(protocol);
-    payload->setControlInfo(check_and_cast<cObject *>(controlInfo));
+    auto addressType = destAddr.getAddressType();
+    packet->addTagIfAbsent<inet::PacketProtocolTag>()->setProtocol(protocol);
+    packet->addTagIfAbsent<inet::DispatchProtocolReq>()->setProtocol(addressType->getNetworkProtocol());
+    packet->addTagIfAbsent<inet::L3AddressReq>()->setDestAddress(destAddr);
 
     if(!dummy) {
         EV_INFO << "Sending packet: ";
-        printPacket(payload);
-        emit(sentPkSignal, payload);
-        send(payload, "ipOut");
+        printPacket(packet);
+        emit(inet::sentPkSignal, packet);
+        send(packet, "ipOut");
         numSent++;
     }
     else {
         EV_INFO << "Sending dummy packet: ";
-        printPacket(payload);
-        emit(sentDummyPkSignal, payload);
-        send(payload, "ipOut");
+        printPacket(packet);
+        emit(sentDummyPkSignal, packet);
+        send(packet, "ipOut");
     }
 }
 
 std::string PRRTrafGen::extractHostName(const std::string& sourceName) {
     std::string signalName = "";
     std::size_t hostStart = sourceName.find("host[");
-    if (hostStart != std::string::npos) {
-        std::size_t hostEnd = sourceName.find("]", hostStart);
-        if (hostEnd != std::string::npos) {
-            std::stringstream s;
-            s << "rcvdPkFrom-host[" << sourceName.substr(hostStart + 5, hostEnd - hostStart - 5) << "]";
-            signalName = s.str();
-        }
-    }
+    assert(hostStart != std::string::npos);
+    std::size_t hostEnd = sourceName.find("]", hostStart);
+    assert(hostEnd != std::string::npos);
+    std::stringstream s;
+    s << "rcvdPkFrom-host[" << sourceName.substr(hostStart + 5, hostEnd - hostStart - 5) << "]";
+    signalName = s.str();
     return signalName;
 }
 
-void PRRTrafGen::processPacket(cPacket *msg)
+void PRRTrafGen::processPacket(inet::Packet *msg)
 {
     // Throw away dummy packets
     if(msg->par("dummy")) {
@@ -156,27 +154,27 @@ void PRRTrafGen::processPacket(cPacket *msg)
         return;
     }
 
-    // Emit rcvdPkFrom signal
-    INetworkProtocolControlInfo *ctrl = dynamic_cast<INetworkProtocolControlInfo *>(msg->getControlInfo());
-    if (ctrl != nullptr) {
-        auto it = rcvdPkFromSignals.find(ctrl->getSourceAddress());
+    auto tag = msg->findTag<inet::L3AddressInd>();
+    if (tag != nullptr) {
+        auto sourceAddress = tag->getSrcAddress();
+
+        auto it = rcvdPkFromSignals.find(sourceAddress);
         if(it == rcvdPkFromSignals.end()) {
-            std::string signalName = extractHostName(ctrl->getSourceAddress().str());
+            std::string signalName = extractHostName(sourceAddress.str());
             auto signal = registerSignal(signalName.c_str());
 
-            cProperty *statisticTemplate =
-                getProperties()->get("statisticTemplate", "rcvdPkFrom");
+            omnetpp::cProperty *statisticTemplate = getProperties()->get("statisticTemplate", "rcvdPkFrom");
             getSimulation()->getActiveEnvir()->addResultRecorders(this, signal, signalName.c_str(), statisticTemplate);
 
-            rcvdPkFromSignals[ctrl->getSourceAddress()] = signal;
-            it = rcvdPkFromSignals.find(ctrl->getSourceAddress());
+            rcvdPkFromSignals[sourceAddress] = signal;
+            it = rcvdPkFromSignals.find(sourceAddress);
         }
 
         emit(it->second, msg);
     }
 
-    IPvXTrafGen::processPacket(msg);
+    IpvxTrafGen::processPacket(msg);
 }
 
-} // namespace inet
+} /* namespace inet */
 

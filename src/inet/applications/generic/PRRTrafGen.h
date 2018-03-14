@@ -31,49 +31,37 @@ namespace inet {
 /**
  * IP traffic generator application for measuring PRR.
  */
-class INET_API PRRTrafGen : public IpvxTrafGen, public cIListener
+class PRRTrafGen : public inet::IpvxTrafGen, public omnetpp::cIListener
 {
   protected:
     // statistic
-    static simsignal_t sinkRcvdPkSignal;
-    static simsignal_t sentDummyPkSignal;
-    std::map<L3Address,simsignal_t> rcvdPkFromSignals;
+    static omnetpp::simsignal_t sinkRcvdPkSignal;
+    static omnetpp::simsignal_t sentDummyPkSignal;
+    std::map<inet::L3Address, omnetpp::simsignal_t> rcvdPkFromSignals;
 
     static int initializedCount;
     static int finishedCount;
     bool finished = false;
 
-    simtime_t warmUpDuration;
-    simtime_t coolDownDuration;
+    omnetpp::simtime_t warmUpDuration;
+    omnetpp::simtime_t coolDownDuration;
     bool continueSendingDummyPackets;
-    cMessage *shutdownTimer = nullptr;
+    omnetpp::cMessage *shutdownTimer = nullptr;
 
   protected:
     virtual void initialize(int stage) override;
-    virtual void processPacket(cPacket *msg) override;
+    virtual void processPacket(inet::Packet *msg) override;
     virtual void sendPacket() override;
     virtual bool isEnabled() override;
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void handleMessage(omnetpp::cMessage *msg) override;
 
-    virtual void receiveSignal(cComponent *prev, simsignal_t t, bool b DETAILS_ARG) override {
-    }
-
-    virtual void receiveSignal(cComponent *prev, simsignal_t t, long l DETAILS_ARG) override {
-    }
-
-    virtual void receiveSignal(cComponent *prev, simsignal_t t, unsigned long l DETAILS_ARG) override {
-    }
-
-    virtual void receiveSignal(cComponent *prev, simsignal_t t, double d DETAILS_ARG) override {
-    }
-
-    virtual void receiveSignal(cComponent *prev, simsignal_t t, const SimTime& v DETAILS_ARG) override {
-    }
-
-    virtual void receiveSignal(cComponent *prev, simsignal_t t, const char *s DETAILS_ARG) override {
-    }
-
-    virtual void receiveSignal(cComponent *prev, simsignal_t t, cObject *obj DETAILS_ARG) override;
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, bool b, omnetpp::cObject *details) override {}
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, long l, omnetpp::cObject *details) override {}
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, unsigned long l, omnetpp::cObject *details) override {}
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, double d, omnetpp::cObject *details) override {}
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, const omnetpp::SimTime& t, omnetpp::cObject *details) override {}
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, const char *s, omnetpp::cObject *details) override {}
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, omnetpp::cObject *obj, omnetpp::cObject *details) override;
 
     std::vector<bool> packetReceived;
 
@@ -85,7 +73,6 @@ private:
     std::string extractHostName(const std::string& sourceName);
 };
 
-} // namespace inet
+} /* namespace inet */
 
-#endif // ifndef __INET_PRRTRAFGEN_H
-
+#endif /* __INET_PRRTRAFGEN_H */

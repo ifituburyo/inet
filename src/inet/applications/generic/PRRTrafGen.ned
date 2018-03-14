@@ -19,6 +19,8 @@
 
 package inet.applications.generic;
 
+import inet.applications.generic.IpvxTrafGen;
+
 simple PRRTrafGen extends IpvxTrafGen
 {
     parameters:
@@ -32,14 +34,18 @@ simple PRRTrafGen extends IpvxTrafGen
         double coolDownDuration @unit("s") = default(10s);
         bool continueSendingDummyPackets = default(true);
         
-        @signal[sinkRcvdPk](type=cPacket);
-        @signal[sentDummyPk](type=cPacket);
-        @signal[rcvdPkFrom-*](type=cPacket);
+        @signal[sentPk](type=inet::Packet);
+        @signal[rcvdPk](type=inet::Packet);
+        @signal[sinkRcvdPk](type=inet::Packet);
+        @signal[sentDummyPk](type=inet::Packet);
+        @signal[rcvdPkFrom-*](type=inet::Packet);
+
         @statisticTemplate[rcvdPkFrom](record=count);
         @statistic[sinkRcvdPk](title="own packets received by sink"; source=sinkRcvdPk; record=count,vector(packetBytes); interpolationmode=none);
         @statistic[sentDummyPk](title="dummy packets sent"; source=sentDummyPk; record=count,vector(packetBytes); interpolationmode=none);
         @statistic[sinkRcvdPkDelay](title="delay of own packets received by sink"; source=messageAge(sinkRcvdPk); record=mean,max; interpolationmode=none);
         @statistic[PRR](title="PRR"; source=count(sinkRcvdPk)/count(sentPk); record=last,vector; interpolationmode=none);
+
         @class(PRRTrafGen);
 }
 
