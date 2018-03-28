@@ -40,7 +40,7 @@
 #ifdef WITH_IPv4
 #include "inet/networklayer/arp/ipv4/ArpPacket_m.h"
 #include "inet/networklayer/ipv4/IcmpHeader.h"
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #endif // ifdef WITH_IPv4
 
 #ifdef WITH_IPv6
@@ -61,7 +61,6 @@ PacketDump::~PacketDump()
 }
 
 #ifdef WITH_SCTP
-#if 0
 void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::SctpHeader>& sctpmsg,
         const std::string& srcAddr, const std::string& destAddr, const char *comment)
 {
@@ -82,19 +81,15 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
     out << srcAddr << "." << sctpmsg->getSrcPort() << " > "
         << destAddr << "." << sctpmsg->getDestPort() << ": ";
 
-    if (sctpmsg->hasBitError()) {
-        sctpmsg->setChecksumOk(false);
-    }
+    numberOfChunks = sctpmsg->getSctpChunksArraySize();
+    out << "numberOfChunks=" << numberOfChunks << " VTag=" << sctpmsg->getVTag() << "\n";
 
-    numberOfChunks = sctpmsg->getChunksArraySize();
-    out << "numberOfChunks=" << numberOfChunks << " VTag=" << sctpmsg->getTag() << "\n";
-
-    if (sctpmsg->hasBitError())
+    if (pk->hasBitError())
         out << "Packet has bit error!!\n";
 
     for (uint32 i = 0; i < numberOfChunks; i++) {
-        chunk = (SctpChunk *)sctpmsg->getChunks(i);
-        type = chunk->getChunkType();
+        chunk = (SctpChunk *)sctpmsg->getSctpChunks(i);
+        type = chunk->getSctpChunkType();
 
         // FIXME create a getChunkTypeName(SctpChunkType x) function in SCTP code and use it!
         switch (type) {
@@ -156,8 +151,8 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
         out << endl;
 
         for (uint32 i = 0; i < numberOfChunks; i++) {
-            chunk = (SctpChunk *)sctpmsg->getChunks(i);
-            type = chunk->getChunkType();
+            chunk = (SctpChunk *)sctpmsg->getSctpChunks(i);
+            type = chunk->getSctpChunkType();
 
             sprintf(buf, "   %3u: ", i + 1);
             out << buf;
@@ -175,7 +170,7 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
                     out << "; IS=";
                     out << initChunk->getNoInStreams();
                     out << "; InitialTSN=";
-                    out << initChunk->getInitTSN();
+                    out << initChunk->getInitTsn();
 
                     if (initChunk->getAddressesArraySize() > 0) {
                         out << "; Addresses=";
@@ -207,7 +202,7 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
                     out << "; IS=";
                     out << initackChunk->getNoInStreams();
                     out << "; InitialTSN=";
-                    out << initackChunk->getInitTSN();
+                    out << initackChunk->getInitTsn();
                     out << "; CookieLength=";
                     out << initackChunk->getCookieArraySize();
 
@@ -228,7 +223,7 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
 
                 case COOKIE_ECHO:
                     out << "COOKIE_ECHO[CookieLength=";
-                    out << chunk->getBitLength() / 8 - 4;
+                    out << chunk->getLength() - 4;
                     out << "]";
                     break;
 
@@ -248,7 +243,7 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
                     out << "; PPID=";
                     out << dataChunk->getPpid();
                     out << "; PayloadLength=";
-                    out << dataChunk->getBitLength() / 8 - 16;
+                    out << dataChunk->getLength() - 16;
                     out << "]";
                     break;
                 }
@@ -291,7 +286,7 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
                     SctpHeartbeatChunk *heartbeatChunk;
                     heartbeatChunk = check_and_cast<SctpHeartbeatChunk *>(chunk);
                     out << "HEARTBEAT[InfoLength=";
-                    out << chunk->getBitLength() / 8 - 4;
+                    out << chunk->getLength() - 4;
                     out << "; time=";
                     out << heartbeatChunk->getTimeField();
                     out << "]";
@@ -299,7 +294,7 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
 
                 case HEARTBEAT_ACK:
                     out << "HEARTBEAT_ACK[InfoLength=";
-                    out << chunk->getBitLength() / 8 - 4;
+                    out << chunk->getLength() - 4;
                     out << "]";
                     break;
 
@@ -353,7 +348,6 @@ void PacketDump::sctpDump(const char *label, Packet * pk, const Ptr<const sctp::
     out << endl;
 }
 #endif // ifndef WITH_SCTP
-#endif
 
 void PacketDump::dump(const char *label, const char *msg)
 {
@@ -376,36 +370,34 @@ void PacketDump::dumpPacket(bool l2r, cPacket *msg)
     std::string leftAddr = "A";
     std::string rightAddr = "B";
     packet = packet->dup();
-    while(const auto& chunk = packet->popHeader(b(-1), Chunk::PF_ALLOW_NULLPTR)) {
+    while(const auto& chunk = packet->popAtFront(b(-1), Chunk::PF_ALLOW_NULLPTR)) {
 #ifdef WITH_IPv4
         if (const auto& ipv4Hdr = dynamicPtrCast<const Ipv4Header>(chunk)) {
             leftAddr = ipv4Hdr->getSourceAddress().str();
             rightAddr = ipv4Hdr->getDestinationAddress().str();
-            dumpIPv4(l2r, "", ipv4Hdr, "");
+            dumpIpv4(l2r, "", ipv4Hdr, "");
         }
         else
         if (const auto& arpPacket = dynamicPtrCast<const ArpPacket>(chunk)) {
-            dumpARP(l2r, "", arpPacket, "");
+            dumpArp(l2r, "", arpPacket, "");
         }
         else
-        if (const auto& icmpHeader = dynamicPtrCast<const IcmpHeader>(chunk)) {
+        if (dynamicPtrCast<const IcmpHeader>(chunk)) {
             out << "ICMPMessage " << packet->getName() << (packet->hasBitError() ? " (BitError)" : "") << endl;
         }
         else
 #endif // ifdef WITH_IPv4
 #ifdef WITH_IPv6
         if (const auto& ipv6Hdr = dynamicPtrCast<const Ipv6Header>(chunk)) {
-            dumpIPv6(l2r, "", ipv6Hdr);
+            dumpIpv6(l2r, "", ipv6Hdr);
         }
         else
 #endif // ifdef WITH_IPv6
 #ifdef WITH_SCTP
-#if 0
         if (const auto& sctpMessage = dynamicPtrCast<const sctp::SctpHeader>(chunk)) {
             sctpDump("", packet, sctpMessage, std::string(l2r ? leftAddr : rightAddr), std::string(l2r ?  rightAddr: leftAddr));
         }
         else
-#endif
 #endif // ifdef WITH_SCTP
 #ifdef WITH_TCP_COMMON
         if (const auto& tcpHdr = dynamicPtrCast<const tcp::TcpHeader>(chunk)) {
@@ -444,16 +436,6 @@ void PacketDump::udpDump(bool l2r, const char *label, const Ptr<const UdpHeader>
     //out << endl;
     out << "UDP: Payload length=" << udpHeader->getTotalLengthField() - UDP_HEADER_BYTES << endl;
 
-#ifdef WITH_SCTP
-#if 0
-    if (udpHeader->getSourcePort() == 9899 || udpHeader->getDestinationPort() == 9899) {
-        if (dynamic_cast<sctp::SctpHeader *>(udpHeader->getEncapsulatedPacket()))
-            sctpDump("", (sctp::SctpHeader *)(udpHeader->getEncapsulatedPacket()),
-                    std::string(l2r ? "A" : "B"), std::string(l2r ? "B" : "A"));
-    }
-#endif
-#endif // ifdef WITH_SCTP
-
     // comment
     if (comment)
         out << "# " << comment;
@@ -463,16 +445,16 @@ void PacketDump::udpDump(bool l2r, const char *label, const Ptr<const UdpHeader>
 #endif // ifdef WITH_UDP
 
 #ifdef WITH_IPv4
-void PacketDump::dumpARP(bool l2r, const char *label, const Ptr<const ArpPacket>& arp, const char *comment)
+void PacketDump::dumpArp(bool l2r, const char *label, const Ptr<const ArpPacket>& arp, const char *comment)
 {
     std::ostream& out = *outp;
     char buf[30];
     sprintf(buf, "[%.3f%s] ", simTime().dbl(), label);
-    out << buf << " src: " << arp->getSrcIPAddress() << ", " << arp->getSrcMACAddress()
-        << "; dest: " << arp->getDestIPAddress() << ", " << arp->getDestMACAddress() << endl;
+    out << buf << " src: " << arp->getSrcIpAddress() << ", " << arp->getSrcMacAddress()
+        << "; dest: " << arp->getDestIpAddress() << ", " << arp->getDestMacAddress() << endl;
 }
 
-void PacketDump::dumpIPv4(bool l2r, const char *label, const Ptr<const Ipv4Header>& ipv4Header, const  char *comment)
+void PacketDump::dumpIpv4(bool l2r, const char *label, const Ptr<const Ipv4Header>& ipv4Header, const  char *comment)
 {
     std::ostream& out = *outp;
     char buf[30];
@@ -505,7 +487,7 @@ void PacketDump::dumpIPv4(bool l2r, const char *label, const Ptr<const Ipv4Heade
 #endif // ifdef WITH_IPv4
 
 #ifdef WITH_IPv6
-void PacketDump::dumpIPv6(bool l2r, const char *label, const Ptr<const Ipv6Header>& ipv6Header, const char *comment)
+void PacketDump::dumpIpv6(bool l2r, const char *label, const Ptr<const Ipv6Header>& ipv6Header, const char *comment)
 {
     using namespace tcp;
 

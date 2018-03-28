@@ -21,7 +21,7 @@
 #include "inet/networklayer/ipv4/Ipv4FragBuf.h"
 
 #include "inet/networklayer/ipv4/Icmp.h"
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 
 namespace inet {
 
@@ -31,7 +31,7 @@ Ipv4FragBuf::Ipv4FragBuf()
 
 Ipv4FragBuf::~Ipv4FragBuf()
 {
-    for (auto i = bufs.begin(); i != bufs.end(); ) {
+    for (auto i = bufs.begin(); i != bufs.end(); ++i) {
         delete i->second.packet;
     }
     bufs.clear();
@@ -39,7 +39,7 @@ Ipv4FragBuf::~Ipv4FragBuf()
 
 Packet *Ipv4FragBuf::addFragment(Packet *packet, simtime_t now)
 {
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     // find datagram buffer
     Key key;
     key.id = ipv4Header->getIdentification();
@@ -48,56 +48,56 @@ Packet *Ipv4FragBuf::addFragment(Packet *packet, simtime_t now)
 
     auto i = bufs.find(key);
 
-    DatagramBuffer *buf = nullptr;
+    DatagramBuffer *curBuf = nullptr;
 
     if (i == bufs.end()) {
         // this is the first fragment of that datagram, create reassembly buffer for it
-        buf = &bufs[key];
-        buf->packet = nullptr;
+        curBuf = &bufs[key];
+        i = bufs.find(key);
     }
     else {
         // use existing buffer
-        buf = &(i->second);
+        curBuf = &(i->second);
     }
 
     // add fragment into reassembly buffer
     ASSERT(ipv4Header->getTotalLengthField() > ipv4Header->getHeaderLength());
     int bytes = ipv4Header->getTotalLengthField() - ipv4Header->getHeaderLength();
-    buf->buf.replace(B(ipv4Header->getFragmentOffset()), packet->peekDataAt(B(ipv4Header->getHeaderLength()), B(bytes)));
+    curBuf->buf.replace(B(ipv4Header->getFragmentOffset()), packet->peekDataAt(B(ipv4Header->getHeaderLength()), B(bytes)));
     if (!ipv4Header->getMoreFragments()) {
-        buf->buf.setExpectedLength(B(ipv4Header->getFragmentOffset() + bytes));
+        curBuf->buf.setExpectedLength(B(ipv4Header->getFragmentOffset() + bytes));
     }
-    if (ipv4Header->getFragmentOffset() == 0 || buf->packet == nullptr) {
-        delete buf->packet;
-        buf->packet = packet;
+    if (ipv4Header->getFragmentOffset() == 0 || curBuf->packet == nullptr) {
+        delete curBuf->packet;
+        curBuf->packet = packet;
     }
     else {
         delete packet;
     }
 
     // do we have the complete datagram?
-    if (buf->buf.isComplete()) {
+    if (curBuf->buf.isComplete()) {
         // datagram complete: deallocate buffer and return complete datagram
-        std::string pkName(buf->packet->getName());
+        std::string pkName(curBuf->packet->getName());
         std::size_t found = pkName.find("-frag-");
         if (found != std::string::npos)
             pkName.resize(found);
-        auto hdr = Ptr<Ipv4Header>(buf->packet->peekHeader<Ipv4Header>()->dup());
-        Packet *pk = buf->packet;
+        auto hdr = Ptr<Ipv4Header>(curBuf->packet->peekAtFront<Ipv4Header>()->dup());
+        Packet *pk = curBuf->packet;
         pk->setName(pkName.c_str());
         pk->removeAll();
-        const auto& payload = buf->buf.getReassembledData();
+        const auto& payload = curBuf->buf.getReassembledData();
         hdr->setTotalLengthField(hdr->getHeaderLength() + B(payload->getChunkLength()).get());
         hdr->setFragmentOffset(0);
         hdr->setMoreFragments(false);
-        pk->insertAtBeginning(hdr);
-        pk->insertAtEnd(payload);
+        pk->insertAtFront(hdr);
+        pk->insertAtBack(payload);
         bufs.erase(i);
         return pk;
     }
     else {
         // there are still missing fragments
-        buf->lastupdate = now;
+        curBuf->lastupdate = now;
         return nullptr;
     }
 }

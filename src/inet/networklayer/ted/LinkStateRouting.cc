@@ -66,8 +66,8 @@ void LinkStateRouting::initialize(int stage)
         // schedule start of flooding link state info
         announceMsg = new cMessage("announce");
         scheduleAt(simTime() + exponential(0.01), announceMsg);
-        registerService(Protocol::ospf, nullptr, gate("ipIn"));
-        registerProtocol(Protocol::ospf, gate("ipOut"), nullptr);
+        registerService(Protocol::linkstaterouting, nullptr, gate("ipIn"));
+        registerProtocol(Protocol::linkstaterouting, gate("ipOut"), nullptr);
     }
 }
 
@@ -80,7 +80,7 @@ void LinkStateRouting::handleMessage(cMessage *msg)
     }
     else if (!strcmp(msg->getArrivalGate()->getName(), "ipIn")) {
         EV_INFO << "Processing message from Ipv4: " << msg << endl;
-        Ipv4Address sender = check_and_cast<Packet *>(msg)->getTag<L3AddressInd>()->getSrcAddress().toIPv4();
+        Ipv4Address sender = check_and_cast<Packet *>(msg)->getTag<L3AddressInd>()->getSrcAddress().toIpv4();
         processLINK_STATE_MESSAGE(check_and_cast<Packet *>(msg), sender);
     }
     else
@@ -118,7 +118,7 @@ void LinkStateRouting::processLINK_STATE_MESSAGE(Packet *pk, Ipv4Address sender)
 {
     EV_INFO << "received LINK_STATE message from " << sender << endl;
 
-    const auto& msg = pk->peekHeader<LinkStateMsg>();
+    const auto& msg = pk->peekAtFront<LinkStateMsg>();
     TeLinkStateInfoVector forward;
 
     unsigned int n = msg->getLinkInfoArraySize();
@@ -212,7 +212,7 @@ void LinkStateRouting::sendToPeer(Ipv4Address peer, const std::vector<TeLinkStat
     out->setRequest(req);
     int length = out->getLinkInfoArraySize() * 72;
     out->setChunkLength(B(length));
-    pk->insertAtEnd(out);
+    pk->insertAtBack(out);
 
     sendToIP(pk, peer);
 }
@@ -221,8 +221,8 @@ void LinkStateRouting::sendToIP(Packet *msg, Ipv4Address destAddr)
 {
     msg->addPar("color") = TED_TRAFFIC;
 
-    msg->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ospf);
-    msg->addTagIfAbsent<DispatchProtocolInd>()->setProtocol(&Protocol::ospf);
+    msg->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::linkstaterouting);
+    msg->addTagIfAbsent<DispatchProtocolInd>()->setProtocol(&Protocol::linkstaterouting);
     msg->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::ipv4);
     msg->addTagIfAbsent<L3AddressReq>()->setDestAddress(destAddr);
     msg->addTagIfAbsent<L3AddressReq>()->setSrcAddress(routerId);

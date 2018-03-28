@@ -78,14 +78,14 @@ void UdpVideoStreamClient::requestStream()
 
     Packet *pk = new Packet("VideoStrmReq");
     const auto& payload = makeShared<ByteCountChunk>(B(1));    //FIXME set packet length
-    pk->insertAtEnd(payload);
+    pk->insertAtBack(payload);
     socket.sendTo(pk, svrAddr, svrPort);
 }
 
 void UdpVideoStreamClient::receiveStream(Packet *pk)
 {
     EV_INFO << "Video stream packet: " << UdpSocket::getReceivedPacketInfo(pk) << endl;
-    emit(rcvdPkSignal, pk);
+    emit(packetReceivedSignal, pk);
     delete pk;
 }
 

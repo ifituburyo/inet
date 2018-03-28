@@ -6,7 +6,7 @@ Test the IP fragmentation reassembly buffer (Ipv4FragBuf class)
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/networklayer/ipv4/Ipv4FragBuf.h"
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 
 %global:
 
@@ -46,8 +46,8 @@ bool insertFragment(Ipv4FragBuf& fragbuf, Frag& f)
     frag->setChunkLength(B(24));
     frag->setTotalLengthField(24 + f.bytes);
     const auto& payload = makeShared<ByteCountChunk>(B(f.bytes));
-    pk->insertHeader(payload);
-    pk->insertHeader(frag);
+    pk->insertAtFront(payload);
+    pk->insertAtFront(frag);
     ASSERT(pk->getByteLength() == 24+f.bytes);
 
     Packet *pk2 = fragbuf.addFragment(pk, 0);

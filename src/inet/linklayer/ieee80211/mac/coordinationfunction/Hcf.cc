@@ -147,7 +147,7 @@ void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtH
         PacketDropDetails details;
         details.setReason(QUEUE_OVERFLOW);
         details.setLimit(edcaPendingQueues[ac]->getMaxQueueSize());
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
     }
 }
@@ -180,7 +180,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
             EV_INFO << "This frame is not for us" << std::endl;
             PacketDropDetails details;
             details.setReason(NOT_ADDRESSED_TO_US);
-            emit(packetDropSignal, packet, &details);
+            emit(packetDroppedSignal, packet, &details);
             delete packet;
         }
         cancelEvent(startRxTimer);
@@ -193,7 +193,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
         EV_INFO << "This frame is not for us" << std::endl;
         PacketDropDetails details;
         details.setReason(NOT_ADDRESSED_TO_US);
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
     }
 }
@@ -233,7 +233,7 @@ void Hcf::handleInternalCollision(std::vector<Edcaf*> internallyCollidedEdcafs)
     for (auto edcaf : internallyCollidedEdcafs) {
         AccessCategory ac = edcaf->getAccessCategory();
         Packet *internallyCollidedFrame = edcaInProgressFrames[ac]->getFrameToTransmit();
-        auto internallyCollidedHeader = internallyCollidedFrame->peekHeader<Ieee80211DataOrMgmtHeader>();
+        auto internallyCollidedHeader = internallyCollidedFrame->peekAtFront<Ieee80211DataOrMgmtHeader>();
         EV_INFO << printAccessCategory(ac) << " (" << internallyCollidedFrame->getName() << ")" << endl;
         bool retryLimitReached = false;
         if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(internallyCollidedHeader)) { // TODO: QoSDataFrame
@@ -257,8 +257,8 @@ void Hcf::handleInternalCollision(std::vector<Edcaf*> internallyCollidedEdcafs)
             PacketDropDetails details;
             details.setReason(RETRY_LIMIT_REACHED);
             details.setLimit(-1); // TODO:
-            emit(packetDropSignal, internallyCollidedFrame, &details);
-            emit(linkBreakSignal, internallyCollidedFrame);
+            emit(packetDroppedSignal, internallyCollidedFrame, &details);
+            emit(linkBrokenSignal, internallyCollidedFrame);
             edcaInProgressFrames[ac]->dropFrame(internallyCollidedFrame);
             if (hasFrameToTransmit(ac))
                 edcaf->requestChannel(this);
@@ -368,7 +368,7 @@ void Hcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeade
 
 void Hcf::originatorProcessRtsProtectionFailed(Packet *packet)
 {
-    auto protectedHeader = packet->peekHeader<Ieee80211DataOrMgmtHeader>();
+    auto protectedHeader = packet->peekAtFront<Ieee80211DataOrMgmtHeader>();
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         EV_INFO << "RTS frame transmission failed\n";
@@ -394,8 +394,8 @@ void Hcf::originatorProcessRtsProtectionFailed(Packet *packet)
             PacketDropDetails details;
             details.setReason(RETRY_LIMIT_REACHED);
             details.setLimit(-1); // TODO:
-            emit(packetDropSignal, packet, &details);
-            emit(linkBreakSignal, packet);
+            emit(packetDroppedSignal, packet, &details);
+            emit(linkBrokenSignal, packet);
         }
     }
     else
@@ -405,7 +405,7 @@ void Hcf::originatorProcessRtsProtectionFailed(Packet *packet)
 void Hcf::originatorProcessTransmittedFrame(Packet *packet)
 {
     mac->emit(packetSentToPeerSignal, packet);
-    auto transmittedHeader = packet->peekHeader<Ieee80211MacHeader>();
+    auto transmittedHeader = packet->peekAtFront<Ieee80211MacHeader>();
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         AccessCategory ac = edcaf->getAccessCategory();
@@ -467,7 +467,7 @@ void Hcf::originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacH
 
 void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
 {
-    auto failedHeader = failedPacket->peekHeader<Ieee80211DataOrMgmtHeader>();
+    auto failedHeader = failedPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         AccessCategory ac = edcaf->getAccessCategory();
@@ -513,13 +513,13 @@ void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
             PacketDropDetails details;
             details.setReason(RETRY_LIMIT_REACHED);
             details.setLimit(-1); // TODO:
-            emit(packetDropSignal, failedPacket, &details);
-            emit(linkBreakSignal, failedPacket);
+            emit(packetDroppedSignal, failedPacket, &details);
+            emit(linkBrokenSignal, failedPacket);
         }
         else {
-            auto h = failedPacket->removeHeader<Ieee80211DataOrMgmtHeader>();
+            auto h = failedPacket->removeAtFront<Ieee80211DataOrMgmtHeader>();
             h->setRetry(true);
-            failedPacket->insertHeader(h);
+            failedPacket->insertAtFront(h);
         }
     }
     else
@@ -529,8 +529,8 @@ void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
 void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket)
 {
     mac->emit(packetReceivedFromPeerSignal, receivedPacket);
-    auto receivedHeader = receivedPacket->peekHeader<Ieee80211MacHeader>();
-    auto lastTransmittedHeader = lastTransmittedPacket->peekHeader<Ieee80211MacHeader>();
+    auto receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
+    auto lastTransmittedHeader = lastTransmittedPacket->peekAtFront<Ieee80211MacHeader>();
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         AccessCategory ac = edcaf->getAccessCategory();
@@ -631,7 +631,7 @@ void Hcf::sendUp(const std::vector<Packet *>& completeFrames)
 {
     for (auto frame : completeFrames) {
         // FIXME: mgmt module does not handle addba req ..
-        const auto& header = frame->peekHeader<Ieee80211DataOrMgmtHeader>();
+        const auto& header = frame->peekAtFront<Ieee80211DataOrMgmtHeader>();
         if (!dynamicPtrCast<const Ieee80211ActionFrame>(header))
             mac->sendUpFrame(frame);
     }
@@ -641,7 +641,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
     auto channelOwner = edca->getChannelOwner();
     if (channelOwner) {
-        auto header = packet->peekHeader<Ieee80211MacHeader>();
+        auto header = packet->peekAtFront<Ieee80211MacHeader>();
         AccessCategory ac = channelOwner->getAccessCategory();
         auto txop = edcaTxops[ac];
         if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
@@ -649,24 +649,24 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             if (originatorBlockAckAgreementHandler)
                 agreement = originatorBlockAckAgreementHandler->getAgreement(dataFrame->getReceiverAddress(), dataFrame->getTid());
             auto ackPolicy = originatorAckPolicy->computeAckPolicy(packet, dataFrame, agreement);
-            auto dataHeader = packet->removeHeader<Ieee80211DataHeader>();
+            auto dataHeader = packet->removeAtFront<Ieee80211DataHeader>();
             dataHeader->setAckPolicy(ackPolicy);
-            packet->insertHeader(dataHeader);
+            packet->insertAtFront(dataHeader);
         }
         setFrameMode(packet, header, rateSelection->computeMode(packet, header, txop));
         if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION) {
             auto pendingPacket = edcaInProgressFrames[ac]->getPendingFrameFor(packet);
-            const auto& pendingHeader = pendingPacket == nullptr ? nullptr : pendingPacket->peekHeader<Ieee80211DataOrMgmtHeader>();
+            const auto& pendingHeader = pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
             auto duration = singleProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingHeader, edcaTxops[ac], recipientAckPolicy);
-            auto header = packet->removeHeader<Ieee80211MacHeader>();
+            auto header = packet->removeAtFront<Ieee80211MacHeader>();
             header->setDuration(duration);
-            packet->insertHeader(header);
+            packet->insertAtFront(header);
         }
         else if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION)
             throw cRuntimeError("Multiple protection is unsupported");
         else
             throw cRuntimeError("Undefined protection mechanism");
-        tx->transmitFrame(packet, packet->peekHeader<Ieee80211MacHeader>(), ifs, this);
+        tx->transmitFrame(packet, packet->peekAtFront<Ieee80211MacHeader>(), ifs, this);
     }
     else
         throw cRuntimeError("Hcca is unimplemented");
@@ -674,7 +674,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
 
 void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const Ieee80211MacHeader>& responseHeader, Packet *receivedPacket, const Ptr<const Ieee80211MacHeader>& receivedHeader)
 {
-    responsePacket->insertTrailer(makeShared<Ieee80211MacTrailer>());
+    responsePacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
     const IIeee80211Mode *responseMode = nullptr;
     if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(receivedHeader))
         responseMode = rateSelection->computeResponseCtsFrameMode(receivedPacket, rtsFrame);
@@ -707,7 +707,7 @@ void Hcf::recipientProcessTransmittedControlResponseFrame(Packet *packet, const 
 
 void Hcf::processMgmtFrame(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader)
 {
-    mgmtPacket->insertTrailer(makeShared<Ieee80211MacTrailer>());
+    mgmtPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
     processUpperFrame(mgmtPacket, mgmtHeader);
 }
 

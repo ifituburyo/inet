@@ -69,7 +69,7 @@ SctpPathVariables::SctpPathVariables(const L3Address& addr, SctpAssociation *ass
         throw cRuntimeError("No interface for remote address %s found!", remoteAddress.str().c_str());
     }
 
-    pmtu = rtie->getMTU();
+    pmtu = rtie->getMtu();
     rttvar = 0.0;
 
     cwndTimeout = pathRto;
@@ -144,7 +144,7 @@ SctpPathVariables::SctpPathVariables(const L3Address& addr, SctpAssociation *ass
     snprintf(str, sizeof(str), "RTX_TIMER %d:%s", assoc->assocId, addr.str().c_str());
     T3_RtxTimer = new cMessage(str);
     snprintf(str, sizeof(str), "Reset_TIMER %d:%s", assoc->assocId, addr.str().c_str());
-    ResetTimer = new cMessage(str);
+    ResetTimer = new cPacket(str);
     ResetTimer->setContextPointer(association);
     snprintf(str, sizeof(str), "ASCONF_TIMER %d:%s", assoc->assocId, addr.str().c_str());
     AsconfTimer = new cMessage(str);
@@ -368,7 +368,7 @@ SctpStateVariables::SctpStateVariables()
     initChunk = nullptr;
     cookieChunk = nullptr;
     resetInfo = nullptr;
-    sctpmsg = nullptr;
+   // sctpmsg = nullptr;
     sctpMsg = nullptr;
     incomingRequest = nullptr;
     peerRequestType = 0;
@@ -980,12 +980,12 @@ bool SctpAssociation::processTimer(cMessage *msg)
     return performStateTransition(event);
 }
 
-bool SctpAssociation::processSctpMessage(const Ptr<const SctpHeader>& sctpmsg,
+//bool SctpAssociation::processSctpMessage(const Ptr<const SctpHeader>& sctpmsg,
+bool SctpAssociation::processSctpMessage(SctpHeader *sctpmsg,
         const L3Address& msgSrcAddr,
         const L3Address& msgDestAddr)
 {
     printAssocBrief();
-
     localAddr = msgDestAddr;
     localPort = sctpmsg->getDestPort();
     remoteAddr = msgSrcAddr;
@@ -1080,12 +1080,10 @@ SctpEventCode SctpAssociation::preanalyseAppCommandEvent(int32 commandCode)
     }
 }
 
-bool SctpAssociation::processAppCommand(cMessage *msg)
+bool SctpAssociation::processAppCommand(cMessage *msg, SctpCommandReq* sctpCommand)
 {
     printAssocBrief();
 
-    // first do actions
-    SctpCommand *sctpCommand = (SctpCommand *)(msg->removeControlInfo());
     SctpEventCode event = preanalyseAppCommandEvent(msg->getKind());
 
     EV_INFO << "App command: " << eventName(event) << "\n";
@@ -1129,8 +1127,8 @@ bool SctpAssociation::processAppCommand(cMessage *msg)
             break;
 
         case SCTP_E_SET_STREAM_PRIO:
-            state->ssPriorityMap[((SctpSendInfo *)sctpCommand)->getSid()] =
-                ((SctpSendInfo *)sctpCommand)->getPpid();
+            state->ssPriorityMap[((SctpSendReq *)sctpCommand)->getSid()] =
+                ((SctpSendReq *)sctpCommand)->getPpid();
             break;
 
         case SCTP_E_QUEUE_BYTES_LIMIT:
@@ -1174,15 +1172,15 @@ bool SctpAssociation::processAppCommand(cMessage *msg)
             break;
 
         case SCTP_E_SET_RTO_INFO:
-            sctpMain->setRtoInitial(((SctpRtoInfo *)sctpCommand)->getRtoInitial());
-            sctpMain->setRtoMin(((SctpRtoInfo *)sctpCommand)->getRtoMin());
-            sctpMain->setRtoMax(((SctpRtoInfo *)sctpCommand)->getRtoMax());
+            sctpMain->setRtoInitial(((SctpRtoReq *)sctpCommand)->getRtoInitial());
+            sctpMain->setRtoMin(((SctpRtoReq *)sctpCommand)->getRtoMin());
+            sctpMain->setRtoMax(((SctpRtoReq *)sctpCommand)->getRtoMax());
             break;
         default:
             throw cRuntimeError("Wrong event code");
     }
 
-    delete sctpCommand;
+   // delete sctpCommand;
     // then state transitions
     return performStateTransition(event);
 }

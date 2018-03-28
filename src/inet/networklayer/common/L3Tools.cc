@@ -18,7 +18,7 @@
 #include "inet/networklayer/common/L3Tools.h"
 
 #ifdef WITH_IPv4
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #endif
 #ifdef WITH_IPv6
 #include "inet/networklayer/ipv6/Ipv6Header.h"
@@ -63,15 +63,15 @@ const Ptr<const NetworkHeaderBase> peekNetworkProtocolHeader(Packet *packet, con
 {
 #ifdef WITH_IPv4
     if (protocol == Protocol::ipv4)
-        return packet->peekHeader<Ipv4Header>();
+        return packet->peekAtFront<Ipv4Header>();
 #endif
 #ifdef WITH_IPv6
     if (protocol == Protocol::ipv6)
-        return packet->peekHeader<Ipv6Header>();
+        return packet->peekAtFront<Ipv6Header>();
 #endif
 #ifdef WITH_GENERIC
     if (protocol == Protocol::gnp)
-        return packet->peekHeader<GenericDatagramHeader>();
+        return packet->peekAtFront<GenericDatagramHeader>();
 #endif
     // TODO: add other L3 protocols
     throw cRuntimeError("Unknown protocol: %s", protocol.getName());

@@ -27,7 +27,7 @@
 #include "inet/common/lifecycle/ILifecycle.h"
 #include "inet/networklayer/contract/INetfilter.h"
 #include "inet/networklayer/contract/INetworkProtocol.h"
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/networklayer/ipv4/Ipv4FragBuf.h"
 #include "inet/common/ProtocolMap.h"
 #include "inet/common/queue/QueueBase.h"
@@ -126,6 +126,9 @@ class INET_API Ipv4 : public QueueBase, public NetfilterBase, public ILifecycle,
 
     // utility: verifying CRC
     bool verifyCrc(const Ptr<const Ipv4Header>& ipv4Header);
+
+    // utility: calculate and set CRC
+    void setComputedCrc(Ptr<Ipv4Header>& ipv4Header);
 
     /**
      * Encapsulate packet coming from higher layers into Ipv4Header, using

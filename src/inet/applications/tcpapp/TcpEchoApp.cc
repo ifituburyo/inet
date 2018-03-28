@@ -56,7 +56,7 @@ void TcpEchoApp::sendDown(Packet *msg)
     if (msg->isPacket()) {
         Packet *pk = static_cast<Packet *>(msg);
         bytesSent += pk->getByteLength();
-        emit(sentPkSignal, pk);
+        emit(packetSentSignal, pk);
     }
 
     msg->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::tcp);
@@ -84,7 +84,7 @@ void TcpEchoAppThread::established()
 
 void TcpEchoAppThread::dataArrived(Packet *rcvdPkt, bool urgent)
 {
-    echoAppModule->emit(rcvdPkSignal, rcvdPkt);
+    echoAppModule->emit(packetReceivedSignal, rcvdPkt);
     int64_t rcvdBytes = rcvdPkt->getByteLength();
     echoAppModule->bytesRcvd += rcvdBytes;
 
@@ -102,10 +102,10 @@ void TcpEchoAppThread::dataArrived(Packet *rcvdPkt, bool urgent)
 
         int64_t len = 0;
         for ( ; len + rcvdBytes <= outByteLen; len += rcvdBytes) {
-            outPkt->insertAtEnd(rcvdPkt->peekDataAt(B(0), B(rcvdBytes)));
+            outPkt->insertAtBack(rcvdPkt->peekDataAt(B(0), B(rcvdBytes)));
         }
         if (len < outByteLen)
-            outPkt->insertAtEnd(rcvdPkt->peekDataAt(B(0), B(outByteLen - len)));
+            outPkt->insertAtBack(rcvdPkt->peekDataAt(B(0), B(outByteLen - len)));
 
         ASSERT(outPkt->getByteLength() == outByteLen);
 

@@ -49,7 +49,7 @@ void LinkBreakVisualizerBase::initialize(int stage)
         displayLinkBreaks = par("displayLinkBreaks");
         nodeFilter.setPattern(par("nodeFilter"));
         interfaceFilter.setPattern(par("interfaceFilter"));
-        packetFilter.setPattern(par("packetFilter"));
+        packetFilter.setPattern(par("packetFilter"), par("packetDataFilter"));
         icon = par("icon");
         iconTintAmount = par("iconTintAmount");
         if (iconTintAmount != 0)
@@ -70,7 +70,7 @@ void LinkBreakVisualizerBase::handleParameterChange(const char *name)
         else if (!strcmp(name, "interfaceFilter"))
             interfaceFilter.setPattern(par("interfaceFilter"));
         else if (!strcmp(name, "packetFilter"))
-            packetFilter.setPattern(par("packetFilter"));
+            packetFilter.setPattern(par("packetFilter"), par("packetDataFilter"));
         removeAllLinkBreakVisualizations();
     }
 }
@@ -104,7 +104,7 @@ void LinkBreakVisualizerBase::refreshDisplay() const
 void LinkBreakVisualizerBase::subscribe()
 {
     auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this);
-    subscriptionModule->subscribe(linkBreakSignal, this);
+    subscriptionModule->subscribe(linkBrokenSignal, this);
 }
 
 void LinkBreakVisualizerBase::unsubscribe()
@@ -112,13 +112,13 @@ void LinkBreakVisualizerBase::unsubscribe()
     // NOTE: lookup the module again because it may have been deleted first
     auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this, false);
     if (subscriptionModule != nullptr)
-        subscriptionModule->unsubscribe(linkBreakSignal, this);
+        subscriptionModule->unsubscribe(linkBrokenSignal, this);
 }
 
 void LinkBreakVisualizerBase::receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *details)
 {
     Enter_Method_Silent();
-    if (signal == linkBreakSignal) {
+    if (signal == linkBrokenSignal) {
         MacAddress transmitterAddress;
         MacAddress receiverAddress;
         // TODO: revive

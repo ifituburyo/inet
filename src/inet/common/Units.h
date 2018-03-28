@@ -26,6 +26,8 @@
 #include <cmath>
 #include <iostream>
 
+#include "inet/common/INETMath.h" // M_PI
+
 namespace inet {
 
 namespace units {
@@ -51,6 +53,10 @@ struct compose;
 // Constructs a unit equivalent to Unit*Num/Den
 template<typename Unit, int Num, int Den = 1>
 struct scale;
+
+// Constructs a unit equivalent to F(Unit)
+template<typename Unit, double F()>
+struct fscale;
 
 // Constructs a unit equivalent to Unit*Num/Den
 template<typename Unit, int Num, int Den = 1>
@@ -367,6 +373,30 @@ struct convert3<T, scale<U, Num, Den> >
 };
 
 // Convert from a scaled unit
+template<typename T, typename U, double F()>
+struct convert2<fscale<T, F>, U>
+{
+    template<typename V>
+    static V fn(const V& v)
+    {
+        auto t = v / F();
+        return convert<T, U>::fn(t);
+    }
+};
+
+// Convert to a scaled unit
+template<typename T, typename U, double F()>
+struct convert3<T, fscale<U, F> >
+{
+    template<typename V>
+    static V fn(const V& v)
+    {
+        auto t = convert<T, U>::fn(v);
+        return t * F();
+    }
+};
+
+// Convert from a scaled unit
 template<typename T, typename U, int Num, int Den>
 struct convert2<intscale<T, Num, Den>, U>
 {
@@ -440,6 +470,14 @@ struct count_terms<Term, scale<Unit, N, D> >
     static const int den = result::den;
 };
 
+template<typename Term, typename Unit, double F()>
+struct count_terms<Term, fscale<Unit, F> >
+{
+    typedef count_terms<Term, Unit> result;
+    static const int num = result::num;
+    static const int den = result::den;
+};
+
 // count_terms ignores scaling factors - that is taken care of by scaling_factor.
 template<typename Term, typename Unit, int N, int D>
 struct count_terms<Term, intscale<Unit, N, D> >
@@ -502,6 +540,12 @@ struct check_terms_equal<pow<Unit, N, D>, T1, T2>
 
 template<typename Unit, int N, int D, typename T1, typename T2>
 struct check_terms_equal<scale<Unit, N, D>, T1, T2>
+{
+    static const bool value = check_terms_equal<Unit, T1, T2>::value;
+};
+
+template<typename Unit, double F(), typename T1, typename T2>
+struct check_terms_equal<fscale<Unit, F>, T1, T2>
 {
     static const bool value = check_terms_equal<Unit, T1, T2>::value;
 };
@@ -643,6 +687,16 @@ struct scaling_factor<scale<U, N, D> >
     }
 };
 
+template<typename U, double F()>
+struct scaling_factor<fscale<U, F> >
+{
+    template<typename T>
+    static T fn()
+    {
+        return scaling_factor<U>::template fn<T>() * F();
+    }
+};
+
 template<typename U, int N, int D>
 struct scaling_factor<intscale<U, N, D> >
 {
@@ -774,6 +828,17 @@ struct output_unit2<scale<Unit, Num, Den> >
     }
 };
 
+template<typename Unit, double F()>
+struct output_unit2<fscale<Unit, F> >
+{
+    template<typename Stream>
+    static void fn(Stream& os)
+    {
+        os << F() << '.';
+        output_unit<Unit>::fn(os);
+    }
+};
+
 template<typename Unit, int Num, int Den>
 struct output_unit2<intscale<Unit, Num, Den> >
 {
@@ -819,6 +884,7 @@ struct A;    // Ampere
 struct mol;    // mole
 struct cd;    // candela
 struct b;    // bit
+struct rad; // rad;
 
 } // namespace units
 
@@ -834,7 +900,6 @@ UNIT_DISPLAY_NAME(units::b, "b");
 namespace units {
 
 // SI derived units:
-typedef compose<m, pow<m, -1> > rad;
 typedef compose<pow<m, 2>, pow<m, -2> > sr;
 typedef pow<s, -1> Hz;
 typedef compose<m, compose<kg, pow<s, -2> > > N;
@@ -1044,10 +1109,10 @@ typedef compose<nautical_mile, pow<hour, -1> > knot;
 typedef scale<mps, 100, 34029> mach;
 
 // Angles
-typedef scale<rad, 180000000, 3141593> degree;
-typedef scale<rad, 200000000, 3141593> grad;
-typedef scale<degree, 60> degree_minute;
-typedef scale<degree_minute, 60> degree_second;
+constexpr static double rad2degScale() { return 180 / M_PI; }
+typedef fscale<rad, rad2degScale> deg;
+typedef scale<deg, 60> deg_min;
+typedef scale<deg_min, 60> deg_sec;
 
 // Pressure
 typedef scale<Pa, 1, 1000> kPa;
@@ -1098,10 +1163,9 @@ UNIT_DISPLAY_NAME(units::mps, "mps");
 UNIT_DISPLAY_NAME(units::kph, "km/h");
 UNIT_DISPLAY_NAME(units::knot, "knots");
 UNIT_DISPLAY_NAME(units::mach, "mach");
-UNIT_DISPLAY_NAME(units::degree, "deg");
-UNIT_DISPLAY_NAME(units::grad, "grad");
-UNIT_DISPLAY_NAME(units::degree_minute, "'");
-UNIT_DISPLAY_NAME(units::degree_second, "\"");
+UNIT_DISPLAY_NAME(units::deg, "deg");
+UNIT_DISPLAY_NAME(units::deg_min, "'");
+UNIT_DISPLAY_NAME(units::deg_sec, "\"");
 UNIT_DISPLAY_NAME(units::kPa, "kPa");
 UNIT_DISPLAY_NAME(units::psi, "PSI");
 UNIT_DISPLAY_NAME(units::millibar, "millibars");
@@ -1212,10 +1276,9 @@ typedef value<double, units::spm> spm;
 typedef value<double, units::knot> knot;
 typedef value<double, units::mach> mach;
 
-typedef value<double, units::degree> degree;
-typedef value<double, units::grad> grad;
-typedef value<double, units::degree_minute> degree_minute;
-typedef value<double, units::degree_second> degree_second;
+typedef value<double, units::deg> deg;
+typedef value<double, units::deg_min> deg_min;
+typedef value<double, units::deg_sec> deg_sec;
 
 typedef value<double, units::kPa> kPa;
 typedef value<double, units::psi> psi;

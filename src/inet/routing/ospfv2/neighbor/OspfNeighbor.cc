@@ -191,7 +191,7 @@ void Neighbor::sendDatabaseDescriptionPacket(bool init)
     }
 
     if (parentInterface->getType() != Interface::VIRTUAL) {
-        ddPacket->setInterfaceMTU(parentInterface->getMTU());
+        ddPacket->setInterfaceMTU(parentInterface->getMtu());
     }
     else {
         ddPacket->setInterfaceMTU(0);
@@ -204,9 +204,9 @@ void Neighbor::sendDatabaseDescriptionPacket(bool init)
 
     ddPacket->setDdSequenceNumber(ddSequenceNumber);
 
-    long maxPacketSize = (((IP_MAX_HEADER_BYTES + OSPF_HEADER_LENGTH + OSPF_DD_HEADER_LENGTH + OSPF_LSA_HEADER_LENGTH) > parentInterface->getMTU()) ?
+    long maxPacketSize = (((IP_MAX_HEADER_BYTES + OSPF_HEADER_LENGTH + OSPF_DD_HEADER_LENGTH + OSPF_LSA_HEADER_LENGTH) > parentInterface->getMtu()) ?
                           IPV4_DATAGRAM_LENGTH :
-                          parentInterface->getMTU()) - IP_MAX_HEADER_BYTES;
+                          parentInterface->getMtu()) - IP_MAX_HEADER_BYTES;
     long packetSize = OSPF_HEADER_LENGTH + OSPF_DD_HEADER_LENGTH;
 
     if (init || databaseSummaryList.empty()) {
@@ -242,7 +242,7 @@ void Neighbor::sendDatabaseDescriptionPacket(bool init)
 
     ddPacket->setChunkLength(B(packetSize));
     Packet *pk = new Packet();
-    pk->insertAtEnd(ddPacket);
+    pk->insertAtBack(ddPacket);
 
     MessageHandler *messageHandler = parentInterface->getArea()->getRouter()->getMessageHandler();
     int ttl = (parentInterface->getType() == Interface::VIRTUAL) ? VIRTUAL_LINK_TTL : 1;
@@ -342,9 +342,9 @@ void Neighbor::sendLinkStateRequestPacket()
         requestPacket->setAuthentication(i, authKey.bytes[i]);
     }
 
-    long maxPacketSize = (((IP_MAX_HEADER_BYTES + OSPF_HEADER_LENGTH + OSPF_REQUEST_LENGTH) > parentInterface->getMTU()) ?
+    long maxPacketSize = (((IP_MAX_HEADER_BYTES + OSPF_HEADER_LENGTH + OSPF_REQUEST_LENGTH) > parentInterface->getMtu()) ?
                           IPV4_DATAGRAM_LENGTH :
-                          parentInterface->getMTU()) - IP_MAX_HEADER_BYTES;
+                          parentInterface->getMtu()) - IP_MAX_HEADER_BYTES;
     long packetSize = OSPF_HEADER_LENGTH;
 
     if (linkStateRequestList.empty()) {
@@ -372,7 +372,7 @@ void Neighbor::sendLinkStateRequestPacket()
 
     requestPacket->setChunkLength(B(packetSize));
     Packet *pk = new Packet();
-    pk->insertAtEnd(requestPacket);
+    pk->insertAtBack(requestPacket);
 
     MessageHandler *messageHandler = parentInterface->getArea()->getRouter()->getMessageHandler();
     int ttl = (parentInterface->getType() == Interface::VIRTUAL) ? VIRTUAL_LINK_TTL : 1;
@@ -669,7 +669,7 @@ void Neighbor::retransmitUpdatePacket()
                 break;
         }
 
-        if (packetLength + lsaSize < parentInterface->getMTU()) {
+        if (packetLength + lsaSize < parentInterface->getMtu()) {
             includeLSA = true;
             lsaCount++;
         }
@@ -763,7 +763,7 @@ void Neighbor::retransmitUpdatePacket()
 
     updatePacket->setChunkLength(B(packetLength - IP_MAX_HEADER_BYTES));
     Packet *pk = new Packet();
-    pk->insertAtEnd(updatePacket);
+    pk->insertAtBack(updatePacket);
 
     MessageHandler *messageHandler = parentInterface->getArea()->getRouter()->getMessageHandler();
     int ttl = (parentInterface->getType() == Interface::VIRTUAL) ? VIRTUAL_LINK_TTL : 1;

@@ -25,6 +25,7 @@
 
 #include "inet/networklayer/common/L3Address.h"
 #include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
+#include "inet/common/packet/Message.h"
 
 namespace inet {
 
@@ -69,12 +70,12 @@ class INET_API SctpSocket
       public:
         virtual ~CallbackInterface() {}
         virtual void socketDataArrived(int assocId, void *yourPtr, Packet *msg, bool urgent) = 0;
-        virtual void socketDataNotificationArrived(int assocId, void *yourPtr, Packet *msg) = 0;
+        virtual void socketDataNotificationArrived(int assocId, void *yourPtr, Message *msg) = 0;
         virtual void socketEstablished(int assocId, void *yourPtr, unsigned long int buffer) {}
         virtual void socketPeerClosed(int assocId, void *yourPtr) {}
         virtual void socketClosed(int assocId, void *yourPtr) {}
         virtual void socketFailure(int assocId, void *yourPtr, int code) {}
-        virtual void socketStatusArrived(int assocId, void *yourPtr, SctpStatusInfo *status) { delete status; }
+        virtual void socketStatusArrived(int assocId, void *yourPtr, SctpStatusReq *status) { delete status; }
         virtual void socketDeleted(int assocId, void *yourPtr) {}
         virtual void sendRequestArrived() {}
         virtual void msgAbandonedArrived(int assocId) {}
@@ -115,6 +116,7 @@ class INET_API SctpSocket
 
   public:
     cGate *gateToSctp;
+    int interfaceIdToTun = -1;
     /**
      * Constructor. The connectionId() method returns a valid Id right after
      * constructor call.
@@ -196,7 +198,7 @@ class INET_API SctpSocket
     void setFragPoint(int option) { sOptions->fragPoint = option; };
     void setNagle(int option) { sOptions->nagle = option; };
     void setPathMaxRetrans(int option) { sOptions->pathMaxRetrans = option; };
-    void setEnableHeartbeats(bool option) { sOptions->enableHeartbeats = option; printf("enableHeartbeats set to %d\n", sOptions->enableHeartbeats);};
+    void setEnableHeartbeats(bool option) { sOptions->enableHeartbeats = option; };
     void setHbInterval(double option) { sOptions->hbInterval = option; };
     void setRtoInfo(double initial, double max, double min);
     void setAssocMaxRtx(int option) { sOptions->assocMaxRtx = option; };
@@ -265,13 +267,9 @@ class INET_API SctpSocket
     void connectx(AddressVector remoteAddresses, int32 remotePort, bool streamReset = false, int32 prMethod = 0, uint32 numRequests = 0);
 
     void accept(int32 assocId, int32 fd);
-    /**
-     * Send data message.
-     */
-   /* void send(SctpSimpleMessage *msg, int prMethod = 0, double prValue = 0.0, int32 streamId = 0, bool last = true, bool primary = true);*/
 
     /**
-     * Send data message (provided within control message).
+     * Send data message
      */
     void sendMsg(cMessage *cmsg);
 
@@ -367,6 +365,10 @@ class INET_API SctpSocket
     //@}
 
     void setState(int state) { sockstate = state; };
+
+    void setTunInterface(int id) { interfaceIdToTun = id; };
+
+    int getTunInterface() { return interfaceIdToTun; };
 };
 
 } // namespace inet

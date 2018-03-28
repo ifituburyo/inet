@@ -77,7 +77,7 @@ void TcpGenericServerApp::sendBack(cMessage *msg)
     if (packet) {
         msgsSent++;
         bytesSent += packet->getByteLength();
-        emit(sentPkSignal, packet);
+        emit(packetSentSignal, packet);
 
         EV_INFO << "sending \"" << packet->getName() << "\" to TCP, " << packet->getByteLength() << " bytes\n";
     }
@@ -110,7 +110,7 @@ void TcpGenericServerApp::handleMessage(cMessage *msg)
         ChunkQueue &queue = socketQueue[connId];
         auto chunk = packet->peekDataAt(B(0));
         queue.push(chunk);
-        emit(rcvdPkSignal, packet);
+        emit(packetReceivedSignal, packet);
 
         bool doClose = false;
         while (const auto& appmsg = queue.pop<GenericAppMsg>(b(-1), Chunk::PF_ALLOW_NULLPTR)) {
@@ -129,7 +129,7 @@ void TcpGenericServerApp::handleMessage(cMessage *msg)
                 payload->setChunkLength(B(requestedBytes));
                 payload->setExpectedReplyLength(0);
                 payload->setReplyDelay(0);
-                outPacket->insertAtEnd(payload);
+                outPacket->insertAtBack(payload);
                 sendOrSchedule(outPacket, delay + msgDelay);
             }
             if (appmsg->getServerClose()) {

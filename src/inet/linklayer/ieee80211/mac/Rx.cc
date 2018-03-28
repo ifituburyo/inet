@@ -73,7 +73,7 @@ bool Rx::lowerFrameReceived(Packet *packet)
     bool isFrameOk = isFcsOk(packet);
     if (isFrameOk) {
         EV_INFO << "Received frame from PHY: " << packet << endl;
-        const auto& header = packet->peekHeader<Ieee80211MacHeader>();
+        const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
         if (header->getReceiverAddress() != address)
             setOrExtendNav(header->getDuration());
 //        statistics->frameReceived(frame);
@@ -83,7 +83,7 @@ bool Rx::lowerFrameReceived(Packet *packet)
         EV_INFO << "Received an erroneous frame from PHY, dropping it." << std::endl;
         PacketDropDetails details;
         details.setReason(INCORRECTLY_RECEIVED);
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
         for (auto contention : contentions)
             contention->corruptedFrameReceived();
@@ -111,7 +111,7 @@ bool Rx::isFcsOk(Packet *packet) const
     if (packet->hasBitError() || !packet->peekData()->isCorrect())
         return false;
     else {
-        const auto& trailer = packet->peekTrailer<Ieee80211MacTrailer>(B(4));
+        const auto& trailer = packet->peekAtBack<Ieee80211MacTrailer>(B(4));
         switch (trailer->getFcsMode()) {
             case FCS_DECLARED:
                 return true;

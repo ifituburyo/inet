@@ -59,7 +59,7 @@ void BMac::initialize(int stage)
 
         macState = INIT;
 
-        initializeMACAddress();
+        initializeMacAddress();
         registerInterface();
 
         cModule *radioModule = getModuleFromPar<cModule>(par("radioModule"), this);
@@ -146,7 +146,7 @@ void BMac::finish()
     //recordScalar("timeTX", timeTX);
 }
 
-void BMac::initializeMACAddress()
+void BMac::initializeMacAddress()
 {
     const char *addrstr = par("address");
 
@@ -170,7 +170,7 @@ InterfaceEntry *BMac::createInterfaceEntry()
     e->setDatarate(bitrate);
 
     // generate a link-layer address to be used as interface token for IPv6
-    e->setMACAddress(address);
+    e->setMacAddress(address);
     e->setInterfaceToken(address.formInterfaceIdentifier());
 
     // capabilities
@@ -209,9 +209,10 @@ void BMac::sendPreamble()
     preamble->setChunkLength(headerLength);
 
     //attach signal and send down
-    auto packet = new Packet();
-    packet->setKind(BMAC_PREAMBLE);
-    packet->insertHeader(preamble);
+    auto packet = new Packet("Preamble");
+    preamble->setType(BMAC_PREAMBLE);
+    packet->insertAtFront(preamble);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::bmac);
     attachSignal(packet);
     sendDown(packet);
     nbTxPreambles++;
@@ -228,9 +229,10 @@ void BMac::sendMacAck()
     ack->setChunkLength(headerLength);
 
     //attach signal and send down
-    auto packet = new Packet();
-    packet->setKind(BMAC_ACK);
-    packet->insertHeader(ack);
+    auto packet = new Packet("BMacAck");
+    ack->setType(BMAC_ACK);
+    packet->insertAtFront(ack);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::bmac);
     attachSignal(packet);
     sendDown(packet);
     nbTxAcks++;
@@ -403,7 +405,7 @@ void BMac::handleSelfMessage(cMessage *msg)
                     //drop the packet
                     cMessage *mac = macQueue.front();
                     macQueue.pop_front();
-                    emit(linkBreakSignal, mac);
+                    emit(linkBrokenSignal, mac);
                     delete mac;
 
                     // if something in the queue, wakeup soon.
@@ -427,7 +429,7 @@ void BMac::handleSelfMessage(cMessage *msg)
             if (msg->getKind() == BMAC_ACK) {
                 EV_DETAIL << "State WAIT_ACK, message BMAC_ACK" << endl;
                 auto packet = check_and_cast<Packet *>(msg);
-                const MacAddress src = packet->peekHeader<BMacHeader>()->getSrcAddr();
+                const MacAddress src = packet->peekAtFront<BMacHeader>()->getSrcAddr();
                 // the right ACK is received..
                 EV_DETAIL << "We are waiting for ACK from : " << lastDataPktDestAddr
                           << ", and ACK came from : " << src << endl;
@@ -471,7 +473,7 @@ void BMac::handleSelfMessage(cMessage *msg)
             if (msg->getKind() == BMAC_DATA) {
                 nbRxDataPackets++;
                 auto packet = check_and_cast<Packet *>(msg);
-                const auto bmacHeader = packet->peekHeader<BMacHeader>();
+                const auto bmacHeader = packet->peekAtFront<BMacHeader>();
                 const MacAddress& dest = bmacHeader->getDestAddr();
                 const MacAddress& src = bmacHeader->getSrcAddr();
                 if ((dest == address) || dest.isBroadcast()) {
@@ -483,7 +485,7 @@ void BMac::handleSelfMessage(cMessage *msg)
                     EV_DETAIL << "Received " << packet << " is not for us, dropping frame." << endl;
                     PacketDropDetails details;
                     details.setReason(NOT_ADDRESSED_TO_US);
-                    emit(packetDropSignal, msg, &details);
+                    emit(packetDroppedSignal, msg, &details);
                     delete msg;
                     msg = nullptr;
                     packet = nullptr;
@@ -565,13 +567,16 @@ void BMac::handleLowerPacket(Packet *packet)
         EV << "Received " << packet << " contains bit errors or collision, dropping it\n";
         PacketDropDetails details;
         details.setReason(INCORRECTLY_RECEIVED);
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
         return;
     }
-    else
+    else {
+        const auto& hdr = packet->peekAtFront<BMacHeader>();
+        packet->setKind(hdr->getType());
         // simply pass the massage as self message, to be processed by the FSM.
         handleSelfMessage(packet);
+    }
 }
 
 void BMac::sendDataPacket()
@@ -579,8 +584,9 @@ void BMac::sendDataPacket()
     nbTxDataPackets++;
     Packet *pkt = macQueue.front()->dup();
     attachSignal(pkt);
-    lastDataPktDestAddr = pkt->peekHeader<BMacHeader>()->getDestAddr();
-    pkt->setKind(BMAC_DATA);
+    const auto& hdr = pkt->peekAtFront<BMacHeader>();
+    lastDataPktDestAddr = hdr->getDestAddr();
+    ASSERT(hdr->getType() == BMAC_DATA);
     sendDown(pkt);
 }
 
@@ -628,7 +634,7 @@ bool BMac::addToQueue(cMessage *msg)
         PacketDropDetails details;
         details.setReason(QUEUE_OVERFLOW);
         details.setLimit(queueLength);
-        emit(packetDropSignal, msg, &details);
+        emit(packetDroppedSignal, msg, &details);
         nbDroppedDataPackets++;
         return false;
     }
@@ -741,12 +747,12 @@ void BMac::refreshDisplay() const
 
 void BMac::decapsulate(Packet *packet)
 {
-    const auto& bmacHeader = packet->popHeader<BMacHeader>();
+    const auto& bmacHeader = packet->popAtFront<BMacHeader>();
     packet->addTagIfAbsent<MacAddressInd>()->setSrcAddress(bmacHeader->getSrcAddr());
     packet->addTagIfAbsent<InterfaceInd>()->setInterfaceId(interfaceEntry->getInterfaceId());
-    auto protocol = ProtocolGroup::ethertype.getProtocol(bmacHeader->getNetworkProtocol());
-    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(protocol);
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(protocol);
+    auto payloadProtocol = ProtocolGroup::ethertype.getProtocol(bmacHeader->getNetworkProtocol());
+    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(payloadProtocol);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(payloadProtocol);
     EV_DETAIL << " message decapsulated " << endl;
 }
 
@@ -755,6 +761,7 @@ void BMac::encapsulate(Packet *packet)
     auto pkt = makeShared<BMacHeader>();
     pkt->setChunkLength(headerLength);
 
+    pkt->setType(BMAC_DATA);
     // copy dest address from the Control Info attached to the network
     // message by the network layer
     auto dest = packet->getTag<MacAddressReq>()->getDestAddress();
@@ -769,8 +776,9 @@ void BMac::encapsulate(Packet *packet)
     pkt->setSrcAddr(address);
 
     //encapsulate the network packet
-    packet->insertHeader(pkt);
+    packet->insertAtFront(pkt);
     EV_DETAIL << "pkt encapsulated\n";
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::bmac);
 }
 
 } // namespace inet

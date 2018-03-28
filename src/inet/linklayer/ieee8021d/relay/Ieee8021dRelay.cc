@@ -23,6 +23,7 @@
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/linklayer/configurator/Ieee8021dInterfaceData.h"
 #include "inet/linklayer/ethernet/EtherEncap.h"
+#include "inet/linklayer/ethernet/EtherPhyFrame_m.h"
 #include "inet/linklayer/ieee8021d/relay/Ieee8021dRelay.h"
 #include "inet/linklayer/ieee8022/Ieee8022LlcHeader_m.h"
 #include "inet/networklayer/common/InterfaceEntry.h"
@@ -44,8 +45,8 @@ void Ieee8021dRelay::initialize(int stage)
         fcsMode = parseEthernetFcsMode(par("fcsMode"));
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
-        registerService(Protocol::ethernet, gate("stpIn"), gate("ifIn"));
-        registerProtocol(Protocol::ethernet, gate("ifOut"), gate("stpOut"));
+        registerService(Protocol::ethernetMac, gate("stpIn"), gate("ifIn"));
+        registerProtocol(Protocol::ethernetMac, gate("ifOut"), gate("stpOut"));
     }
     else if (stage == INITSTAGE_LINK_LAYER_2) {
         NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
@@ -145,7 +146,7 @@ namespace {
 
 void Ieee8021dRelay::handleAndDispatchFrame(Packet *packet)
 {
-    const auto& frame = packet->peekHeader<EthernetMacHeader>();
+    const auto& frame = packet->peekAtFront<EthernetMacHeader>();
     int arrivalInterfaceId = packet->getTag<InterfaceInd>()->getInterfaceId();
     InterfaceEntry *arrivalInterface = ifTable->getInterfaceById(arrivalInterfaceId);
     Ieee8021dInterfaceData *arrivalPortData = arrivalInterface->ieee8021dData();
@@ -198,13 +199,17 @@ void Ieee8021dRelay::handleAndDispatchFrame(Packet *packet)
 
 void Ieee8021dRelay::dispatch(Packet *packet, InterfaceEntry *ie)
 {
-    const auto& frame = packet->peekHeader<EthernetMacHeader>();
+    const auto& frame = packet->peekAtFront<EthernetMacHeader>();
     EV_INFO << "Sending frame " << packet << " on output interface " << ie->getFullName() << " with destination = " << frame->getDest() << endl;
 
     numDispatchedNonBPDUFrames++;
+    auto oldPacketProtocolTag = packet->removeTag<PacketProtocolTag>();
     packet->clearTags();
-    packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(ie->getInterfaceId());
-    packet->removePoppedChunks();
+    auto newPacketProtocolTag = packet->addTag<PacketProtocolTag>();
+    *newPacketProtocolTag = *oldPacketProtocolTag;
+    delete oldPacketProtocolTag;
+    packet->addTag<InterfaceReq>()->setInterfaceId(ie->getInterfaceId());
+    packet->trim();
     emit(packetSentToLowerSignal, packet);
     send(packet, "ifOut");
 }
@@ -219,7 +224,7 @@ void Ieee8021dRelay::learn(MacAddress srcAddr, int arrivalInterfaceId)
 
 void Ieee8021dRelay::dispatchBPDU(Packet *packet)
 {
-    const auto& bpdu = packet->peekHeader<Bpdu>();
+    const auto& bpdu = packet->peekAtFront<Bpdu>();
     (void)bpdu;       // unused variable
     unsigned int portNum = packet->getTag<InterfaceReq>()->getInterfaceId();
     MacAddress address = packet->getTag<MacAddressReq>()->getDestAddress();
@@ -232,16 +237,16 @@ void Ieee8021dRelay::dispatchBPDU(Packet *packet)
     llcHeader->setSsap(0x42);
     llcHeader->setDsap(0x42);
     llcHeader->setControl(3);
-    packet->insertHeader(llcHeader);
+    packet->insertAtFront(llcHeader);
     const auto& header = makeShared<EthernetMacHeader>();
     packet->setKind(packet->getKind());
     header->setSrc(bridgeAddress);
     header->setDest(address);
     header->setTypeOrLength(packet->getByteLength());
-    packet->insertHeader(header);
+    packet->insertAtFront(header);
 
     EtherEncap::addPaddingAndFcs(packet, fcsMode);
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ethernet);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ethernetMac);
 
     EV_INFO << "Sending BPDU frame " << packet << " with destination = " << header->getDest() << ", port = " << portNum << endl;
     numDispatchedBDPUFrames++;
@@ -254,10 +259,10 @@ void Ieee8021dRelay::deliverBPDU(Packet *packet)
     auto eth = EtherEncap::decapsulateMacHeader(packet);
     ASSERT(isIeee8023Header(*eth));
 
-    const auto& llc = packet->popHeader<Ieee8022LlcHeader>();
+    const auto& llc = packet->popAtFront<Ieee8022LlcHeader>();
     ASSERT(llc->getSsap() == 0x42 && llc->getDsap() == 0x42 && llc->getControl() == 3);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::stp);
-    const auto& bpdu = packet->peekHeader<Bpdu>();
+    const auto& bpdu = packet->peekAtFront<Bpdu>();
 
     EV_INFO << "Sending BPDU frame " << bpdu << " to the STP/RSTP module" << endl;
     numDeliveredBDPUsToSTP++;

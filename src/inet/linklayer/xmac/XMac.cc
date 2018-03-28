@@ -74,7 +74,7 @@ void XMac::initialize(int stage)
         WATCH(macState);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
-        initializeMACAddress();
+        initializeMacAddress();
         registerInterface();
 
         wakeup = new cMessage("wakeup");
@@ -177,7 +177,7 @@ void XMac::finish()
     }
 }
 
-void XMac::initializeMACAddress()
+void XMac::initializeMacAddress()
 {
     const char *addrstr = par("address");
 
@@ -201,7 +201,7 @@ InterfaceEntry *XMac::createInterfaceEntry()
     e->setDatarate(bitrate);
 
     // generate a link-layer address to be used as interface token for IPv6
-    e->setMACAddress(address);
+    e->setMacAddress(address);
     e->setInterfaceToken(address.formInterfaceIdentifier());
 
     // capabilities
@@ -241,8 +241,9 @@ void XMac::sendPreamble(MacAddress preamble_address)
     preamble->setSrcAddr(address);
     preamble->setDestAddr(preamble_address);
     preamble->setChunkLength(b(headerLength));
+    preamble->setType(XMAC_PREAMBLE);
     auto packet = new Packet("Preamble", preamble);
-    packet->setKind(XMAC_PREAMBLE);
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::xmac);
     attachSignal(packet, simTime());
     sendDown(packet);
     nbTxPreambles++;
@@ -258,8 +259,9 @@ void XMac::sendMacAck()
     //~ diff with XMAC, ack_preamble_based
     ack->setDestAddr(lastPreamblePktSrcAddr);
     ack->setChunkLength(b(headerLength));
-    auto packet = new Packet("Acknowledgment", ack);
-    packet->setKind(XMAC_ACK);
+    ack->setType(XMAC_ACK);
+    auto packet = new Packet("XMacAck", ack);
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::xmac);
     attachSignal(packet, simTime());
     sendDown(packet);
     nbTxAcks++;
@@ -331,7 +333,7 @@ void XMac::handleSelfMessage(cMessage *msg)
         // during CCA, we received a preamble. Go to state WAIT_DATA and
         // schedule the timeout.
         if (msg->getKind() == XMAC_PREAMBLE) {
-            auto incoming_preamble = check_and_cast<Packet *>(msg)->peekHeader<XMacHeader>();
+            auto incoming_preamble = check_and_cast<Packet *>(msg)->peekAtFront<XMacHeader>();
 
             // preamble is for me
             if (incoming_preamble->getDestAddr() == address || incoming_preamble->getDestAddr().isBroadcast() || incoming_preamble->getDestAddr().isMulticast()) {
@@ -368,7 +370,7 @@ void XMac::handleSelfMessage(cMessage *msg)
         // if in CCA the node receives directly the data packet, accept it
         // even if we increased nbMissedAcks in state SLEEP
         if (msg->getKind() == XMAC_DATA) {
-            auto incoming_data = check_and_cast<Packet *>(msg)->peekHeader<XMacHeader>();
+            auto incoming_data = check_and_cast<Packet *>(msg)->peekAtFront<XMacHeader>();
 
             // packet is for me
             if (incoming_data->getDestAddr() == address) {
@@ -405,7 +407,7 @@ void XMac::handleSelfMessage(cMessage *msg)
         // radio switch from above
         if (msg->getKind() == XMAC_SWITCHING_FINISHED) {
             if (radio->getRadioMode() == IRadio::RADIO_MODE_TRANSMITTER) {
-                auto pkt_preamble = macQueue.front()->peekHeader<XMacHeader>();
+                auto pkt_preamble = macQueue.front()->peekAtFront<XMacHeader>();
                 sendPreamble(pkt_preamble->getDestAddr());
             }
             return;
@@ -497,7 +499,7 @@ void XMac::handleSelfMessage(cMessage *msg)
         }
         if (msg->getKind() == XMAC_DATA) {
             auto packet = check_and_cast<Packet *>(msg);
-            auto mac = packet->peekHeader<XMacHeader>();
+            auto mac = packet->peekAtFront<XMacHeader>();
             const MacAddress& dest = mac->getDestAddr();
 
             if ((dest == address) || dest.isBroadcast() || dest.isMulticast()) {
@@ -578,6 +580,8 @@ void XMac::handleLowerPacket(Packet *msg)
         return;
     }
     // simply pass the massage as self message, to be processed by the FSM.
+    const auto& hdr = msg->peekAtFront<XMacHeader>();
+    msg->setKind(hdr->getType());
     handleSelfMessage(msg);
 }
 
@@ -585,8 +589,9 @@ void XMac::sendDataPacket()
 {
     nbTxDataPackets++;
     auto packet = macQueue.front()->dup();
-    lastDataPktDestAddr = packet->peekHeader<XMacHeader>()->getDestAddr();
-    packet->setKind(XMAC_DATA);
+    const auto& hdr = packet->peekAtFront<XMacHeader>();
+    lastDataPktDestAddr = hdr->getDestAddr();
+    ASSERT(hdr->getType() == XMAC_DATA);
     attachSignal(packet, simTime());
     sendDown(packet);
 }
@@ -637,14 +642,14 @@ bool XMac::addToQueue(Packet *packet)
                   " deleted\n";
         PacketDropDetails details;
         details.setReason(QUEUE_OVERFLOW);
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
         nbDroppedDataPackets++;
         return false;
     }
 
     encapsulate(packet);
-    EV_DETAIL << "CSMA received a message from upper layer, name is " << packet->getName() << ", CInfo removed, mac addr=" << packet->peekHeader<XMacHeader>()->getDestAddr() << endl;
+    EV_DETAIL << "CSMA received a message from upper layer, name is " << packet->getName() << ", CInfo removed, mac addr=" << packet->peekAtFront<XMacHeader>()->getDestAddr() << endl;
     EV_DETAIL << "pkt encapsulated, length: " << packet->getBitLength() << "\n";
     macQueue.push_back(packet);
     EV_DEBUG << "Max queue length: " << queueLength << ", packet put in queue"
@@ -702,12 +707,12 @@ void XMac::changeDisplayColor(XMAC_COLORS color)
 
 void XMac::decapsulate(Packet *packet)
 {
-    const auto& xmacHeader = packet->popHeader<XMacHeader>();
+    const auto& xmacHeader = packet->popAtFront<XMacHeader>();
     packet->addTagIfAbsent<MacAddressInd>()->setSrcAddress(xmacHeader->getSrcAddr());
     packet->addTagIfAbsent<InterfaceInd>()->setInterfaceId(interfaceEntry->getInterfaceId());
-    auto protocol = ProtocolGroup::ethertype.getProtocol(xmacHeader->getNetworkProtocol());
-    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(protocol);
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(protocol);
+    auto payloadProtocol = ProtocolGroup::ethertype.getProtocol(xmacHeader->getNetworkProtocol());
+    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(payloadProtocol);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(payloadProtocol);
     EV_DETAIL << " message decapsulated " << endl;
 }
 
@@ -729,8 +734,12 @@ void XMac::encapsulate(Packet *packet)
     //set the src address to own mac address (nic module getId())
     pkt->setSrcAddr(address);
 
+    pkt->setType(XMAC_DATA);
+    packet->setKind(XMAC_DATA);
+
     //encapsulate the network packet
-    packet->insertHeader(pkt);
+    packet->insertAtFront(pkt);
+    packet->getTag<PacketProtocolTag>()->setProtocol(&Protocol::xmac);
     EV_DETAIL << "pkt encapsulated\n";
 }
 

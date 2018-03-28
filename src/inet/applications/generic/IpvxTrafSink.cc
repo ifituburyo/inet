@@ -41,7 +41,16 @@ void IpvxTrafSink::initialize(int stage)
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
         NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
         isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
-        auto protocol = ProtocolGroup::ipprotocol.getProtocol(par("protocol"));
+        int protocolId = par("protocol");
+        if (protocolId < 143 || protocolId > 254)
+            throw cRuntimeError("invalid protocol id %d, accepts only between 143 and 254", protocolId);
+        auto protocol = ProtocolGroup::ipprotocol.findProtocol(protocolId);
+        if (!protocol) {
+            char *buff = new char[40];
+            sprintf(buff, "prot_%d", protocolId);
+            protocol = new Protocol(buff, buff);
+            ProtocolGroup::ipprotocol.addProtocol(protocolId, protocol);
+        }
         registerService(*protocol, nullptr, gate("ipIn"));
         registerProtocol(*protocol, gate("ipOut"), nullptr);
     }
@@ -103,7 +112,7 @@ void IpvxTrafSink::printPacket(Packet *msg)
 
 void IpvxTrafSink::processPacket(Packet *msg)
 {
-    emit(rcvdPkSignal, msg);
+    emit(packetReceivedSignal, msg);
     EV_INFO << "Received packet: ";
     printPacket(msg);
     delete msg;

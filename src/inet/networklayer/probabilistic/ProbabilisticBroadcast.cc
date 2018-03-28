@@ -52,7 +52,7 @@ void ProbabilisticBroadcast::handleUpperPacket(Packet *packet)
 {
     // encapsulate message in a network layer packet.
     encapsulate(packet);
-    auto macHeader = packet->peekHeader<ProbabilisticBroadcastHeader>();
+    auto macHeader = packet->peekAtFront<ProbabilisticBroadcastHeader>();
     nbDataPacketsSent++;
     EV << "PBr: " << simTime() << " n" << myNetwAddr << " handleUpperMsg(): Pkt ID = " << macHeader->getId() << " TTL = " << macHeader->getAppTtl() << endl;
     // submit packet for first insertion in queue.
@@ -62,8 +62,8 @@ void ProbabilisticBroadcast::handleUpperPacket(Packet *packet)
 void ProbabilisticBroadcast::handleLowerPacket(Packet *packet)
 {
     MacAddress macSrcAddr;
-    auto macHeader = dynamicPtrCast<ProbabilisticBroadcastHeader>(packet->popHeader<ProbabilisticBroadcastHeader>()->dupShared());
-    packet->removePoppedChunks();
+    auto macHeader = dynamicPtrCast<ProbabilisticBroadcastHeader>(packet->popAtFront<ProbabilisticBroadcastHeader>()->dupShared());
+    packet->trim();
     auto macAddressInd = packet->getTag<MacAddressInd>();
     macHeader->setNbHops(macHeader->getNbHops() + 1);
     macSrcAddr = macAddressInd->getSrcAddress();
@@ -94,7 +94,7 @@ void ProbabilisticBroadcast::handleLowerPacket(Packet *packet)
         setDownControlInfo(packet, MacAddress::BROADCAST_ADDRESS);
         // before inserting message, update source address (for this hop, not the initial source)
         macHeader->setSrcAddr(myNetwAddr);
-        packet->insertHeader(macHeader);
+        packet->insertAtFront(macHeader);
         insertNewMessage(packet);
 
         // until a subscription mechanism is implemented, duplicate and pass all received packets
@@ -117,7 +117,7 @@ void ProbabilisticBroadcast::handleSelfMessage(cMessage *msg)
         // into a container of type tMsgDesc.
         msgDesc = popFirstMessageUpdateQueue();
         auto packet = msgDesc->pkt;
-        auto macHeader = packet->peekHeader<ProbabilisticBroadcastHeader>();
+        auto macHeader = packet->peekAtFront<ProbabilisticBroadcastHeader>();
         // if the packet is alive, duplicate it and insert the copy in the queue,
         // then perform a broadcast attempt.
         EV << "PBr: " << simTime() << " n" << myNetwAddr << " handleSelfMsg(): Message ID= " << macHeader->getId() << " TTL= " << macHeader->getAppTtl() << endl;
@@ -133,7 +133,7 @@ void ProbabilisticBroadcast::handleSelfMessage(cMessage *msg)
                 // => insert it with delay = TTL. So when the copy will be popped out of the
                 // queue, it will be considered as dead and discarded.
                 auto packetCopy = packet->dup();
-                auto macHeaderCopy = packetCopy->peekHeader<ProbabilisticBroadcastHeader>();;
+                auto macHeaderCopy = packetCopy->peekAtFront<ProbabilisticBroadcastHeader>();;
                 // control info is not duplicated with the message, so we have to re-create one here.
                 setDownControlInfo(packetCopy, MacAddress::BROADCAST_ADDRESS);
                 // it the copy that is re-inserted into the queue so update the container accordingly
@@ -235,10 +235,10 @@ void ProbabilisticBroadcast::insertMessage(simtime_t_cref bcastDelay, tMsgDesc *
 
     EV << "PBr: " << simTime() << " n" << myNetwAddr << "         insertMessage() bcastDelay = " << bcastDelay << " Msg ID = " << msgDesc->pkt->getId() << endl;
     // update TTL field of the message to the value it will have when taken out of the list
-    auto macHeader = dynamicPtrCast<ProbabilisticBroadcastHeader>(msgDesc->pkt->popHeader<ProbabilisticBroadcastHeader>()->dupShared());
-    msgDesc->pkt->removePoppedChunks();
+    msgDesc->pkt->trim();
+    auto macHeader = msgDesc->pkt->removeAtFront<ProbabilisticBroadcastHeader>();
     macHeader->setAppTtl(macHeader->getAppTtl() - bcastDelay);
-    msgDesc->pkt->insertHeader(macHeader);
+    msgDesc->pkt->insertAtFront(macHeader);
     // insert message ID in ID list.
     knownMsgIds.insert(macHeader->getId());
     // insert key value pair <broadcast time, pointer to message> in message queue.
@@ -288,18 +288,19 @@ void ProbabilisticBroadcast::encapsulate(Packet *packet)
     pkt->setAppTtl(timeToLive);
     pkt->setId(getNextID());
     pkt->setProtocol(packet->getTag<PacketProtocolTag>()->getProtocol());
+    pkt->setPayloadLengthField(packet->getDataLength());
     // clean-up
     delete controlInfo;
 
     //encapsulate the application packet
-    packet->insertHeader(pkt);
+    packet->insertAtFront(pkt);
 
     setDownControlInfo(packet, MacAddress::BROADCAST_ADDRESS);
 }
 
 void ProbabilisticBroadcast::insertNewMessage(Packet *packet, bool iAmInitialSender)
 {
-    auto macHeader = packet->peekHeader<ProbabilisticBroadcastHeader>();
+    auto macHeader = packet->peekAtFront<ProbabilisticBroadcastHeader>();
     simtime_t ttl = macHeader->getAppTtl();
 
     if (ttl > 0) {
@@ -335,10 +336,19 @@ void ProbabilisticBroadcast::insertNewMessage(Packet *packet, bool iAmInitialSen
 
 void ProbabilisticBroadcast::decapsulate(Packet *packet)
 {
-    auto macHeader = packet->popHeader<ProbabilisticBroadcastHeader>();
-    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(macHeader->getProtocol());
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(macHeader->getProtocol());
-    packet->addTagIfAbsent<L3AddressInd>()->setSrcAddress(macHeader->getSrcAddr());
+    auto networkHeader = packet->popAtFront<ProbabilisticBroadcastHeader>();
+    auto payloadLength = networkHeader->getPayloadLengthField();
+    if (packet->getDataLength() < payloadLength) {
+        throw cRuntimeError("Data error: illegal payload length");     //FIXME packet drop
+    }
+    if (packet->getDataLength() > payloadLength)
+        packet->setBackOffset(packet->getFrontOffset() + payloadLength);
+    auto payloadProtocol = networkHeader->getProtocol();
+    packet->addTagIfAbsent<NetworkProtocolInd>()->setProtocol(&getProtocol());
+    packet->addTagIfAbsent<NetworkProtocolInd>()->setNetworkProtocolHeader(networkHeader);
+    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(payloadProtocol);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(payloadProtocol);
+    packet->addTagIfAbsent<L3AddressInd>()->setSrcAddress(networkHeader->getSrcAddr());
 }
 
 /**
@@ -347,8 +357,8 @@ void ProbabilisticBroadcast::decapsulate(Packet *packet)
 void ProbabilisticBroadcast::setDownControlInfo(Packet *const pMsg, const MacAddress& pDestAddr)
 {
     pMsg->addTagIfAbsent<MacAddressReq>()->setDestAddress(pDestAddr);
-    pMsg->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::gnp);
-    pMsg->addTagIfAbsent<DispatchProtocolInd>()->setProtocol(&Protocol::gnp);
+    pMsg->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::probabilistic);
+    pMsg->addTagIfAbsent<DispatchProtocolInd>()->setProtocol(&Protocol::probabilistic);
 }
 
 } // namespace inet

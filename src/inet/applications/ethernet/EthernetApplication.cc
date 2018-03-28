@@ -97,7 +97,7 @@ void EthernetApplication::sendPacket()
     data->setChunkLength(B(len));
     long respLen = *respLength;
     data->setResponseBytes(respLen);
-    datapacket->insertAtEnd(data);
+    datapacket->insertAtBack(data);
     datapacket->addTagIfAbsent<MacAddressReq>()->setDestAddress(destMACAddress);
     send(datapacket, "out");
     packetsSent++;
@@ -111,7 +111,7 @@ void EthernetApplication::receivePacket(cMessage *msg)
     // simtime_t lastEED = simTime() - msg->getCreationTime();
 
     Packet *reqPk = check_and_cast<Packet *>(msg);
-    emit(rcvdPkSignal, reqPk);
+    emit(packetReceivedSignal, reqPk);
     const auto& req = reqPk->peekDataAt<EtherAppReq>(B(0));
 
     if (req != nullptr) {
@@ -132,7 +132,7 @@ void EthernetApplication::receivePacket(cMessage *msg)
             const auto& outPayload = makeShared<EtherAppResp>();
             outPayload->setRequestId(requestId);
             outPayload->setChunkLength(B(l));
-            outPacket->insertAtEnd(outPayload);
+            outPacket->insertAtBack(outPayload);
 
             sendPacket(outPacket, srcAddr);
             packetsSent++;
@@ -145,7 +145,7 @@ void EthernetApplication::receivePacket(cMessage *msg)
 void EthernetApplication::sendPacket(Packet *datapacket, const MacAddress& destAddr)
 {
     datapacket->addTagIfAbsent<MacAddressReq>()->setDestAddress(destAddr);
-    emit(sentPkSignal, datapacket);
+    emit(packetSentSignal, datapacket);
     send(datapacket, "out");
 }
 

@@ -41,7 +41,6 @@
 
 namespace inet {
 
-
 /**
  * Implementation of NetPerfMeter. See NED file for more details.
  */
@@ -178,7 +177,7 @@ class INET_API NetPerfMeter : public cSimpleModule
 
       unsigned long long ReceivedBytes = 0;
       unsigned long long ReceivedMessages = 0;
-      cDoubleHistogram   ReceivedDelayHistogram;
+      cHistogram ReceivedDelayHistogram;
    };
 
    std::map<unsigned int, SenderStatistics*>   SenderStatisticsMap;
@@ -200,7 +199,7 @@ class INET_API NetPerfMeter : public cSimpleModule
    void stopSending();
    void sendDataOfTraceFile(const unsigned long long bytesAvailableInQueue);
    void sendDataOfSaturatedStreams(const unsigned long long   bytesAvailableInQueue,
-                                   const SctpSendQueueAbated* sendQueueAbatedIndication);
+                                   const SctpSendQueueAbatedReq* sendQueueAbatedIndication);
 
    void sendDataOfNonSaturatedStreams(const unsigned long long bytesAvailableInQueue,
                                       const unsigned int       streamID);
@@ -213,7 +212,6 @@ class INET_API NetPerfMeter : public cSimpleModule
    void createAndBindSocket();
    void handleTimer(cMessage* msg);
 };
-
 } // namespace inet
 
 #endif

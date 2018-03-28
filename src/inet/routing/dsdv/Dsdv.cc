@@ -65,7 +65,7 @@ void Dsdv::initialize(int stage)
     {
         registerService(Protocol::manet, nullptr, gate("ipIn"));
         registerProtocol(Protocol::manet, gate("ipOut"), nullptr);
-        L3Socket socket(Protocol::manet.getId(), gate("ipOut"));
+        L3Socket socket(&Protocol::manet, gate("ipOut"));
         forwardList = new std::list<ForwardEntry *>();
         event = new cMessage("event");
         if (isNodeUp())
@@ -321,7 +321,7 @@ void Dsdv::handleMessage(cMessage *msg)
                     EV_DETAIL << "waitime for forward before was " << waitTime <<" And host is " << source << "\n";
                     //waitTime= SIMTIME_DBL (simTime())+waitTime;
                     EV_DETAIL << "waitime for forward is " << waitTime <<" And host is " << source << "\n";     //FIXME unchanged waitTime showed twice!!!
-                    packet->insertAtEnd(recHello);
+                    packet->insertAtBack(recHello);
                     sendDelayed(packet, waitTime, "ipOut");
                     packet = nullptr;
                 }

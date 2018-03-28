@@ -362,7 +362,7 @@ int Ipv6Tunneling::getVIfIndexForDest(const Ipv6Address& destAddress, TunnelType
 
 void Ipv6Tunneling::encapsulateDatagram(Packet *packet)
 {
-    auto ipv6Header = packet->peekHeader<Ipv6Header>();
+    auto ipv6Header = packet->peekAtFront<Ipv6Header>();
     int vIfIndex = -1;
 
     if (ipv6Header->getProtocolId() == IP_PROT_IPv6EXT_MOB) {
@@ -413,7 +413,7 @@ void Ipv6Tunneling::encapsulateDatagram(Packet *packet)
         }
 
         // get rid of the encapsulation of the Ipv6 module
-        packet->popHeader<Ipv6Header>();
+        packet->popAtFront<Ipv6Header>();
         packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(ipv6Header->getProtocol());
 
         if (tunnels[vIfIndex].tunnelType == T2RH) {
@@ -426,11 +426,12 @@ void Ipv6Tunneling::encapsulateDatagram(Packet *packet)
             t2RH->setRoutingType(2);
             t2RH->setSegmentsLeft(1);
             t2RH->setAddressArraySize(1);
+            t2RH->setByteLength(8 + 1 * 16);
             // old src becomes address of T2RH
             t2RH->setAddress(0, rh2);
 
             // append T2RH to routing headers
-            packet->addTagIfAbsent<Ipv6ExtHeaderReq>()->addExtensionHeader(t2RH);
+            packet->addTagIfAbsent<Ipv6ExtHeaderReq>()->insertExtensionHeader(t2RH);
 
             EV_INFO << "Added Type 2 Routing Header." << endl;
         }
@@ -443,7 +444,7 @@ void Ipv6Tunneling::encapsulateDatagram(Packet *packet)
             haOpt->setHomeAddress(rh2);
 
             // append HA option to routing headers
-            packet->addTagIfAbsent<Ipv6ExtHeaderReq>()->addExtensionHeader(haOpt);
+            packet->addTagIfAbsent<Ipv6ExtHeaderReq>()->insertExtensionHeader(haOpt);
 
             EV_INFO << "Added Home Address Option header." << endl;
         }
@@ -475,9 +476,9 @@ void Ipv6Tunneling::encapsulateDatagram(Packet *packet)
 
 void Ipv6Tunneling::decapsulateDatagram(Packet *packet)
 {
-    auto ipv6Header = packet->peekHeader<Ipv6Header>();
+    auto ipv6Header = packet->peekAtFront<Ipv6Header>();
     // decapsulation is performed in Ipv6 module
-    Ipv6Address srcAddr = packet->getTag<L3AddressInd>()->getSrcAddress().toIPv6();
+    Ipv6Address srcAddr = packet->getTag<L3AddressInd>()->getSrcAddress().toIpv6();
 
 #ifdef WITH_xMIPv6
     // we only decapsulate packets for which we have a tunnel

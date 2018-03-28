@@ -27,6 +27,7 @@
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Protocol.h"
+#include "inet/common/ProtocolGroup.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/lifecycle/NodeStatus.h"
@@ -60,6 +61,15 @@ simsignal_t PingApp::numLostSignal = registerSignal("numLost");
 simsignal_t PingApp::numOutOfOrderArrivalsSignal = registerSignal("numOutOfOrderArrivals");
 simsignal_t PingApp::pingTxSeqSignal = registerSignal("pingTxSeq");
 simsignal_t PingApp::pingRxSeqSignal = registerSignal("pingRxSeq");
+
+const std::map<const Protocol *, const Protocol *> PingApp::l3Echo( {
+    { &Protocol::ipv4, &Protocol::icmpv4 },
+    { &Protocol::ipv6, &Protocol::icmpv6 },
+    { &Protocol::flood, &Protocol::echo },
+    { &Protocol::gnp, &Protocol::echo },
+    { &Protocol::probabilistic, &Protocol::echo },
+    { &Protocol::wiseroute, &Protocol::echo },
+});
 
 enum PingSelfKinds {
     PING_FIRST_ADDR = 1001,
@@ -182,23 +192,29 @@ void PingApp::handleMessage(cMessage *msg)
             destAddr = destAddresses[destAddrIdx];
             EV_INFO << "Starting up: dest=" << destAddr << "  src=" << srcAddr << "seqNo=" << sendSeqNo << endl;
             ASSERT(!destAddr.isUnspecified());
-            int l3ProtocolId = -1;
-            int icmp;
-            switch (destAddr.getType()) {
-                case L3Address::Ipv4: icmp = IP_PROT_ICMP; l3ProtocolId = Protocol::ipv4.getId(); break;
-                case L3Address::Ipv6: icmp = IP_PROT_IPv6_ICMP; l3ProtocolId = Protocol::ipv6.getId(); break;
-                case L3Address::MODULEID:
-                case L3Address::MODULEPATH: icmp = IP_PROT_ECHO; l3ProtocolId = Protocol::gnp.getId(); break;
-                    //TODO
-                default: throw cRuntimeError("unknown address type: %d(%s)", (int)destAddr.getType(), L3Address::getTypeName(destAddr.getType()));
+            const Protocol *l3Protocol = nullptr;
+            const char *networkProtocol = par("networkProtocol");
+            if (*networkProtocol) {
+                l3Protocol = Protocol::getProtocol(networkProtocol);
             }
+            else {
+                switch (destAddr.getType()) {
+                    case L3Address::Ipv4: l3Protocol = &Protocol::ipv4; break;
+                    case L3Address::Ipv6: l3Protocol = &Protocol::ipv6; break;
+                    case L3Address::MODULEID:
+                    case L3Address::MODULEPATH: l3Protocol = &Protocol::gnp; break;
+                        //TODO
+                    default: throw cRuntimeError("unknown address type: %d(%s)", (int)destAddr.getType(), L3Address::getTypeName(destAddr.getType()));
+                }
+            }
+            const Protocol *icmp = l3Echo.at(l3Protocol);
 
-            if (!l3Socket || l3Socket->getControlInfoProtocolId() != l3ProtocolId) {
+            if (!l3Socket || l3Socket->getL3Protocol()->getId() != l3Protocol->getId()) {
                 if (l3Socket) {
                     l3Socket->close();
                     delete l3Socket;
                 }
-                l3Socket = new L3Socket(l3ProtocolId, gate("socketOut"));
+                l3Socket = new L3Socket(l3Protocol, gate("socketOut"));
                 l3Socket->bind(icmp);
             }
             msg->setKind(PING_SEND);
@@ -227,7 +243,7 @@ void PingApp::handleMessage(cMessage *msg)
         Packet *packet = check_and_cast<Packet *>(msg);
 #ifdef WITH_IPv4
         if (packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::icmpv4) {
-            const auto& icmpHeader = packet->popHeader<IcmpHeader>();
+            const auto& icmpHeader = packet->popAtFront<IcmpHeader>();
             if (icmpHeader->getType() == ICMP_ECHO_REPLY) {
                 const auto& echoReply = CHK(dynamicPtrCast<const IcmpEchoReply>(icmpHeader));
                 processPingResponse(echoReply->getIdentifier(), echoReply->getSeqNumber(), packet);
@@ -241,7 +257,7 @@ void PingApp::handleMessage(cMessage *msg)
 #endif
 #ifdef WITH_IPv6
         if (packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::icmpv6) {
-            const auto& icmpHeader = packet->popHeader<Icmpv6Header>();
+            const auto& icmpHeader = packet->popAtFront<Icmpv6Header>();
             if (icmpHeader->getType() == ICMPv6_ECHO_REPLY) {
                 const auto& echoReply = CHK(dynamicPtrCast<const Icmpv6EchoReplyMsg>(icmpHeader));
                 processPingResponse(echoReply->getIdentifier(), echoReply->getSeqNumber(), packet);
@@ -255,7 +271,7 @@ void PingApp::handleMessage(cMessage *msg)
 #endif
 #ifdef WITH_GENERIC
         if (packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::echo) {
-            const auto& icmpHeader = packet->popHeader<EchoPacket>();
+            const auto& icmpHeader = packet->popAtFront<EchoPacket>();
             if (icmpHeader->getType() == ECHO_PROTOCOL_REPLY) {
                 processPingResponse(icmpHeader->getIdentifier(), icmpHeader->getSeqNumber(), packet);
             }
@@ -366,9 +382,9 @@ void PingApp::sendPingRequest()
             const auto& request = makeShared<IcmpEchoRequest>();
             request->setIdentifier(pid);
             request->setSeqNumber(sendSeqNo);
-            outPacket->insertAtEnd(payload);
+            outPacket->insertAtBack(payload);
             Icmp::insertCrc(crcMode, request, outPacket);
-            outPacket->insertHeader(request);
+            outPacket->insertAtFront(request);
             outPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::icmpv4);
             break;
 #else
@@ -380,9 +396,9 @@ void PingApp::sendPingRequest()
             const auto& request = makeShared<Icmpv6EchoRequestMsg>();
             request->setIdentifier(pid);
             request->setSeqNumber(sendSeqNo);
-            outPacket->insertAtEnd(payload);
+            outPacket->insertAtBack(payload);
             Icmpv6::insertCrc(crcMode, request, outPacket);
-            outPacket->insertHeader(request);
+            outPacket->insertAtFront(request);
             outPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::icmpv6);
             break;
 #else
@@ -397,9 +413,9 @@ void PingApp::sendPingRequest()
             request->setType(ECHO_PROTOCOL_REQUEST);
             request->setIdentifier(pid);
             request->setSeqNumber(sendSeqNo);
-            outPacket->insertAtEnd(payload);
+            outPacket->insertAtBack(payload);
             // insertCrc(crcMode, request, outPacket);
-            outPacket->insertHeader(request);
+            outPacket->insertAtFront(request);
             outPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::echo);
             break;
 #else

@@ -161,7 +161,7 @@ void VoipStreamSender::handleMessage(cMessage *msg)
         }
         else {
             packet = check_and_cast<Packet *>(msg);
-            emit(sentPkSignal, packet);
+            emit(packetSentSignal, packet);
             socket.sendTo(packet, destAddress, destPort);
         }
     }
@@ -361,7 +361,7 @@ Packet *VoipStreamSender::generatePacket()
     vp->setSampleBits(pEncoderCtx->bits_per_coded_sample);
     vp->setSamplesPerPacket(samplesPerPacket);
     vp->setTransmitBitrate(compressedBitRate);
-    pk->insertAtEnd(vp);
+    pk->insertAtBack(vp);
 
     pktID++;
 

@@ -23,7 +23,7 @@ package inet.visualizer.base;
 // default, see module parameters for how to enable the visualization. The
 // actual visualization of packet drops is done in derived modules.
 //
-// This module subscribes for packetDrop on the module determined by the
+// This module subscribes for packetDropped on the module determined by the
 // subscriptionModule parameter. If the visualizer receives a packet dropped
 // signal, then it stores the dropped packet and starts the visualization.
 //
@@ -44,6 +44,7 @@ simple PacketDropVisualizerBase extends VisualizerBase
         string nodeFilter = default("*"); // which network nodes are considered, matches all network nodes by default
         string interfaceFilter = default("*"); // which network interfaces are considered, matches all network interfaces by default
         string packetFilter = default("*"); // which packets are considered, matches all packets by default
+        string packetDataFilter = default("*"); // which packets are considered based on the data they contain, matches all packets by default
         string detailsFilter = default("*"); // which packet drops are considered, matches all packet drops by default
 
         string icon = default("msg/packet_s"); // packet drop visualization icon

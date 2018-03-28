@@ -27,7 +27,7 @@
 #include "inet/networklayer/common/InterfaceTable.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
 
 namespace inet {
@@ -179,7 +179,7 @@ void PimBase::sendHelloPacket(PimInterface *pimInterface)
     }
 
     msg->setChunkLength(B(byteLength));
-    pk->insertHeader(msg);
+    pk->insertAtFront(msg);
     pk->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::pim);
     pk->addTagIfAbsent<InterfaceReq>()->setInterfaceId(pimInterface->getInterfaceId());
     pk->addTagIfAbsent<DispatchProtocolInd>()->setProtocol(&Protocol::pim);
@@ -196,8 +196,8 @@ void PimBase::processHelloPacket(Packet *packet)
 {
     int interfaceId = packet->getTag<InterfaceInd>()->getInterfaceId();
 
-    Ipv4Address address = packet->getTag<L3AddressInd>()->getSrcAddress().toIPv4();
-    const auto& pimPacket = packet->peekHeader<PimHello>();
+    Ipv4Address address = packet->getTag<L3AddressInd>()->getSrcAddress().toIpv4();
+    const auto& pimPacket = packet->peekAtFront<PimHello>();
     int version = pimPacket->getVersion();
 
     emit(rcvdHelloPkSignal, packet);

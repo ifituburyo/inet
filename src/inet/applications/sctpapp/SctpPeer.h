@@ -23,6 +23,10 @@
 #include "inet/transportlayer/contract/sctp/SctpSocket.h"
 #include "inet/common/lifecycle/ILifecycle.h"
 #include "inet/common/lifecycle/LifecycleOperation.h"
+#include "inet/applications/common/SocketTag_m.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/TimeTag_m.h"
+#include "inet/common/packet/Message.h"
 
 namespace inet {
 
@@ -44,7 +48,7 @@ class INET_API SctpPeer : public cSimpleModule, public SctpSocket::CallbackInter
     typedef std::map<int, long> SentPacketsPerAssoc;
     typedef std::map<int, long> RcvdBytesPerAssoc;
     typedef std::map<int, cOutVector *> BytesPerAssoc;
-    typedef std::map<int, cDoubleHistogram *> HistEndToEndDelay;
+    typedef std::map<int, cHistogram *> HistEndToEndDelay;
     typedef std::map<int, cOutVector *> EndToEndDelay;
     typedef std::map<L3Address, PathStatus> SctpPathStatus;
 
@@ -99,17 +103,17 @@ class INET_API SctpPeer : public cSimpleModule, public SctpSocket::CallbackInter
     void connect();
     void socketEstablished(int connId, void *yourPtr);
     void socketDataArrived(int connId, void *yourPtr, Packet *msg, bool urgent) override;
-    void socketDataNotificationArrived(int connId, void *yourPtr, Packet *msg) override;
+    void socketDataNotificationArrived(int connId, void *yourPtr, Message *msg) override;
     void socketPeerClosed(int connId, void *yourPtr) override;
     void socketClosed(int connId, void *yourPtr) override;
     void socketFailure(int connId, void *yourPtr, int code) override;
 
     /* Redefine to handle incoming SctpStatusInfo */
-    void socketStatusArrived(int connId, void *yourPtr, SctpStatusInfo *status) override;
+    void socketStatusArrived(int connId, void *yourPtr, SctpStatusReq *status) override;
 
     void sendRequest(bool last = true);
     void sendOrSchedule(cMessage *msg);
-    void generateAndSend(SctpConnectInfo *connectInfo);
+    void generateAndSend();
     void sendRequestArrived() override;
     void sendQueueRequest();
     void shutdownReceivedArrived(int connId) override;

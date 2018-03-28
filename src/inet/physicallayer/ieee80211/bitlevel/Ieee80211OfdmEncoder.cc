@@ -22,7 +22,7 @@
 #include "inet/physicallayer/ieee80211/bitlevel/Ieee80211OfdmDefs.h"
 #include "inet/physicallayer/ieee80211/bitlevel/Ieee80211OfdmEncoder.h"
 #include "inet/physicallayer/ieee80211/bitlevel/Ieee80211OfdmInterleaver.h"
-#include "../mode/Ieee80211OfdmModulation.h"
+#include "inet/physicallayer/ieee80211/mode/Ieee80211OfdmModulation.h"
 #include "inet/physicallayer/modulation/BpskModulation.h"
 #include "inet/physicallayer/modulation/Qam16Modulation.h"
 #include "inet/physicallayer/modulation/Qam64Modulation.h"
@@ -49,12 +49,12 @@ const ITransmissionBitModel *Ieee80211OfdmEncoder::encode(const ITransmissionPac
     auto length = packet->getTotalLength();
     BitVector *encodedBits;
     if (b(length).get() % 8 == 0) {
-        auto bytes = packet->peekAllBytes()->getBytes();
+        auto bytes = packet->peekAllAsBytes()->getBytes();
         encodedBits = new BitVector(bytes);
     }
     else {
         encodedBits = new BitVector();
-        const auto& bitsChunk = packet->peekAllBits();
+        const auto& bitsChunk = packet->peekAllAsBits();
         for (int i = 0; i < b(length).get(); i++)
             encodedBits->appendBit(bitsChunk->getBit(i));
     }

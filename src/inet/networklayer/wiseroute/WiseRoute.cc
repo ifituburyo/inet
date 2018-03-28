@@ -116,7 +116,7 @@ void WiseRoute::handleSelfMessage(cMessage *msg)
         floodSeqNumber++;
         pkt->setIsFlood(1);
         auto packet = new Packet("route-flood", ROUTE_FLOOD);
-        packet->insertAtEnd(pkt);
+        packet->insertAtBack(pkt);
         setDownControlInfo(packet, MacAddress::BROADCAST_ADDRESS);
         sendDown(packet);
         nbFloodsSent++;
@@ -131,7 +131,7 @@ void WiseRoute::handleSelfMessage(cMessage *msg)
 
 void WiseRoute::handleLowerPacket(Packet *packet)
 {
-    auto wiseRouteHeader = staticPtrCast<WiseRouteHeader>(packet->peekHeader<WiseRouteHeader>()->dupShared());
+    auto wiseRouteHeader = staticPtrCast<WiseRouteHeader>(packet->peekAtFront<WiseRouteHeader>()->dupShared());
     const L3Address& finalDestAddr = wiseRouteHeader->getFinalDestAddr();
     const L3Address& initialSrcAddr = wiseRouteHeader->getInitialSrcAddr();
     const L3Address& srcAddr = wiseRouteHeader->getSourceAddress();
@@ -167,9 +167,10 @@ void WiseRoute::handleLowerPacket(Packet *packet)
                 pCtrlInfo = packet->removeControlInfo();
                 wiseRouteHeader->setNbHops(wiseRouteHeader->getNbHops() + 1);
                 auto p = new Packet(packet->getName(), packet->getKind());
-                packet->popHeader<WiseRouteHeader>();
-                p->insertAtEnd(packet->peekDataAt(b(0), packet->getDataLength()));
-                p->insertHeader(wiseRouteHeader);
+                packet->popAtFront<WiseRouteHeader>();
+                p->insertAtBack(packet->peekDataAt(b(0), packet->getDataLength()));
+                wiseRouteHeader->setPayloadLengthField(p->getDataLength());
+                p->insertAtFront(wiseRouteHeader);
                 setDownControlInfo(p, MacAddress::BROADCAST_ADDRESS);
                 sendDown(p);
                 nbDataPacketsForwarded++;
@@ -195,9 +196,10 @@ void WiseRoute::handleLowerPacket(Packet *packet)
                 pCtrlInfo = packet->removeControlInfo();
                 wiseRouteHeader->setNbHops(wiseRouteHeader->getNbHops() + 1);
                 auto p = new Packet(packet->getName(), packet->getKind());
-                packet->popHeader<WiseRouteHeader>();
-                p->insertAtEnd(packet->peekDataAt(b(0), packet->getDataLength()));
-                p->insertHeader(wiseRouteHeader);
+                packet->popAtFront<WiseRouteHeader>();
+                p->insertAtBack(packet->peekDataAt(b(0), packet->getDataLength()));
+                wiseRouteHeader->setPayloadLengthField(p->getDataLength());
+                p->insertAtFront(wiseRouteHeader);
                 setDownControlInfo(p, MacAddress::BROADCAST_ADDRESS);
                 sendDown(p);
                 nbDataPacketsForwarded++;
@@ -218,9 +220,10 @@ void WiseRoute::handleLowerPacket(Packet *packet)
                     throw cRuntimeError("Cannot immediately resolve MAC address. Please configure a GenericArp module.");
                 wiseRouteHeader->setNbHops(wiseRouteHeader->getNbHops() + 1);
                 auto p = new Packet(packet->getName(), packet->getKind());
-                packet->popHeader<WiseRouteHeader>();
-                p->insertAtEnd(packet->peekDataAt(b(0), packet->getDataLength()));
-                p->insertHeader(wiseRouteHeader);
+                packet->popAtFront<WiseRouteHeader>();
+                p->insertAtBack(packet->peekDataAt(b(0), packet->getDataLength()));
+                wiseRouteHeader->setPayloadLengthField(p->getDataLength());
+                p->insertAtFront(wiseRouteHeader);
                 setDownControlInfo(p, nextHopMacAddr);
                 sendDown(p);
                 nbDataPacketsForwarded++;
@@ -283,7 +286,8 @@ void WiseRoute::handleUpperPacket(Packet *packet)
         if (nextHopMacAddr.isUnspecified())
             throw cRuntimeError("Cannot immediately resolve MAC address. Please configure a GenericArp module.");
     }
-    packet->insertHeader(pkt);
+    pkt->setPayloadLengthField(packet->getDataLength());
+    packet->insertAtFront(pkt);
     packet->setKind(DATA);
     setDownControlInfo(packet, nextHopMacAddr);
     sendDown(packet);
@@ -346,10 +350,18 @@ void WiseRoute::updateRouteTable(const L3Address& origin, const L3Address& lastH
 
 void WiseRoute::decapsulate(Packet *packet)
 {
-    auto wiseRouteHeader = packet->popHeader<WiseRouteHeader>();
-    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(wiseRouteHeader->getProtocol());
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(wiseRouteHeader->getProtocol());
-    packet->addTagIfAbsent<NetworkProtocolInd>()->setProtocol(&Protocol::gnp);
+    auto wiseRouteHeader = packet->popAtFront<WiseRouteHeader>();
+    auto payloadLength = wiseRouteHeader->getPayloadLengthField();
+    if (packet->getDataLength() < payloadLength) {
+        throw cRuntimeError("Data error: illegal payload length");     //FIXME packet drop
+    }
+    if (packet->getDataLength() > payloadLength)
+        packet->setBackOffset(packet->getFrontOffset() + payloadLength);
+    auto payloadProtocol = wiseRouteHeader->getProtocol();
+    packet->addTagIfAbsent<NetworkProtocolInd>()->setProtocol(&getProtocol());
+    packet->addTagIfAbsent<NetworkProtocolInd>()->setNetworkProtocolHeader(wiseRouteHeader);
+    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(payloadProtocol);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(payloadProtocol);
     packet->addTagIfAbsent<L3AddressInd>()->setSrcAddress(wiseRouteHeader->getInitialSrcAddr());
     nbHops = nbHops + wiseRouteHeader->getNbHops();
 }
@@ -394,8 +406,8 @@ WiseRoute::tFloodTable::key_type WiseRoute::getRoute(const tFloodTable::key_type
 void WiseRoute::setDownControlInfo(Packet *const pMsg, const MacAddress& pDestAddr)
 {
     pMsg->addTagIfAbsent<MacAddressReq>()->setDestAddress(pDestAddr);
-    pMsg->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::gnp);
-    pMsg->addTagIfAbsent<DispatchProtocolInd>()->setProtocol(&Protocol::gnp);
+    pMsg->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&getProtocol());
+    pMsg->addTagIfAbsent<DispatchProtocolInd>()->setProtocol(&getProtocol());
 }
 
 } // namespace inet

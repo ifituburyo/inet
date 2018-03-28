@@ -81,7 +81,7 @@ void Mpls::processPacketFromL3(Packet *msg)
         return;
     }
 
-    const auto& ipHeader = msg->peekHeader<Ipv4Header>();
+    const auto& ipHeader = msg->peekAtFront<Ipv4Header>();
 
     // XXX temporary solution, until TcpSocket and Ipv4 are extended to support nam tracing
     if (ipHeader->getProtocolId() == IP_PROT_TCP) {
@@ -98,12 +98,12 @@ void Mpls::processPacketFromL3(Packet *msg)
     }
     // XXX end of temporary area
 
-    labelAndForwardIPv4Datagram(msg);
+    labelAndForwardIpv4Datagram(msg);
 }
 
-bool Mpls::tryLabelAndForwardIPv4Datagram(Packet *packet)
+bool Mpls::tryLabelAndForwardIpv4Datagram(Packet *packet)
 {
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     (void)ipv4Header;       // unused variable
     LabelOpVector outLabel;
     std::string outInterface;   //FIXME set based on interfaceID
@@ -126,15 +126,15 @@ bool Mpls::tryLabelAndForwardIPv4Datagram(Packet *packet)
 
     if (!mplsHeader->hasLabel()) {
         // yes, this may happen - if we'are both ingress and egress
-        packet->removePoppedChunks();
+        packet->trim();
         packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ipv4);
         delete packet->removeTagIfPresent<DispatchProtocolReq>();
         packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(outInterfaceId);
         sendToL2(packet);
     }
     else {
-        packet->removePoppedChunks();
-        packet->insertHeader(mplsHeader);
+        packet->trim();
+        packet->insertAtFront(mplsHeader);
         packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::mpls);
         delete packet->removeTagIfPresent<DispatchProtocolReq>();
         packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(outInterfaceId);
@@ -144,9 +144,9 @@ bool Mpls::tryLabelAndForwardIPv4Datagram(Packet *packet)
     return true;
 }
 
-void Mpls::labelAndForwardIPv4Datagram(Packet *ipdatagram)
+void Mpls::labelAndForwardIpv4Datagram(Packet *ipdatagram)
 {
-    if (tryLabelAndForwardIPv4Datagram(ipdatagram))
+    if (tryLabelAndForwardIpv4Datagram(ipdatagram))
         return;
 
     // handling our outgoing Ipv4 traffic that didn't match any FEC/LSP
@@ -194,13 +194,13 @@ void Mpls::processPacketFromL2(Packet *packet)
 {
     const Protocol *protocol = packet->getTag<PacketProtocolTag>()->getProtocol();
     if (protocol == &Protocol::mpls) {
-        processMPLSPacketFromL2(packet);
+        processMplsPacketFromL2(packet);
     }
     else if (protocol == &Protocol::ipv4) {
         // Ipv4 datagram arrives at Ingress router. We'll try to classify it
         // and add an MPLS header
 
-        if (!tryLabelAndForwardIPv4Datagram(packet)) {
+        if (!tryLabelAndForwardIpv4Datagram(packet)) {
             sendToL3(packet);
         }
     }
@@ -211,12 +211,12 @@ void Mpls::processPacketFromL2(Packet *packet)
     }
 }
 
-void Mpls::processMPLSPacketFromL2(Packet *packet)
+void Mpls::processMplsPacketFromL2(Packet *packet)
 {
     int incomingInterfaceId = packet->getTag<InterfaceInd>()->getInterfaceId();
     InterfaceEntry *ie = ift->getInterfaceById(incomingInterfaceId);
     std::string incomingInterfaceName = ie->getInterfaceName();
-    const auto& mplsHeader = dynamicPtrCast<MplsHeader>(packet->popHeader<MplsHeader>()->dupShared());
+    const auto& mplsHeader = dynamicPtrCast<MplsHeader>(packet->popAtFront<MplsHeader>()->dupShared());
     ASSERT(mplsHeader->hasLabel());
     MplsLabel oldLabel = mplsHeader->getTopLabel();
 
@@ -248,8 +248,8 @@ void Mpls::processMPLSPacketFromL2(Packet *packet)
 
     if (mplsHeader->hasLabel()) {
         // forward labeled packet
-        packet->removePoppedChunks();
-        packet->insertHeader(mplsHeader);
+        packet->trim();
+        packet->insertAtFront(mplsHeader);
 
         EV_INFO << "forwarding packet to " << outInterface << endl;
 
@@ -272,7 +272,7 @@ void Mpls::processMPLSPacketFromL2(Packet *packet)
         EV_INFO << "decapsulating Ipv4 datagram" << endl;
 
         if (outgoingInterface) {
-            packet->removePoppedChunks();
+            packet->trim();
             delete packet->removeTagIfPresent<DispatchProtocolReq>();
             packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(outgoingInterface->getInterfaceId());
             packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ipv4); // TODO: this ipv4 protocol is a lie somewhat, because this is the mpls protocol

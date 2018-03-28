@@ -29,7 +29,7 @@
 
 #include "PacketDrillUtils.h"
 
-using namespace inet;
+namespace inet {
 
 /* A table of platform-specific string->int mappings. */
 struct int_symbol platform_symbols_table[] = {
@@ -128,9 +128,9 @@ PacketDrillExpression::PacketDrillExpression(enum expression_t type_)
 PacketDrillExpression::~PacketDrillExpression()
 {
     if (type == EXPR_LIST) {
-        for (cQueue::Iterator iter(*value.list); !iter.end(); iter++)
-            value.list->remove((*iter));
-        delete value.list;
+        for (cQueue::Iterator iter(*list); !iter.end(); iter++)
+            list->remove((*iter));
+        delete list;
     }
 }
 
@@ -338,7 +338,7 @@ void PacketDrillScript::readScript()
 int PacketDrillScript::parseScriptAndSetConfig(PacketDrillConfig *config, const char *script_buffer)
 {
     int res = 0;
-    struct invocation invocation = {
+    Invocation invocation = {
         .config = config,
         .script = this,
     };
@@ -401,7 +401,7 @@ PacketDrillTcpOption::PacketDrillTcpOption(uint16 kind_, uint16 length_)
     blockCount = 0;
 }
 
-PacketDrillSctpChunk::PacketDrillSctpChunk(uint8 type_, SCTPChunk *sctpChunk)
+PacketDrillSctpChunk::PacketDrillSctpChunk(uint8 type_, SctpChunk *sctpChunk)
 {
     type = type_;
     chunk = sctpChunk->dup();
@@ -459,8 +459,13 @@ PacketDrillSctpParameter::PacketDrillSctpParameter(uint16 type_, int16 len, void
             }
             default:
                 content = content_;
+                break;
         }
     }
 
     flags = flgs;
 }
+
+}    // namespace inet
+
+

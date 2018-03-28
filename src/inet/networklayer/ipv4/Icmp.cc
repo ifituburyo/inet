@@ -26,11 +26,13 @@
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolGroup.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/dissector/ProtocolDissector.h"
+#include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/common/serializer/TcpIpChecksum.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
 
 namespace inet {
@@ -73,7 +75,7 @@ void Icmp::sendErrorMessage(Packet *packet, int inputInterfaceId, IcmpType type,
 {
     Enter_Method("sendErrorMessage(datagram, type=%d, code=%d)", type, code);
 
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     Ipv4Address origSrcAddr = ipv4Header->getSrcAddress();
     Ipv4Address origDestAddr = ipv4Header->getDestAddress();
 
@@ -127,9 +129,9 @@ void Icmp::sendErrorMessage(Packet *packet, int inputInterfaceId, IcmpType type,
     icmpHeader->setCode(code);
     // ICMP message length: the internet header plus the first 8 bytes of
     // the original datagram's data is returned to the sender.
-    errorPacket->insertAtEnd(packet->peekDataAt(B(0), B(ipv4Header->getHeaderLength() + 8)));
+    errorPacket->insertAtBack(packet->peekDataAt(B(0), B(ipv4Header->getHeaderLength() + 8)));
     insertCrc(icmpHeader,errorPacket);
-    errorPacket->insertHeader(icmpHeader);
+    errorPacket->insertAtFront(icmpHeader);
 
     errorPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::icmpv4);
 
@@ -184,7 +186,7 @@ void Icmp::processICMPMessage(Packet *packet)
         return;
     }
 
-    const auto& icmpmsg = packet->peekHeader<IcmpHeader>();
+    const auto& icmpmsg = packet->peekAtFront<IcmpHeader>();
     switch (icmpmsg->getType()) {
         case ICMP_REDIRECT:
             // TODO implement redirect handling
@@ -247,24 +249,24 @@ void Icmp::errorOut(Packet *packet)
 void Icmp::processEchoRequest(Packet *request)
 {
     // turn request into a reply
-    const auto& icmpReq = request->popHeader<IcmpEchoRequest>();
+    const auto& icmpReq = request->popAtFront<IcmpEchoRequest>();
     Packet *reply = new Packet((std::string(request->getName()) + "-reply").c_str());
     const auto& icmpReply = makeShared<IcmpEchoReply>();
     icmpReply->setIdentifier(icmpReq->getIdentifier());
     icmpReply->setSeqNumber(icmpReq->getSeqNumber());
     auto addressInd = request->getTag<L3AddressInd>();
-    Ipv4Address src = addressInd->getSrcAddress().toIPv4();
-    Ipv4Address dest = addressInd->getDestAddress().toIPv4();
-    reply->insertAtEnd(request->peekData());
+    Ipv4Address src = addressInd->getSrcAddress().toIpv4();
+    Ipv4Address dest = addressInd->getDestAddress().toIpv4();
+    reply->insertAtBack(request->peekData());
     insertCrc(icmpReply, reply);
-    reply->insertHeader(icmpReply);
+    reply->insertAtFront(icmpReply);
 
     // swap src and dest
     // TBD check what to do if dest was multicast etc?
     // A. Ariza Modification 5/1/2011 clean the interface id, this forces the use of routing table in the Ipv4 layer
     auto addressReq = reply->addTagIfAbsent<L3AddressReq>();
-    addressReq->setSrcAddress(addressInd->getDestAddress().toIPv4());
-    addressReq->setDestAddress(addressInd->getSrcAddress().toIPv4());
+    addressReq->setSrcAddress(addressInd->getDestAddress().toIpv4());
+    addressReq->setDestAddress(addressInd->getSrcAddress().toIpv4());
 
     sendToIP(reply);
     delete request;
@@ -315,18 +317,10 @@ void Icmp::insertCrc(CrcMode crcMode, const Ptr<IcmpHeader>& icmpHeader, Packet 
         case CRC_COMPUTED: {
             // if the CRC mode is computed, then compute the CRC and set it
             icmpHeader->setChksum(0x0000); // make sure that the CRC is 0 in the header before computing the CRC
-            MemoryOutputStream icmpHeaderStream;
-            Chunk::serialize(icmpHeaderStream, icmpHeader);
-            const auto& icmpHeaderBytes = icmpHeaderStream.getData();
-            auto icmpDataBytes = packet->peekDataBytes()->getBytes();
-            auto icmpHeaderLength = icmpHeaderBytes.size();
-            auto icmpDataLength =  icmpDataBytes.size();
-            auto bufferLength = icmpHeaderLength + icmpDataLength;
-            auto buffer = new uint8_t[bufferLength];
-            std::copy(icmpHeaderBytes.begin(), icmpHeaderBytes.end(), buffer);
-            std::copy(icmpDataBytes.begin(), icmpDataBytes.end(), buffer + icmpHeaderLength);
-            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(buffer, bufferLength);
-            delete [] buffer;
+            MemoryOutputStream icmpStream;
+            Chunk::serialize(icmpStream, icmpHeader);
+            Chunk::serialize(icmpStream, packet->peekDataAsBytes());
+            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(icmpStream.getData());
             icmpHeader->setChksum(crc);
             break;
         }
@@ -337,7 +331,7 @@ void Icmp::insertCrc(CrcMode crcMode, const Ptr<IcmpHeader>& icmpHeader, Packet 
 
 bool Icmp::verifyCrc(const Packet *packet)
 {
-    const auto& icmpHeader = packet->peekHeader<IcmpHeader>(b(-1), Chunk::PF_ALLOW_INCORRECT);
+    const auto& icmpHeader = packet->peekAtFront<IcmpHeader>(b(-1), Chunk::PF_ALLOW_INCORRECT);
     switch (icmpHeader->getCrcMode()) {
         case CRC_DECLARED_CORRECT:
             // if the CRC mode is declared to be correct, then the check passes if and only if the chunks are correct
@@ -347,12 +341,8 @@ bool Icmp::verifyCrc(const Packet *packet)
             return false;
         case CRC_COMPUTED: {
             // otherwise compute the CRC, the check passes if the result is 0xFFFF (includes the received CRC)
-            auto dataBytes = packet->peekDataBytes(Chunk::PF_ALLOW_INCORRECT);
-            size_t bufferLength = B(dataBytes->getChunkLength()).get();
-            auto buffer = new uint8_t[bufferLength];
-            dataBytes->copyToBuffer(buffer, bufferLength);
-            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(buffer, bufferLength);
-            delete [] buffer;
+            auto dataBytes = packet->peekDataAsBytes(Chunk::PF_ALLOW_INCORRECT);
+            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(dataBytes->getBytes());
             // TODO: delete these isCorrect calls, rely on CRC only
             return crc == 0 && icmpHeader->isCorrect();
         }

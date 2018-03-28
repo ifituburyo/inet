@@ -19,6 +19,8 @@
 import inet.common.INETDefs;
 import inet.networklayer.common.L3Address;
 import inet.transportlayer.contract.TransportHeaderBase;
+import inet.transportlayer.common.CRC;
+import inet.common.packet.Message;
 
 namespace inet::sctp;
 
@@ -37,8 +39,10 @@ class SctpHeader extends TransportHeaderBase
     // Destination Port
     uint16 destPort;
     // Verification Tag
-    uint32 tag;
+    uint32 vTag;
     bool checksumOk;
+    uint16_t crc = 0;
+    CrcMode crcMode = (CrcMode)-1;
     unsigned short headerLength = 12;
     abstract SctpChunk *sctpChunks[];
 }
@@ -112,13 +116,14 @@ class SctpCookieEchoChunk extends SctpChunk
     uint8 unrecognizedParameters[]; //for the serializer to send an Error chunk bundled with a Cookie-Echo
 }
 
-class SctpCookie extends cPacket
+class SctpCookie extends cNamedObject
 {
     simtime_t creationTime;
     uint32 localTag;
     uint32 peerTag;
     uint8 localTieTag[];
     uint8 peerTieTag[];
+    uint32 length;
 }
 
 class SctpCookieAckChunk extends SctpChunk
@@ -297,7 +302,7 @@ class SctpAddStreamsRequestParameter extends SctpParameter
     uint16 reserved = 0;
 }
 
-class SctpResetTimer extends cPacket
+class SctpResetTimer extends cMessage
 {
     uint32 inSN; //Stream Reset Response Sequence Number for Incoming Reset Request
     bool inAcked;   // false, when timer is running for the Reset Response Sequence Number, true otherwise
@@ -368,7 +373,7 @@ class SctpSuccessIndication extends SctpParameter
     uint32 responseCorrelationId;
 }
 
-class NatMessage extends cPacket
+class NatMessage extends cMessage
 {
     bool        multi;
     uint16      peer1;

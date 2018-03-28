@@ -44,8 +44,8 @@ void MacRelayUnit::initialize(int stage)
     else if (stage == INITSTAGE_LINK_LAYER) {
         NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
         isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
-        registerService(Protocol::ethernet, nullptr, gate("ifIn"));
-        registerProtocol(Protocol::ethernet, gate("ifOut"), nullptr);
+        registerService(Protocol::ethernetMac, nullptr, gate("ifIn"));
+        registerProtocol(Protocol::ethernetMac, gate("ifOut"), nullptr);
     }
 }
 
@@ -57,7 +57,7 @@ void MacRelayUnit::handleMessage(cMessage *msg)
         return;
     }
     Packet *packet = check_and_cast<Packet *>(msg);
-    const auto& frame = packet->peekHeader<EthernetMacHeader>();
+    const auto& frame = packet->peekAtFront<EthernetMacHeader>();
     // Frame received from MAC unit
     emit(packetReceivedFromLowerSignal, packet);
     handleAndDispatchFrame(packet, frame);
@@ -96,9 +96,13 @@ void MacRelayUnit::handleAndDispatchFrame(Packet *packet, const Ptr<const Ethern
 
     if (outputInterfaceId >= 0) {
         EV << "Sending frame " << frame << " with dest address " << frame->getDest() << " to port " << outputInterfaceId << endl;
+        auto oldPacketProtocolTag = packet->removeTag<PacketProtocolTag>();
         packet->clearTags();
+        auto newPacketProtocolTag = packet->addTag<PacketProtocolTag>();
+        *newPacketProtocolTag = *oldPacketProtocolTag;
+        delete oldPacketProtocolTag;
         packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(outputInterfaceId);
-        packet->removePoppedChunks();
+        packet->trim();
         emit(packetSentToLowerSignal, packet);
         send(packet, "ifOut");
     }
@@ -110,8 +114,12 @@ void MacRelayUnit::handleAndDispatchFrame(Packet *packet, const Ptr<const Ethern
 
 void MacRelayUnit::broadcastFrame(Packet *packet, int inputInterfaceId)
 {
+    auto oldPacketProtocolTag = packet->removeTag<PacketProtocolTag>();
     packet->clearTags();
-    packet->removePoppedChunks();
+    auto newPacketProtocolTag = packet->addTag<PacketProtocolTag>();
+    *newPacketProtocolTag = *oldPacketProtocolTag;
+    delete oldPacketProtocolTag;
+    packet->trim();
     int numPorts = ift->getNumInterfaces();
     for (int i = 0; i < numPorts; ++i) {
         InterfaceEntry *ie = ift->getInterface(i);

@@ -28,7 +28,7 @@
 #ifdef WITH_IPv4
 #include "inet/networklayer/arp/ipv4/ArpPacket_m.h"
 #include "inet/networklayer/ipv4/IcmpHeader.h"
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #endif // ifdef WITH_IPv4
 
 #ifdef WITH_TCP_COMMON
@@ -92,7 +92,7 @@ class INET_API InetPacketPrinter2 : public cMessagePrinter
     InetPacketPrinter2() {}
     virtual ~InetPacketPrinter2() {}
     virtual int getScoreFor(cMessage *msg) const override;
-    virtual void printMessage(std::ostream& os, cMessage *msg) const override;
+    virtual void printMessage(std::ostream& os, cMessage *msg, const Options *options) const override;
 };
 
 Register_MessagePrinter(InetPacketPrinter2);
@@ -105,7 +105,7 @@ int InetPacketPrinter2::getScoreFor(cMessage *msg) const
     return msg->isPacket() ? 21 : 0;
 }
 
-void InetPacketPrinter2::printMessage(std::ostream& os, cMessage *msg) const
+void InetPacketPrinter2::printMessage(std::ostream& os, cMessage *msg, const Options *options) const
 {
     std::string outs;
 
@@ -139,7 +139,7 @@ std::string InetPacketPrinter2::formatPacket(Packet *pk) const
     std::ostringstream out;
     const char *separ = "";
     auto packet = new Packet(pk->getName(), pk->peekData());
-    while (auto chunkref = packet->popHeader(b(-1), Chunk::PF_ALLOW_NULLPTR)) {
+    while (auto chunkref = packet->popAtFront(b(-1), Chunk::PF_ALLOW_NULLPTR)) {
         const auto chunk = chunkref.get();
         std::ostringstream out;
 
@@ -163,9 +163,9 @@ std::string InetPacketPrinter2::formatPacket(Packet *pk) const
 #ifdef WITH_ETHERNET
         else if (const auto eth = dynamic_cast<const EthernetMacHeader *>(chunk)) {
             out << "ETH: " << eth->getSrc() << " > " << eth->getDest();
-            if (const auto tc = packet->peekTrailer(b(-1), Chunk::PF_ALLOW_NULLPTR).get())
+            if (const auto tc = packet->peekAtBack(b(-1), Chunk::PF_ALLOW_NULLPTR).get())
                 if (typeid(*tc) == typeid(EthernetFcs)) {
-                    const auto& fcs = packet->popTrailer<EthernetFcs>();
+                    const auto& fcs = packet->popAtBack<EthernetFcs>();
                     (void)fcs;    //TODO do we show the FCS?
                 }
             //FIXME llc/qtag/snap/...
@@ -220,33 +220,33 @@ std::string InetPacketPrinter2::formatARPPacket(const ArpPacket *packet) const
     std::ostringstream os;
     switch (packet->getOpcode()) {
         case ARP_REQUEST:
-            os << "ARP req: " << packet->getDestIPAddress()
-               << "=? (s=" << packet->getSrcIPAddress() << "(" << packet->getSrcMACAddress() << "))";
+            os << "ARP req: " << packet->getDestIpAddress()
+               << "=? (s=" << packet->getSrcIpAddress() << "(" << packet->getSrcMacAddress() << "))";
             break;
 
         case ARP_REPLY:
             os << "ARP reply: "
-               << packet->getSrcIPAddress() << "=" << packet->getSrcMACAddress()
-               << " (d=" << packet->getDestIPAddress() << "(" << packet->getDestMACAddress() << "))"
+               << packet->getSrcIpAddress() << "=" << packet->getSrcMacAddress()
+               << " (d=" << packet->getDestIpAddress() << "(" << packet->getDestMacAddress() << "))"
             ;
             break;
 
         case ARP_RARP_REQUEST:
-            os << "RARP req: " << packet->getDestMACAddress()
-               << "=? (s=" << packet->getSrcIPAddress() << "(" << packet->getSrcMACAddress() << "))";
+            os << "RARP req: " << packet->getDestMacAddress()
+               << "=? (s=" << packet->getSrcIpAddress() << "(" << packet->getSrcMacAddress() << "))";
             break;
 
         case ARP_RARP_REPLY:
             os << "RARP reply: "
-               << packet->getSrcMACAddress() << "=" << packet->getSrcIPAddress()
-               << " (d=" << packet->getDestIPAddress() << "(" << packet->getDestMACAddress() << "))";
+               << packet->getSrcMacAddress() << "=" << packet->getSrcIpAddress()
+               << " (d=" << packet->getDestIpAddress() << "(" << packet->getDestMacAddress() << "))";
             break;
 
         default:
-            os << "ARP op=" << packet->getOpcode() << ": d=" << packet->getDestIPAddress()
-               << "(" << packet->getDestMACAddress()
-               << ") s=" << packet->getSrcIPAddress()
-               << "(" << packet->getSrcMACAddress() << ")";
+            os << "ARP op=" << packet->getOpcode() << ": d=" << packet->getDestIpAddress()
+               << "(" << packet->getDestMacAddress()
+               << ") s=" << packet->getSrcIpAddress()
+               << "(" << packet->getSrcMacAddress() << ")";
             break;
     }
     return os.str();
@@ -471,7 +471,7 @@ std::string InetPacketPrinter2::formatICMPPacket(const IcmpHeader *icmpHeader) c
             os << "ICMP dest unreachable " << srcAddr << " to " << destAddr << " type=" << icmpHeader->getType() << " code=" << icmpHeader->getCode()
                << " origin:" << INFO_SEPAR;
 //FIXME ICMP payload was showed on right side of ICMP header
-//            auto subPk = new Packet("", pk->popHeader(byte(icmpHeader->get)))
+//            auto subPk = new Packet("", pk->popAtFront(byte(icmpHeader->get)))
 //            InetPacketPrinter2().printMessage(os, subPk);
 //            showEncapsulatedPackets = false;    // stop printing
             break;

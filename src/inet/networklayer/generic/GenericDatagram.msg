@@ -17,13 +17,12 @@
 
 import inet.common.INETDefs;
 import inet.common.TlvOptions;
+import inet.networklayer.common.L3Address;
 import inet.networklayer.contract.NetworkHeaderBase;
 
 cplusplus {{
 #include "inet/common/ProtocolGroup.h"
-#include "inet/common/TlvOptions.h"
 #include "inet/common/packet/Packet.h"
-#include "inet/networklayer/common/L3Address.h"
 }}
 
 import inet.networklayer.common.IpProtocolId;
@@ -49,6 +48,7 @@ class GenericDatagramHeader extends NetworkHeaderBase
     L3Address destAddr;
     IpProtocolId protocolId = IP_PROT_NONE;
     short hopLimit;
+    B payloadLengthField;
     TlvOptions tlvOptions;
 }
 

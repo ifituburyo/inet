@@ -22,7 +22,7 @@
 #include "inet/common/lifecycle/LifecycleOperation.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/transportlayer/rtp/RtpInnerPacket.h"
+#include "inet/transportlayer/rtp/RtpInnerPacket_m.h"
 #include "inet/transportlayer/rtp/RtpInterfacePacket_m.h"
 #include "inet/transportlayer/rtp/RtpProfile.h"
 #include "inet/transportlayer/rtp/RtpSenderControlMessage_m.h"
@@ -341,9 +341,9 @@ void Rtp::readRet(cMessage *sifp)
 {
     if (!_leaveSession) {
         Packet *pk = check_and_cast<Packet *>(sifp);
-        const auto& rtpHeader = pk->peekHeader<RtpHeader>();
+        const auto& rtpHeader = pk->peekAtFront<RtpHeader>();
 
-        emit(rcvdPkSignal, pk);
+        emit(packetReceivedSignal, pk);
 
         rtpHeader->dump();
         RtpInnerPacket *rinp1 = new RtpInnerPacket("dataIn1()");
@@ -367,7 +367,7 @@ int Rtp::resolveMTU()
     if (rtie == nullptr)
         throw cRuntimeError("No interface for remote address %s found!", _destinationAddress.str().c_str());
 
-    int pmtu = rtie->getMTU();
+    int pmtu = rtie->getMtu();
     return pmtu - 20 - 8;
 }
 

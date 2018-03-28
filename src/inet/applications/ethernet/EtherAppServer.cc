@@ -83,7 +83,7 @@ void EtherAppServer::handleMessage(cMessage *msg)
     if (req == nullptr)
         throw cRuntimeError("data type error: not an EtherAppReq arrived in packet %s", reqPk->str().c_str());
     packetsReceived++;
-    emit(rcvdPkSignal, reqPk);
+    emit(packetReceivedSignal, reqPk);
 
     MacAddress srcAddr = reqPk->getTag<MacAddressInd>()->getSrcAddress();
     int srcSap = reqPk->getTag<Ieee802SapInd>()->getSsap();
@@ -102,7 +102,7 @@ void EtherAppServer::handleMessage(cMessage *msg)
         const auto& outPayload = makeShared<EtherAppResp>();
         outPayload->setRequestId(requestId);
         outPayload->setChunkLength(B(l));
-        outPacket->insertAtEnd(outPayload);
+        outPacket->insertAtBack(outPayload);
 
         EV_INFO << "Send response `" << outPacket->getName() << "' to " << srcAddr << " ssap=" << localSAP << " dsap=" << srcSap << " length=" << l << "B requestId=" << requestId << "\n";
 
@@ -119,7 +119,7 @@ void EtherAppServer::sendPacket(Packet *datapacket, const MacAddress& destAddr, 
     ieee802SapReq->setSsap(localSAP);
     ieee802SapReq->setDsap(destSap);
 
-    emit(sentPkSignal, datapacket);
+    emit(packetSentSignal, datapacket);
     send(datapacket, "out");
     packetsSent++;
 }

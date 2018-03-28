@@ -35,7 +35,7 @@ Define_Module(CsmaCaMac);
 static int getUPBasedFramePriority(cObject *obj)
 {
     auto frame = static_cast<Packet *>(obj);
-    const auto& macHeader = frame->peekHeader<CsmaCaMacDataHeader>();
+    const auto& macHeader = frame->peekAtFront<CsmaCaMacDataHeader>();
     int up = macHeader->getPriority();
     return (up == UP_BK) ? -2 : (up == UP_BK2) ? -1 : up;  // because UP_BE==0, but background traffic should have lower priority than best effort
 }
@@ -190,7 +190,7 @@ InterfaceEntry *CsmaCaMac::createInterfaceEntry()
     e->setDatarate(bitrate);
 
     // generate a link-layer address to be used as interface token for IPv6
-    e->setMACAddress(address);
+    e->setMacAddress(address);
     e->setInterfaceToken(address.formInterfaceIdentifier());
 
     // capabilities
@@ -221,7 +221,7 @@ void CsmaCaMac::handleUpperPacket(Packet *packet)
     }
     auto frame = check_and_cast<Packet *>(packet);
     encapsulate(frame);
-    const auto& macHeader = frame->peekHeader<CsmaCaMacHeader>();
+    const auto& macHeader = frame->peekAtFront<CsmaCaMacHeader>();
     EV << "frame " << frame << " received from higher layer, receiver = " << macHeader->getReceiverAddress() << endl;
     ASSERT(!macHeader->getReceiverAddress().isUnspecified());
     transmissionQueue.insert(frame);
@@ -445,19 +445,20 @@ void CsmaCaMac::encapsulate(Packet *frame)
     int userPriority = userPriorityReq == nullptr ? UP_BE : userPriorityReq->getUserPriority();
     macHeader->setPriority(userPriority == -1 ? UP_BE : userPriority);
     if (headerLength > macHeader->getChunkLength())
-        frame->insertHeader(makeShared<ByteCountChunk>(headerLength - macHeader->getChunkLength()));
-    frame->insertHeader(macHeader);
+        frame->insertAtFront(makeShared<ByteCountChunk>(headerLength - macHeader->getChunkLength()));
+    frame->insertAtFront(macHeader);
     auto macTrailer = makeShared<CsmaCaMacTrailer>();
     macTrailer->setFcsMode(fcsMode);
     if (fcsMode == FCS_COMPUTED)
-        macTrailer->setFcs(computeFcs(frame->peekAllBytes()));
-    frame->insertTrailer(macTrailer);
+        macTrailer->setFcs(computeFcs(frame->peekAllAsBytes()));
+    frame->insertAtBack(macTrailer);
+    frame->getTag<PacketProtocolTag>()->setProtocol(&Protocol::csmacamac);
 }
 
 void CsmaCaMac::decapsulate(Packet *frame)
 {
-    auto macHeader = frame->popHeader<CsmaCaMacDataHeader>();
-    frame->popTrailer(B(4));
+    auto macHeader = frame->popAtFront<CsmaCaMacDataHeader>();
+    frame->popAtBack(B(4));
     auto addressInd = frame->addTagIfAbsent<MacAddressInd>();
     addressInd->setSrcAddress(macHeader->getTransmitterAddress());
     addressInd->setDestAddress(macHeader->getReceiverAddress());
@@ -518,7 +519,7 @@ void CsmaCaMac::generateBackoffPeriod()
     ASSERT(0 <= retryCounter && retryCounter <= retryLimit);
     EV << "generating backoff slot number for retry: " << retryCounter << endl;
     int cw;
-    if (getCurrentTransmission()->peekHeader<CsmaCaMacHeader>()->getReceiverAddress().isMulticast())
+    if (getCurrentTransmission()->peekAtFront<CsmaCaMacHeader>()->getReceiverAddress().isMulticast())
         cw = cwMulticast;
     else
         cw = std::min(cwMax, (cwMin + 1) * (1 << retryCounter) - 1);
@@ -567,16 +568,17 @@ void CsmaCaMac::sendAckFrame()
     auto frameToAck = static_cast<Packet *>(endSifs->getContextPointer());
     endSifs->setContextPointer(nullptr);
     auto macHeader = makeShared<CsmaCaMacAckHeader>();
-    macHeader->setReceiverAddress(frameToAck->peekHeader<CsmaCaMacHeader>()->getTransmitterAddress());
+    macHeader->setReceiverAddress(frameToAck->peekAtFront<CsmaCaMacHeader>()->getTransmitterAddress());
     auto frame = new Packet("CsmaAck");
     if (ackLength > macHeader->getChunkLength())
-        frame->insertHeader(makeShared<ByteCountChunk>(ackLength - macHeader->getChunkLength()));
-    frame->insertHeader(macHeader);
+        frame->insertAtFront(makeShared<ByteCountChunk>(ackLength - macHeader->getChunkLength()));
+    frame->insertAtFront(macHeader);
     auto macTrailer = makeShared<CsmaCaMacTrailer>();
     macTrailer->setFcsMode(fcsMode);
     if (fcsMode == FCS_COMPUTED)
-        macTrailer->setFcs(computeFcs(frame->peekAllBytes()));
-    frame->insertTrailer(macTrailer);
+        macTrailer->setFcs(computeFcs(frame->peekAllAsBytes()));
+    frame->insertAtBack(macTrailer);
+    frame->addTag<PacketProtocolTag>()->setProtocol(&Protocol::csmacamac);
     radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
     sendDown(frame);
     delete frameToAck;
@@ -595,7 +597,7 @@ void CsmaCaMac::giveUpCurrentTransmission()
 {
     auto packet = getCurrentTransmission();
     emitPacketDropSignal(packet, RETRY_LIMIT_REACHED, retryLimit);
-    emit(linkBreakSignal, packet);
+    emit(linkBrokenSignal, packet);
     popTransmissionQueue();
     resetTransmissionVariables();
     numGivenUp++;
@@ -636,7 +638,7 @@ void CsmaCaMac::emitPacketDropSignal(Packet *frame, PacketDropReason reason, int
     PacketDropDetails details;
     details.setReason(reason);
     details.setLimit(limit);
-    emit(packetDropSignal, frame, &details);
+    emit(packetDroppedSignal, frame, &details);
 }
 
 bool CsmaCaMac::isMediumFree()
@@ -651,19 +653,19 @@ bool CsmaCaMac::isReceiving()
 
 bool CsmaCaMac::isAck(Packet *frame)
 {
-    const auto& macHeader = frame->peekHeader<CsmaCaMacHeader>();
+    const auto& macHeader = frame->peekAtFront<CsmaCaMacHeader>();
     return dynamicPtrCast<const CsmaCaMacAckHeader>(macHeader) != nullptr;
 }
 
 bool CsmaCaMac::isBroadcast(Packet *frame)
 {
-    const auto& macHeader = frame->peekHeader<CsmaCaMacHeader>();
+    const auto& macHeader = frame->peekAtFront<CsmaCaMacHeader>();
     return macHeader->getReceiverAddress().isBroadcast();
 }
 
 bool CsmaCaMac::isForUs(Packet *frame)
 {
-    const auto& macHeader = frame->peekHeader<CsmaCaMacHeader>();
+    const auto& macHeader = frame->peekAtFront<CsmaCaMacHeader>();
     return macHeader->getReceiverAddress() == address;
 }
 
@@ -672,7 +674,7 @@ bool CsmaCaMac::isFcsOk(Packet *frame)
     if (frame->hasBitError() || !frame->peekData()->isCorrect())
         return false;
     else {
-        const auto& trailer = frame->peekTrailer<CsmaCaMacTrailer>(B(4));
+        const auto& trailer = frame->peekAtBack<CsmaCaMacTrailer>(B(4));
         switch (trailer->getFcsMode()) {
             case FCS_DECLARED:
                 return true;

@@ -20,6 +20,7 @@
 
 #include <set>
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/ProtocolTag_m.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/common/stlutils.h"
@@ -343,7 +344,7 @@ double NetworkConfiguratorBase::computeWiredLinkWeight(Link *link, const char *m
             if (transmissionChannel) {
                 InterfaceInfo *sourceInterfaceInfo = link->sourceInterfaceInfo;
                 double bitErrorRate = transmissionChannel->getBitErrorRate();
-                double packetErrorRate = 1.0 - pow(1.0 - bitErrorRate, sourceInterfaceInfo->interfaceEntry->getMTU());
+                double packetErrorRate = 1.0 - pow(1.0 - bitErrorRate, sourceInterfaceInfo->interfaceEntry->getMtu());
                 return minLinkWeight - log(1 - packetErrorRate);
             }
             else
@@ -394,8 +395,9 @@ double NetworkConfiguratorBase::computeWirelessLinkWeight(Link *link, const char
             const IRadio *receiverRadio = check_and_cast<IRadio *>(receiverInterfaceModule->getSubmodule("radio"));
             const IRadioMedium *medium = receiverRadio->getMedium();
             Packet *transmittedFrame = new Packet();
-            auto byteCountChunk = makeShared<ByteCountChunk>(B(transmitterInterfaceInfo->interfaceEntry->getMTU()));
-            transmittedFrame->insertAtEnd(byteCountChunk);
+            auto byteCountChunk = makeShared<ByteCountChunk>(B(transmitterInterfaceInfo->interfaceEntry->getMtu()));
+            transmittedFrame->insertAtBack(byteCountChunk);
+            transmittedFrame->addTag<PacketProtocolTag>()->setProtocol(nullptr);      //FIXME kludge
             // TODO: KLUDGE: review
             check_and_cast<const Radio *>(transmitterRadio)->encapsulate(transmittedFrame);
             const ITransmission *transmission = transmitterRadio->getTransmitter()->createTransmission(transmitterRadio, transmittedFrame, simTime());

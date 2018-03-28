@@ -94,7 +94,7 @@ void Interface::setIfIndex(IInterfaceTable *ift, int index)
         InterfaceEntry *routingInterface = ift->getInterfaceById(ifIndex);
         interfaceAddressRange.address = routingInterface->ipv4Data()->getIPAddress();
         interfaceAddressRange.mask = routingInterface->ipv4Data()->getNetmask();
-        mtu = routingInterface->getMTU();
+        mtu = routingInterface->getMtu();
     }
 }
 
@@ -170,12 +170,12 @@ void Interface::sendHelloPacket(Ipv4Address destination, short ttl)
 
     helloPacket->setChunkLength(B(OSPF_HEADER_LENGTH + OSPF_HELLO_HEADER_LENGTH + initedNeighborCount * 4));
     Packet *pk = new Packet();
-    pk->insertAtEnd(helloPacket);
+    pk->insertAtBack(helloPacket);
 
     parentArea->getRouter()->getMessageHandler()->sendPacket(pk, destination, ifIndex, ttl);
 }
 
-void Interface::sendLSAcknowledgement(const OspfLsaHeader *lsaHeader, Ipv4Address destination)
+void Interface::sendLsAcknowledgement(const OspfLsaHeader *lsaHeader, Ipv4Address destination)
 {
     OspfOptions options;
     const auto& lsAckPacket = makeShared<OspfLinkStateAcknowledgementPacket>();
@@ -193,13 +193,13 @@ void Interface::sendLSAcknowledgement(const OspfLsaHeader *lsaHeader, Ipv4Addres
 
     lsAckPacket->setChunkLength(B(OSPF_HEADER_LENGTH + OSPF_LSA_HEADER_LENGTH));
     Packet *pk = new Packet();
-    pk->insertAtEnd(lsAckPacket);
+    pk->insertAtBack(lsAckPacket);
 
     int ttl = (interfaceType == Interface::VIRTUAL) ? VIRTUAL_LINK_TTL : 1;
     parentArea->getRouter()->getMessageHandler()->sendPacket(pk, destination, ifIndex, ttl);
 }
 
-Neighbor *Interface::getNeighborByID(RouterId neighborID)
+Neighbor *Interface::getNeighborById(RouterId neighborID)
 {
     auto neighborIt = neighboringRoutersByID.find(neighborID);
     if (neighborIt != neighboringRoutersByID.end()) {
@@ -301,7 +301,7 @@ bool Interface::isOnAnyRetransmissionList(LsaKeyType lsaKey) const
 /**
  * @see RFC2328 Section 13.3.
  */
-bool Interface::floodLSA(const OspfLsa *lsa, Interface *intf, Neighbor *neighbor)
+bool Interface::floodLsa(const OspfLsa *lsa, Interface *intf, Neighbor *neighbor)
 {
     bool floodedBackOut = false;
 
@@ -383,8 +383,8 @@ bool Interface::floodLSA(const OspfLsa *lsa, Interface *intf, Neighbor *neighbor
                             }
                             else {
                                 messageHandler->sendPacket(updatePacket, Ipv4Address::ALL_OSPF_DESIGNATED_ROUTERS_MCAST, ifIndex, ttl);
-                                Neighbor *dRouter = getNeighborByID(designatedRouter.routerID);
-                                Neighbor *backupDRouter = getNeighborByID(backupDesignatedRouter.routerID);
+                                Neighbor *dRouter = getNeighborById(designatedRouter.routerID);
+                                Neighbor *backupDRouter = getNeighborById(backupDesignatedRouter.routerID);
                                 if (dRouter != nullptr) {
                                     dRouter->addToTransmittedLSAList(lsaKey);
                                     if (!dRouter->isUpdateRetransmissionTimerActive()) {
@@ -525,7 +525,7 @@ Packet *Interface::createUpdatePacket(const OspfLsa *lsa)
 
         updatePacket->setChunkLength(B(packetLength));
         Packet *pk = new Packet();
-        pk->insertAtEnd(updatePacket);
+        pk->insertAtBack(updatePacket);
 
         return pk;
     }
@@ -586,7 +586,7 @@ void Interface::sendDelayedAcknowledgements()
 
                 ackPacket->setChunkLength(B(packetSize - IP_MAX_HEADER_BYTES));
                 Packet *pk = new Packet();
-                pk->insertAtEnd(ackPacket);
+                pk->insertAtBack(ackPacket);
 
                 int ttl = (interfaceType == Interface::VIRTUAL) ? VIRTUAL_LINK_TTL : 1;
 
@@ -615,7 +615,7 @@ void Interface::sendDelayedAcknowledgements()
     messageHandler->startTimer(acknowledgementTimer, acknowledgementDelay);
 }
 
-void Interface::ageTransmittedLSALists()
+void Interface::ageTransmittedLsaLists()
 {
     long neighborCount = neighboringRouters.size();
     for (long i = 0; i < neighborCount; i++) {

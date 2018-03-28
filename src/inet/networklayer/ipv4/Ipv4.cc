@@ -45,7 +45,7 @@
 #include "inet/networklayer/contract/L3SocketCommand_m.h"
 #include "inet/networklayer/ipv4/IcmpHeader_m.h"
 #include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
-#include "inet/networklayer/ipv4/Ipv4Header.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
@@ -116,6 +116,7 @@ void Ipv4::initialize(int stage)
         WATCH(numUnroutable);
         WATCH(numForwarded);
         WATCH_MAP(pendingPackets);
+        WATCH_MAP(socketIdToSocketDescriptor);
     }
     else if (stage == INITSTAGE_NETWORK_LAYER) {
         isUp = isNodeUp();
@@ -133,9 +134,7 @@ void Ipv4::handleRegisterProtocol(const Protocol& protocol, cGate *in, ServicePr
 {
     Enter_Method("handleRegisterProtocol");
     if (!strcmp("transportIn", in->getBaseName())) {
-        int protocolNumber = ProtocolGroup::ipprotocol.findProtocolNumber(&protocol);
-        if (protocolNumber != -1)
-            mapping.addProtocolMapping(protocolNumber, in->getIndex());
+        mapping.addProtocolMapping(protocol.getId(), in->getIndex());
     }
 }
 
@@ -160,9 +159,9 @@ void Ipv4::handleMessage(cMessage *msg)
     auto request = dynamic_cast<Request *>(msg);
     if (L3SocketBindCommand *command = dynamic_cast<L3SocketBindCommand *>(msg->getControlInfo())) {
         int socketId = request->getTag<SocketReq>()->getSocketId();
-        SocketDescriptor *descriptor = new SocketDescriptor(socketId, command->getProtocolId());
+        SocketDescriptor *descriptor = new SocketDescriptor(socketId, command->getProtocol()->getId());
         socketIdToSocketDescriptor[socketId] = descriptor;
-        protocolIdToSocketDescriptors.insert(std::pair<int, SocketDescriptor *>(command->getProtocolId(), descriptor));
+        protocolIdToSocketDescriptors.insert(std::pair<int, SocketDescriptor *>(command->getProtocol()->getId(), descriptor));
         delete msg;
     }
     else if (dynamic_cast<L3SocketCloseCommand *>(msg->getControlInfo()) != nullptr) {
@@ -216,18 +215,14 @@ bool Ipv4::verifyCrc(const Ptr<const Ipv4Header>& ipv4Header)
         case CRC_COMPUTED: {
             if (ipv4Header->isCorrect()) {
                 // compute the CRC, the check passes if the result is 0xFFFF (includes the received CRC) and the chunks are correct
-                auto ipv4HeaderBytes = ipv4Header->Chunk::peek<BytesChunk>(B(0), ipv4Header->getChunkLength());
-                auto bufferLength = B(ipv4HeaderBytes->getChunkLength()).get();
-                auto buffer = new uint8_t[bufferLength];
-                // 1. fill in the data
-                ipv4HeaderBytes->copyToBuffer(buffer, bufferLength);
-                // 2. compute the CRC
-                auto computedCrc = inet::serializer::TcpIpChecksum::checksum(buffer, bufferLength);
-                delete [] buffer;
+                MemoryOutputStream ipv4HeaderStream;
+                Chunk::serialize(ipv4HeaderStream, ipv4Header);
+                uint16_t computedCrc = inet::serializer::TcpIpChecksum::checksum(ipv4HeaderStream.getData());
                 return computedCrc == 0;
             }
-            else
+            else {
                 return false;
+            }
         }
         default:
             throw cRuntimeError("Unknown CRC mode");
@@ -249,7 +244,7 @@ const InterfaceEntry *Ipv4::getDestInterface(Packet *packet)
 Ipv4Address Ipv4::getNextHop(Packet *packet)
 {
     auto tag = packet->findTag<NextHopAddressReq>();
-    return tag != nullptr ? tag->getNextHopAddress().toIPv4() : Ipv4Address::UNSPECIFIED_ADDRESS;
+    return tag != nullptr ? tag->getNextHopAddress().toIpv4() : Ipv4Address::UNSPECIFIED_ADDRESS;
 }
 
 void Ipv4::handleIncomingDatagram(Packet *packet)
@@ -262,12 +257,15 @@ void Ipv4::handleIncomingDatagram(Packet *packet)
     // "Prerouting"
     //
 
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     packet->addTagIfAbsent<NetworkProtocolInd>()->setProtocol(&Protocol::ipv4);
     packet->addTagIfAbsent<NetworkProtocolInd>()->setNetworkProtocolHeader(ipv4Header);
 
     if (!verifyCrc(ipv4Header)) {
         EV_WARN << "CRC error found, drop packet\n";
+        PacketDropDetails details;
+        details.setReason(INCORRECTLY_RECEIVED);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
         return;
     }
@@ -280,7 +278,7 @@ void Ipv4::handleIncomingDatagram(Packet *packet)
 
     // remove lower layer paddings:
     if (ipv4Header->getTotalLengthField() < packet->getByteLength()) {
-        packet->setTrailerPopOffset(packet->getHeaderPopOffset() + B(ipv4Header->getTotalLengthField()));
+        packet->setBackOffset(packet->getFrontOffset() + B(ipv4Header->getTotalLengthField()));
     }
 
     // check for header biterror
@@ -314,7 +312,7 @@ void Ipv4::preroutingFinish(Packet *packet)
     const InterfaceEntry *fromIE = ift->getInterfaceById(packet->getTag<InterfaceInd>()->getInterfaceId());
     Ipv4Address nextHopAddr = getNextHop(packet);
 
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     ASSERT(ipv4Header);
     Ipv4Address destAddr = ipv4Header->getDestAddress();
 
@@ -373,7 +371,7 @@ void Ipv4::preroutingFinish(Packet *packet)
             numDropped++;
             PacketDropDetails details;
             details.setReason(FORWARDING_DISABLED);
-            emit(packetDropSignal, packet, &details);
+            emit(packetDroppedSignal, packet, &details);
             delete packet;
         }
         else {
@@ -394,7 +392,7 @@ void Ipv4::handlePacketFromHL(Packet *packet)
         numDropped++;
         PacketDropDetails details;
         details.setReason(NO_INTERFACE_FOUND);
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
         return;
     }
@@ -413,7 +411,7 @@ void Ipv4::datagramLocalOut(Packet *packet)
     const InterfaceEntry *destIE = getDestInterface(packet);
     Ipv4Address requestedNextHopAddress = getNextHop(packet);
 
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     bool multicastLoop = false;
     MulticastReq *mcr = packet->findTag<MulticastReq>();
     if (mcr != nullptr) {
@@ -451,7 +449,7 @@ void Ipv4::datagramLocalOut(Packet *packet)
             numUnroutable++;
             PacketDropDetails details;
             details.setReason(NO_INTERFACE_FOUND);
-            emit(packetDropSignal, packet, &details);
+            emit(packetDroppedSignal, packet, &details);
             delete packet;
         }
     }
@@ -520,7 +518,7 @@ void Ipv4::routeUnicastPacket(Packet *packet)
     const InterfaceEntry *destIE = getDestInterface(packet);
     Ipv4Address nextHopAddress = getNextHop(packet);
 
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     Ipv4Address destAddr = ipv4Header->getDestAddress();
     EV_INFO << "Routing " << packet << " with destination = " << destAddr << ", ";
 
@@ -555,7 +553,7 @@ void Ipv4::routeUnicastPacket(Packet *packet)
         numUnroutable++;
         PacketDropDetails details;
         details.setReason(NO_ROUTE_FOUND);
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         sendIcmpError(packet, fromIE ? fromIE->getInterfaceId() : -1, ICMP_DESTINATION_UNREACHABLE, 0);
     }
     else {    // fragment and send
@@ -602,7 +600,7 @@ void Ipv4::routeLocalBroadcastPacket(Packet *packet)
         numDropped++;
         PacketDropDetails details;
         details.setReason(NO_INTERFACE_FOUND);
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
     }
 }
@@ -615,7 +613,7 @@ const InterfaceEntry *Ipv4::getShortestPathInterfaceToSource(const Ptr<const Ipv
 void Ipv4::forwardMulticastPacket(Packet *packet)
 {
     const InterfaceEntry *fromIE = ift->getInterfaceById(packet->getTag<InterfaceInd>()->getInterfaceId());
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     const Ipv4Address& srcAddr = ipv4Header->getSrcAddress();
     const Ipv4Address& destAddr = ipv4Header->getDestAddress();
     ASSERT(destAddr.isMulticast());
@@ -639,7 +637,7 @@ void Ipv4::forwardMulticastPacket(Packet *packet)
             numUnroutable++;
             PacketDropDetails details;
             details.setReason(NO_ROUTE_FOUND);
-            emit(packetDropSignal, packet, &details);
+            emit(packetDroppedSignal, packet, &details);
             delete packet;
             return;
         }
@@ -651,7 +649,7 @@ void Ipv4::forwardMulticastPacket(Packet *packet)
         emit(ipv4DataOnNonrpfSignal, ipv4Header.get(), const_cast<InterfaceEntry *>(fromIE));
         numDropped++;
         PacketDropDetails details;
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
     }
     // backward compatible: no parent means shortest path interface to source (RPB routing)
@@ -659,7 +657,7 @@ void Ipv4::forwardMulticastPacket(Packet *packet)
         EV_ERROR << "Did not arrive on shortest path, packet dropped.\n";
         numDropped++;
         PacketDropDetails details;
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
     }
     else {
@@ -699,7 +697,7 @@ void Ipv4::reassembleAndDeliver(Packet *packet)
 {
     EV_INFO << "Delivering " << packet << " locally.\n";
 
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
     if (ipv4Header->getSrcAddress().isUnspecified())
         EV_WARN << "Received datagram '" << packet->getName() << "' without source address filled in\n";
 
@@ -719,6 +717,11 @@ void Ipv4::reassembleAndDeliver(Packet *packet)
             EV_DETAIL << "No complete datagram yet.\n";
             return;
         }
+        if (packet->peekAtFront<Ipv4Header>()->getCrcMode() == CRC_COMPUTED) {
+            auto ipv4Header = removeNetworkProtocolHeader<Ipv4Header>(packet);
+            setComputedCrc(ipv4Header);
+            insertNetworkProtocolHeader(packet, Protocol::ipv4, ipv4Header);
+        }
         EV_DETAIL << "This fragment completes the datagram.\n";
     }
 
@@ -728,12 +731,12 @@ void Ipv4::reassembleAndDeliver(Packet *packet)
 
 void Ipv4::reassembleAndDeliverFinish(Packet *packet)
 {
-    auto ipv4HeaderPosition = packet->getHeaderPopOffset();
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
-    int protocol = ipv4Header->getProtocolId();
+    auto ipv4HeaderPosition = packet->getFrontOffset();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
+    const Protocol *protocol = ipv4Header->getProtocol();
     decapsulate(packet);
-    auto lowerBound = protocolIdToSocketDescriptors.lower_bound(protocol);
-    auto upperBound = protocolIdToSocketDescriptors.upper_bound(protocol);
+    auto lowerBound = protocolIdToSocketDescriptors.lower_bound(protocol->getId());
+    auto upperBound = protocolIdToSocketDescriptors.upper_bound(protocol->getId());
     bool hasSocket = lowerBound != upperBound;
     for (auto it = lowerBound; it != upperBound; it++) {
         auto *packetCopy = packet->dup();
@@ -741,7 +744,7 @@ void Ipv4::reassembleAndDeliverFinish(Packet *packet)
         emit(packetSentToUpperSignal, packetCopy);
         send(packetCopy, "transportOut");
     }
-    if (mapping.findOutputGateForProtocol(protocol) >= 0) {
+    if (mapping.findOutputGateForProtocol(protocol->getId()) >= 0) {
         emit(packetSentToUpperSignal, packet);
         send(packet, "transportOut");
         numLocalDeliver++;
@@ -750,8 +753,8 @@ void Ipv4::reassembleAndDeliverFinish(Packet *packet)
         delete packet;
     }
     else {
-        EV_ERROR << "Transport protocol ID=" << protocol << " not connected, discarding packet\n";
-        packet->setHeaderPopOffset(ipv4HeaderPosition);
+        EV_ERROR << "Transport protocol '" << protocol->getName() << "' not connected, discarding packet\n";
+        packet->setFrontOffset(ipv4HeaderPosition);
         const InterfaceEntry* fromIE = getSourceInterface(packet);
         sendIcmpError(packet, fromIE ? fromIE->getInterfaceId() : -1, ICMP_DESTINATION_UNREACHABLE, ICMP_DU_PROTOCOL_UNREACHABLE);
     }
@@ -760,7 +763,7 @@ void Ipv4::reassembleAndDeliverFinish(Packet *packet)
 void Ipv4::decapsulate(Packet *packet)
 {
     // decapsulate transport packet
-    const auto& ipv4Header = packet->popHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->popAtFront<Ipv4Header>();
 
     // create and fill in control info
     packet->addTagIfAbsent<DscpInd>()->setDifferentiatedServicesCodePoint(ipv4Header->getDiffServCodePoint());
@@ -781,7 +784,7 @@ void Ipv4::fragmentPostRouting(Packet *packet)
 {
     const InterfaceEntry *destIE = ift->getInterfaceById(packet->getTag<InterfaceReq>()->getInterfaceId());
     // fill in source address
-    if (packet->peekHeader<Ipv4Header>()->getSrcAddress().isUnspecified()) {
+    if (packet->peekAtFront<Ipv4Header>()->getSrcAddress().isUnspecified()) {
         auto ipv4Header = removeNetworkProtocolHeader<Ipv4Header>(packet);
         ipv4Header->setSrcAddress(destIE->ipv4Data()->getIPAddress());
         insertNetworkProtocolHeader(packet, Protocol::ipv4, ipv4Header);
@@ -790,13 +793,24 @@ void Ipv4::fragmentPostRouting(Packet *packet)
         fragmentAndSend(packet);
 }
 
+void Ipv4::setComputedCrc(Ptr<Ipv4Header>& ipv4Header)
+{
+    ASSERT(crcMode == CRC_COMPUTED);
+    ipv4Header->setCrc(0);
+    MemoryOutputStream ipv4HeaderStream;
+    Chunk::serialize(ipv4HeaderStream, ipv4Header);
+    // compute the CRC
+    uint16_t crc = inet::serializer::TcpIpChecksum::checksum(ipv4HeaderStream.getData());
+    ipv4Header->setCrc(crc);
+}
+
 void Ipv4::fragmentAndSend(Packet *packet)
 {
     const InterfaceEntry *destIE = ift->getInterfaceById(packet->getTag<InterfaceReq>()->getInterfaceId());
     Ipv4Address nextHopAddr = getNextHop(packet);
     if (nextHopAddr.isUnspecified()) {
         Ipv4InterfaceData *ipv4Data = destIE->ipv4Data();
-        const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+        const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
         Ipv4Address destAddress = ipv4Header->getDestAddress();
         if (Ipv4Address::maskedAddrAreEqual(destAddress, ipv4Data->getIPAddress(), ipv4Data->getNetmask()))
             nextHopAddr = destAddress;
@@ -809,42 +823,29 @@ void Ipv4::fragmentAndSend(Packet *packet)
         packet->addTagIfAbsent<NextHopAddressReq>()->setNextHopAddress(nextHopAddr);
     }
 
-    if (crcMode == CRC_COMPUTED) {
-        packet->removePoppedHeaders();
-        const auto& ipv4Header = removeNetworkProtocolHeader<Ipv4Header>(packet);
-        ipv4Header->setCrc(0);
-        MemoryOutputStream ipv4HeaderStream;
-        Chunk::serialize(ipv4HeaderStream, ipv4Header);
-        auto ipv4HeaderBytes = ipv4HeaderStream.getData();
-        auto bufferLength = ipv4HeaderBytes.size();
-        auto buffer = new uint8_t[bufferLength];
-        // 1. fill in the data
-        std::copy(ipv4HeaderBytes.begin(), ipv4HeaderBytes.end(), (uint8_t *)buffer);
-        // 2. compute the CRC
-        uint16_t crc = inet::serializer::TcpIpChecksum::checksum(buffer, bufferLength);
-        delete [] buffer;
-        ipv4Header->setCrc(crc);
-        insertNetworkProtocolHeader(packet, Protocol::ipv4, ipv4Header);
-    }
-
-    const auto& ipv4Header = packet->peekHeader<Ipv4Header>();
+    const auto& ipv4Header = packet->peekAtFront<Ipv4Header>();
 
     // hop counter check
     if (ipv4Header->getTimeToLive() <= 0) {
         // drop datagram, destruction responsibility in ICMP
         PacketDropDetails details;
         details.setReason(HOP_LIMIT_REACHED);
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         EV_WARN << "datagram TTL reached zero, sending ICMP_TIME_EXCEEDED\n";
         sendIcmpError(packet, -1    /*TODO*/, ICMP_TIME_EXCEEDED, 0);
         numDropped++;
         return;
     }
 
-    int mtu = destIE->getMTU();
+    int mtu = destIE->getMtu();
 
     // send datagram straight out if it doesn't require fragmentation (note: mtu==0 means infinite mtu)
     if (mtu == 0 || packet->getByteLength() <= mtu) {
+        if (crcMode == CRC_COMPUTED) {
+            auto ipv4Header = removeNetworkProtocolHeader<Ipv4Header>(packet);
+            setComputedCrc(ipv4Header);
+            insertNetworkProtocolHeader(packet, Protocol::ipv4, ipv4Header);
+        }
         sendDatagramToOutput(packet);
         return;
     }
@@ -852,7 +853,7 @@ void Ipv4::fragmentAndSend(Packet *packet)
     // if "don't fragment" bit is set, throw datagram away and send ICMP error message
     if (ipv4Header->getDontFragment()) {
         PacketDropDetails details;
-        emit(packetDropSignal, packet, &details);
+        emit(packetDroppedSignal, packet, &details);
         EV_WARN << "datagram larger than MTU and don't fragment bit set, sending ICMP_DESTINATION_UNREACHABLE\n";
         sendIcmpError(packet, -1    /*TODO*/, ICMP_DESTINATION_UNREACHABLE,
                 ICMP_DU_FRAGMENTATION_NEEDED);
@@ -894,10 +895,10 @@ void Ipv4::fragmentAndSend(Packet *packet)
         }
 
         ASSERT(fragment->getByteLength() == 0);
-        const auto& fraghdr = staticPtrCast<Ipv4Header>(ipv4Header->dupShared());
+        auto fraghdr = staticPtrCast<Ipv4Header>(ipv4Header->dupShared());
         const auto& fragData = packet->peekDataAt(B(headerLength + offset), B(thisFragmentLength));
         ASSERT(B(fragData->getChunkLength()).get() == thisFragmentLength);
-        fragment->insertAtEnd(fragData);
+        fragment->insertAtBack(fragData);
 
         // "more fragments" bit is unchanged in the last fragment, otherwise true
         if (!lastFragment)
@@ -905,9 +906,10 @@ void Ipv4::fragmentAndSend(Packet *packet)
 
         fraghdr->setFragmentOffset(offsetBase + offset);
         fraghdr->setTotalLengthField(headerLength + thisFragmentLength);
+        if (crcMode == CRC_COMPUTED)
+            setComputedCrc(fraghdr);
 
-
-        fragment->insertAtBeginning(fraghdr);
+        fragment->insertAtFront(fraghdr);
         ASSERT(fragment->getByteLength() == headerLength + thisFragmentLength);
         sendDatagramToOutput(fragment);
         offset += thisFragmentLength;
@@ -921,8 +923,8 @@ void Ipv4::encapsulate(Packet *transportPacket)
     const auto& ipv4Header = makeShared<Ipv4Header>();
 
     auto l3AddressReq = transportPacket->removeTag<L3AddressReq>();
-    Ipv4Address src = l3AddressReq->getSrcAddress().toIPv4();
-    Ipv4Address dest = l3AddressReq->getDestAddress().toIPv4();
+    Ipv4Address src = l3AddressReq->getSrcAddress().toIpv4();
+    Ipv4Address dest = l3AddressReq->getDestAddress().toIpv4();
     delete l3AddressReq;
 
     ipv4Header->setProtocolId((IpProtocolId)ProtocolGroup::ipprotocol.getProtocolNumber(transportPacket->getTag<PacketProtocolTag>()->getProtocol()));
@@ -1003,7 +1005,7 @@ void Ipv4::sendDatagramToOutput(Packet *packet)
 {
     const InterfaceEntry *ie = ift->getInterfaceById(packet->getTag<InterfaceReq>()->getInterfaceId());
     auto nextHopAddressReq = packet->removeTag<NextHopAddressReq>();
-    Ipv4Address nextHopAddr = nextHopAddressReq->getNextHopAddress().toIPv4();
+    Ipv4Address nextHopAddr = nextHopAddressReq->getNextHopAddress().toIpv4();
     delete nextHopAddressReq;
     if (!ie->isBroadcast() || ie->getMacAddress().isUnspecified()) // we can't do ARP
         sendPacketToNIC(packet);
@@ -1025,7 +1027,7 @@ void Ipv4::arpResolutionCompleted(IArp::Notification *entry)
 {
     if (entry->l3Address.getType() != L3Address::Ipv4)
         return;
-    auto it = pendingPackets.find(entry->l3Address.toIPv4());
+    auto it = pendingPackets.find(entry->l3Address.toIpv4());
     if (it != pendingPackets.end()) {
         cPacketQueue& packetQueue = it->second;
         EV << "ARP resolution completed for " << entry->l3Address << ". Sending " << packetQueue.getLength()
@@ -1046,7 +1048,7 @@ void Ipv4::arpResolutionTimedOut(IArp::Notification *entry)
 {
     if (entry->l3Address.getType() != L3Address::Ipv4)
         return;
-    auto it = pendingPackets.find(entry->l3Address.toIPv4());
+    auto it = pendingPackets.find(entry->l3Address.toIpv4());
     if (it != pendingPackets.end()) {
         cPacketQueue& packetQueue = it->second;
         EV << "ARP resolution failed for " << entry->l3Address << ",  dropping " << packetQueue.getLength() << " packets\n";
@@ -1054,7 +1056,7 @@ void Ipv4::arpResolutionTimedOut(IArp::Notification *entry)
             auto packet = packetQueue.get(i);
             PacketDropDetails details;
             details.setReason(ADDRESS_RESOLUTION_FAILED);
-            emit(packetDropSignal, packet, &details);
+            emit(packetDroppedSignal, packet, &details);
         }
         packetQueue.clear();
         pendingPackets.erase(it);

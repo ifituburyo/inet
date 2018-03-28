@@ -32,7 +32,7 @@ class Ipv6Header;
 namespace tcp { class TcpHeader; }
 class UdpHeader;
 class ArpPacket;
-namespace sctp { class SCTPMessage; }
+namespace sctp { class SctpHeader; }
 
 /**
  * Utility class that provides tcpdump-like functionality. It prints
@@ -93,9 +93,9 @@ class INET_API PacketDump
      * Dumps info about the given Ipv4 datagram. The l2r parameter denotes the
      * direction of the packet.
      */
-    void dumpIPv4(bool l2r, const char *label, const Ptr<const Ipv4Header>& ipv4Header, const char *comment = nullptr);
+    void dumpIpv4(bool l2r, const char *label, const Ptr<const Ipv4Header>& ipv4Header, const char *comment = nullptr);
 
-    void dumpARP(bool l2r, const char *label, const Ptr<const ArpPacket>& arp, const char *comment = nullptr);
+    void dumpArp(bool l2r, const char *label, const Ptr<const ArpPacket>& arp, const char *comment = nullptr);
 #endif // ifdef WITH_IPv4
 
 #ifdef WITH_IPv6
@@ -103,15 +103,15 @@ class INET_API PacketDump
      * Dumps info about the given Ipv6 datagram. The l2r parameter denotes
      * the direction of the packet.
      */
-    void dumpIPv6(bool l2r, const char *label, const Ptr<const Ipv6Header>& ipv6Header, const char *comment = nullptr);
+    void dumpIpv6(bool l2r, const char *label, const Ptr<const Ipv6Header>& ipv6Header, const char *comment = nullptr);
 #endif // ifdef WITH_IPv6
 
 #ifdef WITH_SCTP
     /**
      * Dumps info about the given SCTP message.
      */
-    void sctpDump(const char *label, Packet *pk, const std::string& srcAddr,
-            const std::string& destAddr, const char *comment = nullptr);
+     void sctpDump(const char *label, Packet * pk, const Ptr<const sctp::SctpHeader>& sctpmsg,
+        const std::string& srcAddr, const std::string& destAddr, const char *comment = nullptr);
 
 #endif // ifdef WITH_SCTP
 

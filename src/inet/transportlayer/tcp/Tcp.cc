@@ -129,13 +129,14 @@ Tcp::~Tcp()
     }
 }
 
+// packet contains the tcpHeader
 bool Tcp::checkCrc(const Ptr<const TcpHeader>& tcpHeader, Packet *packet)
 {
     switch (tcpHeader->getCrcMode()) {
         case CRC_COMPUTED: {
             //check CRC:
             auto networkProtocol = packet->getTag<NetworkProtocolInd>()->getProtocol();
-            const std::vector<uint8_t> tcpBytes = packet->peekDataBytes()->getBytes();
+            const std::vector<uint8_t> tcpBytes = packet->peekDataAsBytes()->getBytes();
             auto pseudoHeader = makeShared<TransportPseudoHeader>();
             L3Address srcAddr = packet->getTag<L3AddressInd>()->getSrcAddress();
             L3Address destAddr = packet->getTag<L3AddressInd>()->getDestAddress();
@@ -152,17 +153,10 @@ bool Tcp::checkCrc(const Ptr<const TcpHeader>& tcpHeader, Packet *packet)
                 pseudoHeader->setChunkLength(B(40));
             else
                 throw cRuntimeError("Unknown network protocol: %s", networkProtocol->getName());
-            auto pseudoHeaderBytes = pseudoHeader->Chunk::peek<BytesChunk>(B(0), pseudoHeader->getChunkLength())->getBytes();
-            auto pseudoHeaderLength = pseudoHeaderBytes.size();
-            auto tcpDataLength =  tcpBytes.size();
-            auto bufferLength = pseudoHeaderLength + tcpDataLength;
-            auto buffer = new uint8_t[bufferLength];
-            // 1. fill in the data
-            std::copy(pseudoHeaderBytes.begin(), pseudoHeaderBytes.end(), (uint8_t *)buffer);
-            std::copy(tcpBytes.begin(), tcpBytes.end(), (uint8_t *)buffer + pseudoHeaderLength);
-            // 2. compute the CRC
-            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(buffer, bufferLength);
-            delete [] buffer;
+            MemoryOutputStream stream;
+            Chunk::serialize(stream, pseudoHeader);
+            Chunk::serialize(stream, packet->peekData());
+            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(stream.getData());
             return (crc == 0);
         }
         case CRC_DECLARED_CORRECT:
@@ -198,7 +192,7 @@ void Tcp::handleMessage(cMessage *msg)
         }
         else if (protocol == &Protocol::tcp) {
             // must be a TcpHeader
-            auto tcpHeader = packet->peekHeader<TcpHeader>();
+            auto tcpHeader = packet->peekAtFront<TcpHeader>();
 
             // get src/dest addresses
             L3Address srcAddr, destAddr;

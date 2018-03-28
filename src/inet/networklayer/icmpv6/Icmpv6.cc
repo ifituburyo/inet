@@ -85,7 +85,7 @@ void Icmpv6::processICMPv6Message(Packet *packet)
         return;
     }
 
-    auto icmpv6msg = packet->peekHeader<Icmpv6Header>();
+    auto icmpv6msg = packet->peekAtFront<Icmpv6Header>();
     int type = icmpv6msg->getType();
     if (type < 128) {
         // ICMP errors are delivered to the appropriate higher layer protocols
@@ -105,7 +105,7 @@ void Icmpv6::processICMPv6Message(Packet *packet)
         }
     }
     else {
-        auto icmpv6msg = packet->popHeader<Icmpv6Header>();
+        auto icmpv6msg = packet->popAtFront<Icmpv6Header>();
         if (dynamicPtrCast<const Icmpv6DestUnreachableMsg>(icmpv6msg)) {
             EV_INFO << "ICMPv6 Destination Unreachable Message Received." << endl;
             errorOut(icmpv6msg);
@@ -168,9 +168,9 @@ void Icmpv6::processEchoRequest(Packet *requestPacket, const Ptr<const Icmpv6Ech
     auto replyHeader = makeShared<Icmpv6EchoReplyMsg>();
     replyHeader->setIdentifier(requestHeader->getIdentifier());
     replyHeader->setSeqNumber(requestHeader->getSeqNumber());
-    replyPacket->insertAtEnd(requestPacket->peekData());
+    replyPacket->insertAtBack(requestPacket->peekData());
     insertCrc(replyHeader, replyPacket);
-    replyPacket->insertHeader(replyHeader);
+    replyPacket->insertAtFront(replyHeader);
 
     auto addressInd = requestPacket->getTag<L3AddressInd>();
     replyPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::icmpv6);
@@ -229,11 +229,11 @@ void Icmpv6::sendErrorMessage(Packet *origDatagram, Icmpv6Type type, int code)
     // A workaround is to avoid decapsulation, or to manually set the
     // errorMessage length to be larger than the encapsulated message.
     b copyLength =  B(IPv6_MIN_MTU) - errorMsg->getTotalLength();
-    errorMsg->insertAtEnd(origDatagram->peekDataAt(b(0), std::min(copyLength, origDatagram->getDataLength())));
+    errorMsg->insertAtBack(origDatagram->peekDataAt(b(0), std::min(copyLength, origDatagram->getDataLength())));
 
-    auto icmpHeader = errorMsg->removeHeader<Icmpv6Header>();
+    auto icmpHeader = errorMsg->removeAtFront<Icmpv6Header>();
     insertCrc(icmpHeader, errorMsg);
-    errorMsg->insertHeader(icmpHeader);
+    errorMsg->insertAtFront(icmpHeader);
 
     // debugging information
     EV_DEBUG << "sending ICMP error: (" << errorMsg->getClassName() << ")" << errorMsg->getName()
@@ -241,7 +241,7 @@ void Icmpv6::sendErrorMessage(Packet *origDatagram, Icmpv6Type type, int code)
 
     // if srcAddr is not filled in, we're still in the src node, so we just
     // process the ICMP message locally, right away
-    const auto& ipv6Header = origDatagram->peekHeader<Ipv6Header>();
+    const auto& ipv6Header = origDatagram->peekAtFront<Ipv6Header>();
     if (ipv6Header->getSrcAddress().isUnspecified()) {
         // pretend it came from the IP layer
         errorMsg->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::icmpv6);
@@ -276,7 +276,7 @@ Packet *Icmpv6::createDestUnreachableMsg(Icmpv6DestUnav code)
     errorMsg->setType(ICMPv6_DESTINATION_UNREACHABLE);
     errorMsg->setCode(code);
     auto packet = new Packet("Dest Unreachable");
-    packet->insertAtEnd(errorMsg);
+    packet->insertAtBack(errorMsg);
     return packet;
 }
 
@@ -287,7 +287,7 @@ Packet *Icmpv6::createPacketTooBigMsg(int mtu)
     errorMsg->setCode(0);    //Set to 0 by sender and ignored by receiver.
     errorMsg->setMTU(mtu);
     auto packet = new Packet("Packet Too Big");
-    packet->insertAtEnd(errorMsg);
+    packet->insertAtBack(errorMsg);
     return packet;
 }
 
@@ -297,7 +297,7 @@ Packet *Icmpv6::createTimeExceededMsg(Icmpv6TimeEx code)
     errorMsg->setType(ICMPv6_TIME_EXCEEDED);
     errorMsg->setCode(code);
     auto packet = new Packet("Time Exceeded");
-    packet->insertAtEnd(errorMsg);
+    packet->insertAtBack(errorMsg);
     return packet;
 }
 
@@ -308,13 +308,13 @@ Packet *Icmpv6::createParamProblemMsg(Icmpv6ParameterProblem code)
     errorMsg->setCode(code);
     //TODO: What Pointer? section 3.4
     auto packet = new Packet("Parameter Problem");
-    packet->insertAtEnd(errorMsg);
+    packet->insertAtBack(errorMsg);
     return packet;
 }
 
 bool Icmpv6::validateDatagramPromptingError(Packet *packet)
 {
-    auto ipv6Header = packet->peekHeader<Ipv6Header>();
+    auto ipv6Header = packet->peekAtFront<Ipv6Header>();
     // don't send ICMP error messages for multicast messages
     if (ipv6Header->getDestAddress().isMulticast()) {
         EV_INFO << "won't send ICMP error messages for multicast message " << ipv6Header << endl;
@@ -374,18 +374,13 @@ void Icmpv6::insertCrc(CrcMode crcMode, const Ptr<Icmpv6Header>& icmpHeader, Pac
         case CRC_COMPUTED: {
             // if the CRC mode is computed, then compute the CRC and set it
             icmpHeader->setChksum(0x0000); // make sure that the CRC is 0 in the header before computing the CRC
-            MemoryOutputStream icmpHeaderStream;
-            Chunk::serialize(icmpHeaderStream, icmpHeader);
-            const auto& icmpHeaderBytes = icmpHeaderStream.getData();
-            auto icmpDataBytes = packet->peekDataBytes()->getBytes();
-            auto icmpHeaderLength = icmpHeaderBytes.size();
-            auto icmpDataLength =  icmpDataBytes.size();
-            auto bufferLength = icmpHeaderLength + icmpDataLength;
-            auto buffer = new uint8_t[bufferLength];
-            std::copy(icmpHeaderBytes.begin(), icmpHeaderBytes.end(), buffer);
-            std::copy(icmpDataBytes.begin(), icmpDataBytes.end(), buffer + icmpHeaderLength);
-            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(buffer, bufferLength);
-            delete [] buffer;
+            MemoryOutputStream icmpStream;
+            Chunk::serialize(icmpStream, icmpHeader);
+            if (packet->getByteLength() > 0) {
+                auto icmpDataBytes = packet->peekDataAsBytes();
+                Chunk::serialize(icmpStream, icmpDataBytes);
+            }
+            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(icmpStream.getData());
             icmpHeader->setChksum(crc);
             break;
         }
@@ -396,7 +391,7 @@ void Icmpv6::insertCrc(CrcMode crcMode, const Ptr<Icmpv6Header>& icmpHeader, Pac
 
 bool Icmpv6::verifyCrc(const Packet *packet)
 {
-    const auto& icmpHeader = packet->peekHeader<Icmpv6Header>(b(-1), Chunk::PF_ALLOW_INCORRECT);
+    const auto& icmpHeader = packet->peekAtFront<Icmpv6Header>(b(-1), Chunk::PF_ALLOW_INCORRECT);
     switch (icmpHeader->getCrcMode()) {
         case CRC_DECLARED_CORRECT:
             // if the CRC mode is declared to be correct, then the check passes if and only if the chunks are correct
@@ -406,12 +401,8 @@ bool Icmpv6::verifyCrc(const Packet *packet)
             return false;
         case CRC_COMPUTED: {
             // otherwise compute the CRC, the check passes if the result is 0xFFFF (includes the received CRC)
-            auto dataBytes = packet->peekDataBytes(Chunk::PF_ALLOW_INCORRECT);
-            size_t bufferLength = B(dataBytes->getChunkLength()).get();
-            auto buffer = new uint8_t[bufferLength];
-            dataBytes->copyToBuffer(buffer, bufferLength);
-            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(buffer, bufferLength);
-            delete [] buffer;
+            auto dataBytes = packet->peekDataAsBytes(Chunk::PF_ALLOW_INCORRECT);
+            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(dataBytes->getBytes());
             // TODO: delete these isCorrect calls, rely on CRC only
             return crc == 0 && icmpHeader->isCorrect();
         }

@@ -19,7 +19,7 @@
 #include <string.h>
 
 #include "inet/common/packet/chunk/ByteCountChunk.h"
-#include "inet/transportlayer/rtp/RtpInnerPacket.h"
+#include "inet/transportlayer/rtp/RtpInnerPacket_m.h"
 #include "inet/transportlayer/rtp/RtpPacket_m.h"
 #include "inet/transportlayer/rtp/profiles/avprofile/RtpAvProfilePayload32Sender.h"
 #include "inet/transportlayer/rtp/profiles/avprofile/RtpMpegPacket_m.h"
@@ -156,9 +156,9 @@ bool RtpAvProfilePayload32Sender::sendPacket()
 
             rtpHeader->setTimeStamp(_timeStampBase + (_initialDelay + (1 / _framesPerSecond) * (double)_frameNumber) * _clockRate);
             rtpHeader->setSsrc(_ssrc);
-            packet->insertHeader(rtpHeader);
-            packet->insertTrailer(mpegHeader);
-            packet->insertTrailer(mpegPayload);
+            packet->insertAtFront(rtpHeader);
+            packet->insertAtBack(mpegHeader);
+            packet->insertAtBack(mpegPayload);
 
             RtpInnerPacket *rinpOut = new RtpInnerPacket("dataOut()");
             rinpOut->setDataOutPkt(packet);

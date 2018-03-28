@@ -50,7 +50,16 @@ void IpvxTrafGen::initialize(int stage)
     // because of IPvXAddressResolver, we need to wait until interfaces are registered,
     // address auto-assignment takes place etc.
     if (stage == INITSTAGE_LOCAL) {
-        protocol = ProtocolGroup::ipprotocol.getProtocol(par("protocol"));
+        int protocolId = par("protocol");
+        if (protocolId < 143 || protocolId > 254)
+            throw cRuntimeError("invalid protocol id %d, accepts only between 143 and 254", protocolId);
+        protocol = ProtocolGroup::ipprotocol.findProtocol(protocolId);
+        if (!protocol) {
+            char *buff = new char[40];
+            sprintf(buff, "prot_%d", protocolId);
+            protocol = new Protocol(buff, buff);
+            ProtocolGroup::ipprotocol.addProtocol(protocolId, protocol);
+        }
         numPackets = par("numPackets");
         startTime = par("startTime");
         stopTime = par("stopTime");
@@ -182,18 +191,18 @@ void IpvxTrafGen::sendPacket()
 
     Packet *packet = new Packet(msgName);
     const auto& payload = makeShared<ByteCountChunk>(B(*packetLengthPar));
-    packet->insertAtEnd(payload);
+    packet->insertAtBack(payload);
 
     L3Address destAddr = chooseDestAddr();
 
     IL3AddressType *addressType = destAddr.getAddressType();
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(protocol);
-    packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(addressType->getNetworkProtocol());
-    packet->addTagIfAbsent<L3AddressReq>()->setDestAddress(destAddr);
+    packet->addTag<PacketProtocolTag>()->setProtocol(protocol);
+    packet->addTag<DispatchProtocolReq>()->setProtocol(addressType->getNetworkProtocol());
+    packet->addTag<L3AddressReq>()->setDestAddress(destAddr);
 
     EV_INFO << "Sending packet: ";
     printPacket(packet);
-    emit(sentPkSignal, packet);
+    emit(packetSentSignal, packet);
     send(packet, "ipOut");
     numSent++;
 }
@@ -223,7 +232,7 @@ void IpvxTrafGen::printPacket(Packet *msg)
 
 void IpvxTrafGen::processPacket(Packet *msg)
 {
-    emit(rcvdPkSignal, msg);
+    emit(packetReceivedSignal, msg);
     EV_INFO << "Received packet: ";
     printPacket(msg);
     delete msg;

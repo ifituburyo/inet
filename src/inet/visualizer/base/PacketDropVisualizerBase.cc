@@ -117,7 +117,7 @@ void PacketDropVisualizerBase::initialize(int stage)
         displayPacketDrops = par("displayPacketDrops");
         nodeFilter.setPattern(par("nodeFilter"));
         interfaceFilter.setPattern(par("interfaceFilter"));
-        packetFilter.setPattern(par("packetFilter"));
+        packetFilter.setPattern(par("packetFilter"), par("packetDataFilter"));
         detailsFilter.setPattern(par("detailsFilter"));
         icon = par("icon");
         iconTintAmount = par("iconTintAmount");
@@ -141,7 +141,7 @@ void PacketDropVisualizerBase::handleParameterChange(const char *name)
         else if (!strcmp(name, "interfaceFilter"))
             interfaceFilter.setPattern(par("interfaceFilter"));
         else if (!strcmp(name, "packetFilter"))
-            packetFilter.setPattern(par("packetFilter"));
+            packetFilter.setPattern(par("packetFilter"), par("packetDataFilter"));
         else if (!strcmp(name, "detailsFilter"))
             detailsFilter.setPattern(par("detailsFilter"));
         else if (!strcmp(name, "labelFormat"))
@@ -178,7 +178,7 @@ void PacketDropVisualizerBase::refreshDisplay() const
 void PacketDropVisualizerBase::subscribe()
 {
     auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this);
-    subscriptionModule->subscribe(packetDropSignal, this);
+    subscriptionModule->subscribe(packetDroppedSignal, this);
 
 }
 
@@ -187,13 +187,13 @@ void PacketDropVisualizerBase::unsubscribe()
     // NOTE: lookup the module again because it may have been deleted first
     auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this, false);
     if (subscriptionModule != nullptr)
-        subscriptionModule->unsubscribe(packetDropSignal, this);
+        subscriptionModule->unsubscribe(packetDroppedSignal, this);
 }
 
 void PacketDropVisualizerBase::receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *details)
 {
     Enter_Method_Silent();
-    if (signal == packetDropSignal) {
+    if (signal == packetDroppedSignal) {
         auto module = check_and_cast<cModule *>(source);
         auto packet = check_and_cast<cPacket *>(object);
         auto packetDropDetails = check_and_cast<PacketDropDetails *>(details);

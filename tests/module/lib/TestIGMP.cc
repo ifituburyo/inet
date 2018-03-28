@@ -69,14 +69,14 @@ void TestIGMP::initialize(int stage)
 void TestIGMP::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
 {
     const Ipv4MulticastGroupInfo *info;
-    if (signalID == ipv4McastJoinSignal)
+    if (signalID == ipv4MulticastGroupJoinedSignal)
     {
         info = check_and_cast<const Ipv4MulticastGroupInfo*>(obj);
         startEvent("join group", HOST_GROUP_STATE, info->ie, &info->groupAddress);
         Igmpv2::receiveSignal(source, signalID, obj, details);
         endEvent(HOST_GROUP_STATE, info->ie, &info->groupAddress);
     }
-    else if (signalID == ipv4McastLeaveSignal)
+    else if (signalID == ipv4MulticastGroupLeftSignal)
     {
         info = check_and_cast<const Ipv4MulticastGroupInfo*>(obj);
         startEvent("leave group", HOST_GROUP_STATE, info->ie, &info->groupAddress);
@@ -104,16 +104,16 @@ void TestIGMP::processIgmpMessage(Packet *packet, const Ptr<const IgmpMessage>& 
     switch (igmp->getType())
     {
         case IGMP_MEMBERSHIP_QUERY:
-            group = packet->peekHeader<IgmpQuery>()->getGroupAddress();
+            group = packet->peekAtFront<IgmpQuery>()->getGroupAddress();
             break;
         case IGMPV1_MEMBERSHIP_REPORT:
-            group = packet->peekHeader<Igmpv1Report>()->getGroupAddress();
+            group = packet->peekAtFront<Igmpv1Report>()->getGroupAddress();
             break;
         case IGMPV2_MEMBERSHIP_REPORT:
-            group = packet->peekHeader<Igmpv2Report>()->getGroupAddress();
+            group = packet->peekAtFront<Igmpv2Report>()->getGroupAddress();
             break;
         case IGMPV2_LEAVE_GROUP:
-            group = packet->peekHeader<Igmpv2Leave>()->getGroupAddress();
+            group = packet->peekAtFront<Igmpv2Leave>()->getGroupAddress();
             break;
     }
     int stateMask = 0;
@@ -187,7 +187,7 @@ void TestIGMP::sendToIP(Packet *msg, InterfaceEntry *ie, const Ipv4Address& dest
 {
     if (out.is_open())
     {
-        const auto& igmp = CHK(msg->peekHeader<IgmpMessage>());
+        const auto& igmp = CHK(msg->peekAtFront<IgmpMessage>());
         switch (igmp->getType())
         {
             case IGMP_MEMBERSHIP_QUERY:

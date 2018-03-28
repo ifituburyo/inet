@@ -22,11 +22,17 @@ namespace inet {
 
 namespace visualizer {
 
-std::map<const cCanvas *, LineManager> LineManager::lineManagers;
+std::map<const cCanvas *, LineManager> LineManager::canvasLineManagers;
+std::map<const cCanvas *, LineManager> LineManager::osgLineManagers;
 
-LineManager *LineManager::getLineManager(const cCanvas *canvas)
+LineManager *LineManager::getCanvasLineManager(const cCanvas *canvas)
 {
-    return &lineManagers[canvas];
+    return &canvasLineManagers[canvas];
+}
+
+LineManager *LineManager::getOsgLineManager(const cCanvas *canvas)
+{
+    return &osgLineManagers[canvas];
 }
 
 bool LineManager::compareModuleLines(const ModuleLine *moduleLine1, const ModuleLine *moduleLine2)
@@ -135,6 +141,11 @@ Coord LineManager::getLineShift(int sourceModuleId, int destinationModuleId, con
         auto count = cacheEntry.moduleLines.size() + cacheEntry.modulePaths.size();
         shift *= (double)shiftOffset - ((double)count - 1) / 2;
     }
+
+    double zoomLevel = getEnvir()->getZoomLevel(getSimulation()->getModule(sourceModuleId)->getParentModule());
+    if (!std::isnan(zoomLevel))
+        shift /= zoomLevel;
+
     return shift;
 }
 
