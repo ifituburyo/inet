@@ -90,23 +90,6 @@ void CsmaCaMac::initialize(int stage)
         cwMulticast = par("cwMulticast");
         retryLimit = par("retryLimit");
 
-        const char *addressString = par("address");
-        if (!strcmp(addressString, "auto")) {
-            // assign automatic address
-            address = MacAddress::generateAutoAddress();
-            // change module parameter from "auto" to concrete address
-            par("address").setStringValue(address.str().c_str());
-        }
-        else
-            address.setAddress(addressString);
-        registerInterface();
-
-        // subscribe for the information of the carrier sense
-        cModule *radioModule = getModuleFromPar<cModule>(par("radioModule"), this);
-        radioModule->subscribe(IRadio::receptionStateChangedSignal, this);
-        radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
-        radio = check_and_cast<IRadio *>(radioModule);
-
         // initialize self messages
         endSifs = new cMessage("SIFS");
         endDifs = new cMessage("DIFS");
@@ -121,13 +104,13 @@ void CsmaCaMac::initialize(int stage)
         if (par("prioritizeByUP"))
             transmissionQueue.setup(&compareFramesByPriority);
 
-        // obtain pointer to external queue
-        initializeQueueModule();
-
         // state variables
         fsm.setName("CsmaCaMac State Machine");
         backoffPeriod = -1;
         retryCounter = 0;
+
+        // obtain pointer to external queue
+        initializeQueueModule();        //FIXME move to INITSTAGE_LINK_LAYER
 
         // statistics
         numRetry = 0;
@@ -152,8 +135,27 @@ void CsmaCaMac::initialize(int stage)
         WATCH(numSentBroadcast);
         WATCH(numReceivedBroadcast);
     }
-    else if (stage == INITSTAGE_LINK_LAYER)
+    else if (stage == INITSTAGE_LINK_LAYER) {
+        const char *addressString = par("address");
+        if (!strcmp(addressString, "auto")) {
+            // assign automatic address
+            address = MacAddress::generateAutoAddress();
+            // change module parameter from "auto" to concrete address
+            par("address").setStringValue(address.str().c_str());
+        }
+        else
+            address.setAddress(addressString);
+
+        registerInterface();
+
+        // subscribe for the information of the carrier sense
+        cModule *radioModule = getModuleFromPar<cModule>(par("radioModule"), this);
+        radioModule->subscribe(IRadio::receptionStateChangedSignal, this);
+        radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
+
+        radio = check_and_cast<IRadio *>(radioModule);
         radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
+    }
 }
 
 void CsmaCaMac::initializeQueueModule()
@@ -424,7 +426,7 @@ void CsmaCaMac::receiveSignal(cComponent *source, simsignal_t signalID, long val
     if (signalID == IRadio::receptionStateChangedSignal)
         handleWithFsm(mediumStateChange);
     else if (signalID == IRadio::transmissionStateChangedSignal) {
-        IRadio::TransmissionState newRadioTransmissionState = (IRadio::TransmissionState)value;
+        IRadio::TransmissionState newRadioTransmissionState = static_cast<IRadio::TransmissionState>(value);
         if (transmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING && newRadioTransmissionState == IRadio::TRANSMISSION_STATE_IDLE) {
             handleWithFsm(endData);
             radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
@@ -452,7 +454,7 @@ void CsmaCaMac::encapsulate(Packet *frame)
     if (fcsMode == FCS_COMPUTED)
         macTrailer->setFcs(computeFcs(frame->peekAllAsBytes()));
     frame->insertAtBack(macTrailer);
-    frame->getTag<PacketProtocolTag>()->setProtocol(&Protocol::csmacamac);
+    frame->getTag<PacketProtocolTag>()->setProtocol(&Protocol::csmaCaMac);
 }
 
 void CsmaCaMac::decapsulate(Packet *frame)
@@ -578,7 +580,7 @@ void CsmaCaMac::sendAckFrame()
     if (fcsMode == FCS_COMPUTED)
         macTrailer->setFcs(computeFcs(frame->peekAllAsBytes()));
     frame->insertAtBack(macTrailer);
-    frame->addTag<PacketProtocolTag>()->setProtocol(&Protocol::csmacamac);
+    frame->addTag<PacketProtocolTag>()->setProtocol(&Protocol::csmaCaMac);
     radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
     sendDown(frame);
     delete frameToAck;

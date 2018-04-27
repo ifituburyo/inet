@@ -66,7 +66,8 @@ void Ppp::initialize(int stage)
 
         // find queueModule
         queueModule = nullptr;
-
+    }
+    else if (stage == INITSTAGE_LINK_LAYER) {
         if (par("queueModule").stringValue()[0]) {
             cModule *mod = getModuleFromPar<cModule>(par("queueModule"), this);
             if (mod->isSimple())
@@ -84,8 +85,6 @@ void Ppp::initialize(int stage)
         bool connected = physOutGate->getPathEndGate()->getType() == cGate::INPUT;
         // if we're connected, get the gate with transmission rate
         datarateChannel = connected ? physOutGate->getTransmissionChannel() : nullptr;
-    }
-    else if (stage == INITSTAGE_LINK_LAYER) {
         // register our interface entry in IInterfaceTable
         registerInterface();
 
@@ -129,18 +128,16 @@ void Ppp::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, 
     if (signalID != POST_MODEL_CHANGE)
         return;
 
-    if (dynamic_cast<cPostPathCreateNotification *>(obj)) {
-        cPostPathCreateNotification *gcobj = (cPostPathCreateNotification *)obj;
+    if (auto gcobj = dynamic_cast<cPostPathCreateNotification *>(obj)) {
         if (physOutGate == gcobj->pathStartGate)
             refreshOutGateConnection(true);
     }
-    else if (dynamic_cast<cPostPathCutNotification *>(obj)) {
-        cPostPathCutNotification *gcobj = (cPostPathCutNotification *)obj;
+    else if (auto gcobj = dynamic_cast<cPostPathCutNotification *>(obj)) {
         if (physOutGate == gcobj->pathStartGate)
             refreshOutGateConnection(false);
     }
     else if (datarateChannel && dynamic_cast<cPostParameterChangeNotification *>(obj)) {
-        cPostParameterChangeNotification *gcobj = (cPostParameterChangeNotification *)obj;
+        cPostParameterChangeNotification *gcobj = static_cast<cPostParameterChangeNotification *>(obj);
         if (datarateChannel == gcobj->par->getOwner() && !strcmp("datarate", gcobj->par->getName()))
             refreshOutGateConnection(true);
     }
@@ -396,7 +393,7 @@ void Ppp::flushQueue()
     }
     else {
         while (!txQueue.isEmpty()) {
-            cMessage *msg = (cMessage *)txQueue.pop();
+            cMessage *msg = static_cast<cMessage *>(txQueue.pop());
             PacketDropDetails details;
             details.setReason(INTERFACE_DOWN);
             emit(packetDroppedSignal, msg, &details); //FIXME this signal lumps together packets from the network and packets from higher layers! separate them

@@ -468,7 +468,7 @@ Ipv4AddressVector Ted::getLocalAddress()
     return interfaceAddrs;
 }
 
-Ipv4Address Ted::primaryAddress(Ipv4Address localInf)    // only used in Rsvp::processHelloMsg
+Ipv4Address Ted::primaryAddress(Ipv4Address localInf)    // only used in RsvpTe::processHelloMsg
 {
     for (auto & elem : ted) {
         if (elem.local == localInf)
@@ -491,17 +491,17 @@ bool Ted::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCa
 {
     Enter_Method_Silent();
     if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if ((NodeStartOperation::Stage)stage == NodeStartOperation::STAGE_APPLICATION_LAYER)
+        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER)
             initializeTED();
     }
     else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if ((NodeShutdownOperation::Stage)stage == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
+        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
             ted.clear();
             interfaceAddrs.clear();
         }
     }
     else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if ((NodeCrashOperation::Stage)stage == NodeCrashOperation::STAGE_CRASH) {
+        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
             ted.clear();
             interfaceAddrs.clear();
         }

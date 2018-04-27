@@ -166,7 +166,6 @@
         nedPackages = "
                        inet.networklayer.generic
                        inet.networklayer.configurator.generic
-                       inet.networklayer.arp.generic
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_GENERIC"
@@ -187,18 +186,18 @@
         linkerFlags = ""
         />
     <feature
-        id="Flood"
-        name="Flood"
+        id="Flooding"
+        name="Flooding"
         description = "Provides network layer support for deterministic and probabilistic flooding"
         initiallyEnabled = "true"
         requires = ""
         labels = ""
         nedPackages = "
-                       inet.networklayer.flood
+                       inet.networklayer.flooding
                        inet.networklayer.probabilistic
                       "
         extraSourceFolders = ""
-        compileFlags = "-DWITH_FLOOD"
+        compileFlags = "-DWITH_FLOODING"
         linkerFlags = ""
         />
     <feature
@@ -394,7 +393,7 @@
         nedPackages = "
                        inet.networklayer.mpls inet.node.mpls
                        inet.networklayer.ldp
-                       inet.networklayer.rsvp_te
+                       inet.networklayer.rsvpte
                        inet.networklayer.ted
                       "
         extraSourceFolders = ""
@@ -513,7 +512,7 @@
                        inet.node.dymo
                       "
         extraSourceFolders = ""
-        compileFlags = ""
+        compileFlags = "-DWITH_DYMO"
         linkerFlags = ""
         />
     <feature

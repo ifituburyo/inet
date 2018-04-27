@@ -45,7 +45,7 @@ class Ieee80211FhssPhyHeader extends Ieee80211PhyHeader
     uint16_t plw;
     uint8_t psf;
     uint16_t crc;
-    CrcMode crcMode = (CrcMode)-1;
+    CrcMode crcMode;
 }
 
 //
@@ -59,7 +59,7 @@ class Ieee80211IrPhyHeader extends Ieee80211PhyHeader
 {
     // TODO: uint16_t lengthField;
     uint16_t crc;
-    CrcMode crcMode = (CrcMode)-1;
+    CrcMode crcMode;
 }
 
 //
@@ -76,7 +76,7 @@ class Ieee80211DsssPhyHeader extends Ieee80211PhyHeader
     uint8_t service;
     // TODO: uint16_t lengthField;
     uint16_t crc;
-    CrcMode crcMode = (CrcMode)-1;
+    CrcMode crcMode;
 }
 
 //
@@ -145,3 +145,12 @@ class Ieee80211HtPhyHeader extends Ieee80211PhyHeader
 {
 }
 
+// IEEE 802.11 21. High Throughput (VHT)
+//
+class Ieee80211VhtPhyPreamble extends Ieee80211PhyPreamble
+{
+}
+
+class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
+{
+}

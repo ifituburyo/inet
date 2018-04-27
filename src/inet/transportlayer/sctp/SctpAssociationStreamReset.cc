@@ -66,11 +66,13 @@ void SctpAssociation::checkStreamsToReset()
         if (state->localRequestType == RESET_OUTGOING || state->localRequestType == RESET_BOTH || state->peerRequestType == RESET_INCOMING) {
             state->streamsToReset.clear();
             std::list<uint16>::iterator it;
-            for (it = state->streamsPending.begin(); it != state->streamsPending.end(); it++) {
+            for (it = state->streamsPending.begin(); it != state->streamsPending.end(); ) {
                 if (getBytesInFlightOfStream(*it) == 0) {
                     state->streamsToReset.push_back(*it);
-                    state->streamsPending.erase(it);
+                    it = state->streamsPending.erase(it);
                 }
+                else
+                    ++it;
             }
         }
         if (!state->resetPending && state->resetRequested &&
@@ -88,7 +90,7 @@ void SctpAssociation::checkStreamsToReset()
                     if (state->sendResponse == PERFORMED_WITH_OPTION) {
                         resetExpectedSsns();
                         state->sendResponse = 0;
-                        sendStreamResetResponse((SctpSsnTsnResetRequestParameter *)state->incomingRequest, PERFORMED, true);
+                        sendStreamResetResponse(ssnParam, PERFORMED, true);
                     }
                     delete ssnParam;
                     break;
@@ -218,7 +220,7 @@ void SctpAssociation::sendOutgoingResetRequest(SctpIncomingSsnResetRequestParame
         if (PK(getPath(remoteAddr)->ResetTimer)->hasEncapsulatedPacket()) {
             delete (PK(getPath(remoteAddr)->ResetTimer)->decapsulate());
         }
-        PK(getPath(remoteAddr)->ResetTimer)->encapsulate((cPacket *)rt);
+        PK(getPath(remoteAddr)->ResetTimer)->encapsulate(rt);
         if (getPath(remoteAddr)->ResetTimer->isScheduled()) {
             stopTimer(getPath(remoteAddr)->ResetTimer);
         }
@@ -310,7 +312,7 @@ void SctpAssociation::sendBundledOutgoingResetAndResponse(SctpIncomingSsnResetRe
         if (PK(getPath(remoteAddr)->ResetTimer)->hasEncapsulatedPacket()) {
             PK(getPath(remoteAddr)->ResetTimer)->decapsulate();
         }
-        PK(getPath(remoteAddr)->ResetTimer)->encapsulate((cPacket *)rt);
+        PK(getPath(remoteAddr)->ResetTimer)->encapsulate(rt);
         if (getPath(remoteAddr)->ResetTimer->isScheduled()) {
             stopTimer(getPath(remoteAddr)->ResetTimer);
         }
@@ -438,11 +440,11 @@ void SctpAssociation::sendOutgoingRequestAndResponse(uint32 inRequestSn, uint32 
         delete state->resetChunk;
         state->resetChunk = nullptr;
     }
-    state->resetChunk = check_and_cast<SctpStreamResetChunk *>(resChunk->dup());
+    state->resetChunk = resChunk->dup();
     msg->insertSctpChunks(resChunk);
     Packet *pkt = new Packet("RE_CONFIG");
     sendToIP(pkt, msg, remoteAddr);
-    PK(getPath(remoteAddr)->ResetTimer)->encapsulate((cPacket *)rt);
+    PK(getPath(remoteAddr)->ResetTimer)->encapsulate(rt);
     startTimer(getPath(remoteAddr)->ResetTimer, getPath(remoteAddr)->pathRto);
 }
 
@@ -502,7 +504,7 @@ void SctpAssociation::sendOutgoingRequestAndResponse(SctpIncomingSsnResetRequest
     if (PK(getPath(remoteAddr)->ResetTimer)->hasEncapsulatedPacket()) {
         PK(getPath(remoteAddr)->ResetTimer)->decapsulate();
     }
-    PK(getPath(remoteAddr)->ResetTimer)->encapsulate((cPacket *)rt);
+    PK(getPath(remoteAddr)->ResetTimer)->encapsulate(rt);
     startTimer(getPath(remoteAddr)->ResetTimer, getPath(remoteAddr)->pathRto);
 }
 
@@ -631,7 +633,7 @@ void SctpAssociation::sendStreamResetRequest(SctpResetReq *rinfo)
     if (PK(getPath(remoteAddr)->ResetTimer)->hasEncapsulatedPacket()) {
         PK(getPath(remoteAddr)->ResetTimer)->decapsulate();
     }
-    PK(getPath(remoteAddr)->ResetTimer)->encapsulate((cPacket *)rt);
+    PK(getPath(remoteAddr)->ResetTimer)->encapsulate(rt);
     if (getPath(remoteAddr)->ResetTimer->isScheduled()) {
         stopTimer(getPath(remoteAddr)->ResetTimer);
     }
@@ -683,7 +685,7 @@ void SctpAssociation::sendAddOutgoingStreamsRequest(uint16 numStreams)
         rt->setInAcked(true);
         rt->setOutSN(srsn);
         rt->setOutAcked(false);
-        PK(getPath(remoteAddr)->ResetTimer)->encapsulate((cPacket *)rt);
+        PK(getPath(remoteAddr)->ResetTimer)->encapsulate(rt);
         startTimer(getPath(remoteAddr)->ResetTimer, getPath(remoteAddr)->pathRto);
     }
     state->streamResetSequenceNumber = ++srsn;
@@ -736,7 +738,7 @@ void SctpAssociation::sendAddInAndOutStreamsRequest(SctpResetReq *info)
     msg->insertSctpChunks(resetChunk);
     Packet *pkt = new Packet("RE_CONFIG");
     sendToIP(pkt, msg, remoteAddr);
-    PK(getPath(remoteAddr)->ResetTimer)->encapsulate((cPacket *)rt);
+    PK(getPath(remoteAddr)->ResetTimer)->encapsulate(rt);
     startTimer(getPath(remoteAddr)->ResetTimer, getPath(remoteAddr)->pathRto);
 }
 

@@ -50,11 +50,12 @@ class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener,
 {
   private:
     // GPSR parameters
-    GpsrPlanarizationMode planarizationMode = (GpsrPlanarizationMode)-1;
+    GpsrPlanarizationMode planarizationMode = static_cast<GpsrPlanarizationMode>(-1);
     const char *interfaces = nullptr;
     simtime_t beaconInterval;
     simtime_t maxJitter;
     simtime_t neighborValidityInterval;
+    bool displayBubbles;
 
     // context
     cModule *host = nullptr;

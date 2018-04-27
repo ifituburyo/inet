@@ -125,6 +125,7 @@ void Icmpv6HeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<con
             stream.writeUint32Be(0);   // unused
             //FIXME serialize TLV options
             // TODO: incomplete
+            break;
         }
 
         default:
@@ -135,7 +136,7 @@ void Icmpv6HeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<con
 const Ptr<Chunk> Icmpv6HeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto icmpv6Header = makeShared<Icmpv6Header>();
-    Icmpv6Type type = (Icmpv6Type)stream.readByte();     // type
+    Icmpv6Type type = static_cast<Icmpv6Type>(stream.readByte());     // type
     uint8_t subcode = stream.readByte();  // subcode
     uint16_t chksum = stream.readUint16Be();
 
@@ -157,7 +158,7 @@ const Ptr<Chunk> Icmpv6HeaderSerializer::deserialize(MemoryInputStream& stream) 
         case ICMPv6_DESTINATION_UNREACHABLE: {
             auto destUnreach = makeShared<Icmpv6DestUnreachableMsg>(); icmpv6Header = destUnreach;
             destUnreach->setType(type);
-            destUnreach->setCode((Icmpv6DestUnav)subcode);
+            destUnreach->setCode(static_cast<Icmpv6DestUnav>(subcode));
             stream.readUint32Be();        // unused
             break;
         }
@@ -165,7 +166,7 @@ const Ptr<Chunk> Icmpv6HeaderSerializer::deserialize(MemoryInputStream& stream) 
         case ICMPv6_TIME_EXCEEDED: {
             auto timeExceeded = makeShared<Icmpv6TimeExceededMsg>(); icmpv6Header = timeExceeded;
             timeExceeded->setType(type);
-            timeExceeded->setCode((Icmpv6TimeEx)subcode);
+            timeExceeded->setCode(static_cast<Icmpv6TimeEx>(subcode));
             stream.readUint32Be();        // unused
             break;
         }

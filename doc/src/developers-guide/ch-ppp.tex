@@ -1,3 +1,5 @@
+\ifdraft TODO
+
 \chapter{Point-to-Point Links}
 \label{cha:ppp}
 
@@ -5,7 +7,7 @@
 \section{Overview}
 
 The modules of the PPP model can be found in the \nedtype{inet.linklayer.ppp}
-package. The \nedtype{PPP} simple module performs encapsulation
+package. The \nedtype{Ppp} simple module performs encapsulation
 of network datagrams into PPP frames and decapsulation of
 the incoming PPP frames.
 
@@ -21,9 +23,13 @@ TODO tags PPP attaches to packets; example code
 
 TODO how (override handleMessage etc.)
 
-%%% Local Variables:
-%%% mode: latex
-%%% TeX-master: "usman"
-%%% End:
+signals:
+
+Notifications are sent when
+transmission of a new PPP frame started (\verb!NF_PP_TX_BEGIN!), finished
+(\verb!NF_PP_TX_END!) or when a PPP frame received (\verb!NF_PP_RX_END!).
+
+\fi
+
 
 

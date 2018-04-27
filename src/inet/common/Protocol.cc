@@ -72,7 +72,7 @@ const Protocol *Protocol::getProtocol(const char *name)
         throw cRuntimeError("Unknown protocol: name = %s" , name);
 }
 
-// Standard protocols:
+// Standard protocol identifiers
 const Protocol Protocol::aodv("aodv", "AODV");
 const Protocol Protocol::arp("arp", "ARP", Protocol::NetworkLayer);
 const Protocol Protocol::bgp("bgp", "BGP");
@@ -81,11 +81,11 @@ const Protocol Protocol::dsdv2("dsdv2", "DSDV 2");
 const Protocol Protocol::dsr("dsr", "DSR");
 const Protocol Protocol::dymo("dymo", "DYMO");
 const Protocol Protocol::egp("egp", "EGP");
-const Protocol Protocol::ethernetPhy("ethernetphy", "Ethernet PHY", Protocol::PhysicalLayer);
 const Protocol Protocol::ethernetMac("ethernetmac", "Ethernet MAC", Protocol::LinkLayer);
+const Protocol Protocol::ethernetPhy("ethernetphy", "Ethernet PHY", Protocol::PhysicalLayer);
 const Protocol Protocol::gpsr("gpsr", "GPSR");
-const Protocol Protocol::icmpv4("icmpv4", "ICMP v4", Protocol::NetworkLayer);
-const Protocol Protocol::icmpv6("icmpv6", "ICMP v6", Protocol::NetworkLayer);
+const Protocol Protocol::icmpv4("icmpv4", "ICMPv4", Protocol::NetworkLayer);
+const Protocol Protocol::icmpv6("icmpv6", "ICMPv6", Protocol::NetworkLayer);
 const Protocol Protocol::ieee80211Mac("ieee80211mac", "IEEE 802.11 MAC", Protocol::LinkLayer);
 const Protocol Protocol::ieee80211Mgmt("ieee80211mgmt", "IEEE 802.11 MGMT", Protocol::LinkLayer);
 const Protocol Protocol::ieee80211Phy("ieee80211phy", "IEEE 802.11 PHY", Protocol::PhysicalLayer);
@@ -93,16 +93,17 @@ const Protocol Protocol::ieee802154("ieee802154", "IEEE 802.15.4");
 const Protocol Protocol::ieee8022("ieee8022", "IEEE 802.2", Protocol::LinkLayer);
 const Protocol Protocol::igmp("igmp", "IGMP", Protocol::NetworkLayer);
 const Protocol Protocol::igp("igp", "IGP");
-const Protocol Protocol::ipv4("ipv4", "IP v4", Protocol::NetworkLayer);
-const Protocol Protocol::ipv6("ipv6", "IP v6", Protocol::NetworkLayer);
+const Protocol Protocol::ipv4("ipv4", "IPv4", Protocol::NetworkLayer);
+const Protocol Protocol::ipv6("ipv6", "IPv6", Protocol::NetworkLayer);
 const Protocol Protocol::lmac("lmac", "L-MAC");
 const Protocol Protocol::manet("manet", "MANET");
-const Protocol Protocol::mobileipv6("mobileipv6", "Mobile IP v6");
+const Protocol Protocol::mobileipv6("mobileipv6", "Mobile IPv6");
 const Protocol Protocol::mpls("mpls", "MPLS");
 const Protocol Protocol::ospf("ospf", "OSPF");
 const Protocol Protocol::pim("pim", "PIM");
 const Protocol Protocol::ppp("ppp", "PPP", Protocol::LinkLayer);
-const Protocol Protocol::rsvp("rsvp", "RSVP");
+const Protocol Protocol::rip("rip", "RIP");
+const Protocol Protocol::rsvpTe("rsvpte", "RSVP-TE");
 const Protocol Protocol::sctp("sctp", "SCTP", Protocol::TransportLayer);
 const Protocol Protocol::stp("stp", "STP");
 const Protocol Protocol::tcp("tcp", "TCP", Protocol::TransportLayer);
@@ -110,19 +111,19 @@ const Protocol Protocol::udp("udp", "UDP", Protocol::TransportLayer);
 const Protocol Protocol::xmac("xmac", "X-MAC");
 const Protocol Protocol::xtp("xtp", "XTP");
 
-// INET specific protocols:
-const Protocol Protocol::ackingmac("ackingmac", "Acking MAC"); // INET specific
-const Protocol Protocol::apskPhy("apskphy", "APSK PHY", Protocol::PhysicalLayer); // INET specific
-const Protocol Protocol::csmacamac("csmacamac", "CSMA/CA MAC"); // INET specific
-const Protocol Protocol::echo("echo", "Echo");  // INET specific echo protocol (ping request/reply)
-const Protocol Protocol::flood("flood", "Flood", Protocol::NetworkLayer); // INET specific Flood Network Protocol
-const Protocol Protocol::gnp("gnp", "GNP"); // INET specific Generic Network Protocol
-const Protocol Protocol::linkstaterouting("linkstaterouting", "LinkStateRouting");
-const Protocol Protocol::probabilistic("probabilistic", "Probabilistic", Protocol::NetworkLayer); // INET specific Probabilistic Network Protocol
-const Protocol Protocol::shortcutMac("shortcutmac", "Shortcut MAC"); // INET specific
-const Protocol Protocol::shortcutPhy("shortcutphy", "Shortcut PHY", Protocol::PhysicalLayer); // INET specific
-const Protocol Protocol::unitdisk("unitdisk", "UnitDisk");      // INET specific
-const Protocol Protocol::wiseroute("wiseroute", "WiseRoute"); // INET specific WiseRoute Network Protocol
+// INET specific conceptual protocol identifiers
+const Protocol Protocol::ackingMac("ackingmac", "Acking MAC");
+const Protocol Protocol::apskPhy("apskphy", "APSK PHY", Protocol::PhysicalLayer);
+const Protocol Protocol::csmaCaMac("csmacamac", "CSMA/CA MAC");
+const Protocol Protocol::echo("echo", "Echo"); // Echo protocol (ping request/reply)
+const Protocol Protocol::flooding("flooding", "Flooding", Protocol::NetworkLayer);
+const Protocol Protocol::gnp("gnp", "GNP"); // Generic Network Protocol
+const Protocol Protocol::linkStateRouting("linkstaterouting", "LinkStateRouting");
+const Protocol Protocol::probabilistic("probabilistic", "Probabilistic", Protocol::NetworkLayer); // Probabilistic Network Protocol
+const Protocol Protocol::shortcutMac("shortcutmac", "Shortcut MAC");
+const Protocol Protocol::shortcutPhy("shortcutphy", "Shortcut PHY", Protocol::PhysicalLayer);
+const Protocol Protocol::unitDisk("unitdisk", "UnitDisk");
+const Protocol Protocol::wiseRoute("wiseroute", "WiseRoute"); // WiseRoute Network Protocol
 
 } // namespace inet
 

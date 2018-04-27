@@ -65,10 +65,10 @@ simsignal_t PingApp::pingRxSeqSignal = registerSignal("pingRxSeq");
 const std::map<const Protocol *, const Protocol *> PingApp::l3Echo( {
     { &Protocol::ipv4, &Protocol::icmpv4 },
     { &Protocol::ipv6, &Protocol::icmpv6 },
-    { &Protocol::flood, &Protocol::echo },
+    { &Protocol::flooding, &Protocol::echo },
     { &Protocol::gnp, &Protocol::echo },
     { &Protocol::probabilistic, &Protocol::echo },
-    { &Protocol::wiseroute, &Protocol::echo },
+    { &Protocol::wiseRoute, &Protocol::echo },
 });
 
 enum PingSelfKinds {
@@ -199,8 +199,8 @@ void PingApp::handleMessage(cMessage *msg)
             }
             else {
                 switch (destAddr.getType()) {
-                    case L3Address::Ipv4: l3Protocol = &Protocol::ipv4; break;
-                    case L3Address::Ipv6: l3Protocol = &Protocol::ipv6; break;
+                    case L3Address::IPv4: l3Protocol = &Protocol::ipv4; break;
+                    case L3Address::IPv6: l3Protocol = &Protocol::ipv6; break;
                     case L3Address::MODULEID:
                     case L3Address::MODULEPATH: l3Protocol = &Protocol::gnp; break;
                         //TODO
@@ -299,15 +299,15 @@ bool PingApp::handleOperationStage(LifecycleOperation *operation, int stage, IDo
 {
     Enter_Method_Silent();
     if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if ((NodeStartOperation::Stage)stage == NodeStartOperation::STAGE_APPLICATION_LAYER && isEnabled())
+        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER && isEnabled())
             startSendingPingRequests();
     }
     else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if ((NodeShutdownOperation::Stage)stage == NodeShutdownOperation::STAGE_APPLICATION_LAYER)
+        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER)
             stopSendingPingRequests();
     }
     else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if ((NodeCrashOperation::Stage)stage == NodeCrashOperation::STAGE_CRASH)
+        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH)
             stopSendingPingRequests();
     }
     else
@@ -377,7 +377,7 @@ void PingApp::sendPingRequest()
     auto payload = makeShared<ByteCountChunk>(B(packetSize));
 
     switch (destAddr.getType()) {
-        case L3Address::Ipv4: {
+        case L3Address::IPv4: {
 #ifdef WITH_IPv4
             const auto& request = makeShared<IcmpEchoRequest>();
             request->setIdentifier(pid);
@@ -391,7 +391,7 @@ void PingApp::sendPingRequest()
             throw cRuntimeError("INET compiled without Ipv4");
 #endif
         }
-        case L3Address::Ipv6: {
+        case L3Address::IPv6: {
 #ifdef WITH_IPv6
             const auto& request = makeShared<Icmpv6EchoRequestMsg>();
             request->setIdentifier(pid);

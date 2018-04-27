@@ -28,8 +28,6 @@ using namespace physicallayer;
 
 Define_Module(LMac)
 
-#define myId    (getParentModule()->getParentModule()->getIndex())
-
 const MacAddress LMac::LMAC_NO_RECEIVER = MacAddress(-2);
 const MacAddress LMac::LMAC_FREE_SLOT = MacAddress::BROADCAST_ADDRESS;
 
@@ -46,6 +44,8 @@ void LMac::initialize(int stage)
         // the first N slots are reserved for mobile nodes to be able to function normally
         reservedMobileSlots = par("reservedMobileSlots");
 
+        auto node = getContainingNode(this);
+        myId = node->isVector() ? node->getIndex() : getId() % numSlots;
         EV_DETAIL << "My Mac address is" << address << " and my Id is " << myId << endl;
 
         macState = INIT;
@@ -55,7 +55,8 @@ void LMac::initialize(int stage)
         // how long does it take to send/receive a control packet
         controlDuration = (double)(headerLength.get() + numSlots + 16) / (double)bitrate;     //FIXME replace 16 to a constant
         EV << "Control packets take : " << controlDuration << " seconds to transmit\n";
-
+    }
+    else if (stage == INITSTAGE_LINK_LAYER) {
         initializeMacAddress();
         registerInterface();
 
@@ -65,10 +66,6 @@ void LMac::initialize(int stage)
         radio = check_and_cast<IRadio *>(radioModule);
 
         WATCH(macState);
-    }
-    else if (stage == INITSTAGE_LINK_LAYER) {
-        //int channel;
-        //channel = hasPar("defaultChannel") ? par("defaultChannel") : 0;
 
         EV_DETAIL << "queueLength = " << queueLength
                   << " slotDuration = " << slotDuration
@@ -612,7 +609,7 @@ void LMac::handleLowerPacket(Packet *packet)
 void LMac::receiveSignal(cComponent *source, simsignal_t signalID, long value, cObject *details)
 {
     if (signalID == IRadio::transmissionStateChangedSignal) {
-        IRadio::TransmissionState newRadioTransmissionState = (IRadio::TransmissionState)value;
+        IRadio::TransmissionState newRadioTransmissionState = static_cast<IRadio::TransmissionState>(value);
         if (transmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING && newRadioTransmissionState == IRadio::TRANSMISSION_STATE_IDLE) {
             // if data is scheduled for transfer, don;t do anything.
             if (sendData->isScheduled()) {

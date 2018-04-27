@@ -1,5 +1,9 @@
 ====== inet-4.x ======
 
+2018-01-26  Levente Mészáros
+
+	Replaced headerBitLength with headerLength where the unit is already present.
+
 2017-12-22  ------ inet-3.99.2 released ------
 
 2017-12-20  Zoltan Bojthe
@@ -33,6 +37,8 @@
 	Signed-off-by: Florian Kauer <florian.kauer@koalo.de>
 
 ====== inet-3.x ======
+
+2018-03-21  ------ inet-3.6.4 released ------
 
 2017-12-22  ------ inet-3.6.3 released ------
 

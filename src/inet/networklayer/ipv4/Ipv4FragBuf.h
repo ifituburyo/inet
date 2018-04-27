@@ -42,7 +42,7 @@ class INET_API Ipv4FragBuf
     //
     struct Key
     {
-        ushort id = (ushort)-1;
+        ushort id = static_cast<ushort>(-1);
         Ipv4Address src;
         Ipv4Address dest;
 
@@ -96,6 +96,11 @@ class INET_API Ipv4FragBuf
      * 10..30 seconds or so.
      */
     void purgeStaleFragments(Icmp *icmpModule, simtime_t lastupdate);
+
+    /**
+     * Clear all state.
+     */
+    void flush();
 };
 
 } // namespace inet

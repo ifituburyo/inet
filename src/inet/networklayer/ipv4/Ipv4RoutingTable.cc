@@ -251,12 +251,12 @@ void Ipv4RoutingTable::printRoutingTable() const
     for (int i = 0; i < getNumRoutes(); i++) {
         Ipv4Route *route = getRoute(i);
         InterfaceEntry *interfacePtr = route->getInterface();
-        EV << stringf("%-16s %-16s %-16s %-4s (%s) %d\n",
+        EV << stringf("%-16s %-16s %-16s %-4s %-16s %6d\n",
                 route->getDestination().isUnspecified() ? "*" : route->getDestination().str().c_str(),
                 route->getNetmask().isUnspecified() ? "*" : route->getNetmask().str().c_str(),
                 route->getGateway().isUnspecified() ? "*" : route->getGateway().str().c_str(),
                 !interfacePtr ? "*" : interfacePtr->getInterfaceName(),
-                !interfacePtr ? "*  " : interfacePtr->ipv4Data()->getIPAddress().str().c_str(),
+                !interfacePtr ? "(*)" : (std::string("(") + interfacePtr->ipv4Data()->getIPAddress().str() + ")").c_str(),
                 route->getMetric());
     }
     EV << "\n";
@@ -818,28 +818,28 @@ bool Ipv4RoutingTable::handleOperationStage(LifecycleOperation *operation, int s
 {
     Enter_Method_Silent();
     if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if ((NodeStartOperation::Stage)stage == NodeStartOperation::STAGE_NETWORK_LAYER) {
+        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_NETWORK_LAYER) {
             // read routing table file (and interface configuration)
             const char *filename = par("routingFile");
             RoutingTableParser parser(ift, this);
             if (*filename && parser.readRoutingTableFromFile(filename) == -1)
                 throw cRuntimeError("Error reading routing table file %s", filename);
         }
-        else if ((NodeStartOperation::Stage)stage == NodeStartOperation::STAGE_TRANSPORT_LAYER) {
+        else if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_TRANSPORT_LAYER) {
             configureRouterId();
             updateNetmaskRoutes();
             isNodeUp = true;
         }
     }
     else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if ((NodeShutdownOperation::Stage)stage == NodeShutdownOperation::STAGE_NETWORK_LAYER) {
+        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_NETWORK_LAYER) {
             while (!routes.empty())
                 delete removeRoute(routes[0]);
             isNodeUp = false;
         }
     }
     else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if ((NodeCrashOperation::Stage)stage == NodeCrashOperation::STAGE_CRASH) {
+        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
             while (!routes.empty())
                 delete removeRoute(routes[0]);
             isNodeUp = false;

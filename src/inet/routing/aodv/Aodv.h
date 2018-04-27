@@ -16,8 +16,8 @@
 // along with this program.  If not, see http://www.gnu.org/licenses/.
 //
 
-#ifndef __INET_AODVROUTING_H
-#define __INET_AODVROUTING_H
+#ifndef __INET_AODV_H
+#define __INET_AODV_H
 
 #include "inet/common/INETDefs.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
@@ -61,10 +61,15 @@ class INET_API Aodv : public cSimpleModule, public ILifecycle, public NetfilterB
 
     class RreqIdentifierCompare
     {
-      public:
+    public:
         bool operator()(const RreqIdentifier& lhs, const RreqIdentifier& rhs) const
         {
-            return lhs.rreqID < rhs.rreqID;
+            if (lhs.originatorAddr < rhs.originatorAddr)
+                return true;
+            else if (lhs.originatorAddr > rhs.originatorAddr)
+                return false;
+            else
+                return lhs.rreqID < rhs.rreqID;
         }
     };
 
@@ -82,6 +87,7 @@ class INET_API Aodv : public cSimpleModule, public ILifecycle, public NetfilterB
     unsigned int aodvUDPPort = 0;
     bool askGratuitousRREP = false;
     bool useHelloMessages = false;
+    bool destinationOnlyFlag = false;
     simtime_t maxJitter;
     simtime_t activeRouteTimeout;
     simtime_t helloInterval;
@@ -212,5 +218,5 @@ class INET_API Aodv : public cSimpleModule, public ILifecycle, public NetfilterB
 } // namespace aodv
 } // namespace inet
 
-#endif    // ifndef AODVROUTING_H_
+#endif // ifndef __INET_AODV_H
 

@@ -22,6 +22,7 @@
 #include "inet/transportlayer/udp/Udp.h"
 
 #include "inet/applications/common/SocketTag_m.h"
+#include "inet/common/IProtocolRegistrationListener.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/LayeredProtocolBase.h"
@@ -258,43 +259,43 @@ void Udp::processCommandFromApp(cMessage *msg)
             else if (auto cmd = dynamic_cast<UdpJoinMulticastGroupsCommand *>(ctrl)) {
                 std::vector<L3Address> addresses;
                 std::vector<int> interfaceIds;
-                for (unsigned int i = 0; i < cmd->getMulticastAddrArraySize(); i++)
+                for (size_t i = 0; i < cmd->getMulticastAddrArraySize(); i++)
                     addresses.push_back(cmd->getMulticastAddr(i));
-                for (unsigned int i = 0; i < cmd->getInterfaceIdArraySize(); i++)
+                for (size_t i = 0; i < cmd->getInterfaceIdArraySize(); i++)
                     interfaceIds.push_back(cmd->getInterfaceId(i));
                 joinMulticastGroups(sd, addresses, interfaceIds);
             }
             else if (auto cmd = dynamic_cast<UdpLeaveMulticastGroupsCommand *>(ctrl)) {
                 std::vector<L3Address> addresses;
-                for (unsigned int i = 0; i < cmd->getMulticastAddrArraySize(); i++)
+                for (size_t i = 0; i < cmd->getMulticastAddrArraySize(); i++)
                     addresses.push_back(cmd->getMulticastAddr(i));
                 leaveMulticastGroups(sd, addresses);
             }
             else if (auto cmd = dynamic_cast<UdpBlockMulticastSourcesCommand *>(ctrl)) {
                 InterfaceEntry *ie = ift->getInterfaceById(cmd->getInterfaceId());
                 std::vector<L3Address> sourceList;
-                for (unsigned int i = 0; i < cmd->getSourceListArraySize(); i++)
+                for (size_t i = 0; i < cmd->getSourceListArraySize(); i++)
                     sourceList.push_back(cmd->getSourceList(i));
                 blockMulticastSources(sd, ie, cmd->getMulticastAddr(), sourceList);
             }
             else if (auto cmd = dynamic_cast<UdpUnblockMulticastSourcesCommand *>(ctrl)) {
                 InterfaceEntry *ie = ift->getInterfaceById(cmd->getInterfaceId());
                 std::vector<L3Address> sourceList;
-                for (unsigned int i = 0; i < cmd->getSourceListArraySize(); i++)
+                for (size_t i = 0; i < cmd->getSourceListArraySize(); i++)
                     sourceList.push_back(cmd->getSourceList(i));
                 leaveMulticastSources(sd, ie, cmd->getMulticastAddr(), sourceList);
             }
             else if (auto cmd = dynamic_cast<UdpJoinMulticastSourcesCommand *>(ctrl)) {
                 InterfaceEntry *ie = ift->getInterfaceById(cmd->getInterfaceId());
                 std::vector<L3Address> sourceList;
-                for (unsigned int i = 0; i < cmd->getSourceListArraySize(); i++)
+                for (size_t i = 0; i < cmd->getSourceListArraySize(); i++)
                     sourceList.push_back(cmd->getSourceList(i));
                 joinMulticastSources(sd, ie, cmd->getMulticastAddr(), sourceList);
             }
             else if (auto cmd = dynamic_cast<UdpLeaveMulticastSourcesCommand *>(ctrl)) {
                InterfaceEntry *ie = ift->getInterfaceById(cmd->getInterfaceId());
                 std::vector<L3Address> sourceList;
-                for (int i = 0; i < (int)cmd->getSourceListArraySize(); i++)
+                for (size_t i = 0; i < cmd->getSourceListArraySize(); i++)
                     sourceList.push_back(cmd->getSourceList(i));
                 leaveMulticastSources(sd, ie, cmd->getMulticastAddr(), sourceList);
             }
@@ -303,7 +304,7 @@ void Udp::processCommandFromApp(cMessage *msg)
                 std::vector<L3Address> sourceList;
                 for (unsigned int i = 0; i < cmd->getSourceListArraySize(); i++)
                     sourceList.push_back(cmd->getSourceList(i));
-                setMulticastSourceFilter(sd, ie, cmd->getMulticastAddr(), (UdpSourceFilterMode)cmd->getFilterMode(), sourceList);
+                setMulticastSourceFilter(sd, ie, cmd->getMulticastAddr(), cmd->getFilterMode(), sourceList);
             }
             else
                 throw cRuntimeError("Unknown subclass of UdpSetOptionCommand received from app: %s", ctrl->getClassName());
@@ -370,11 +371,11 @@ void Udp::processPacketFromApp(Packet *packet)
 
     const Protocol *l3Protocol = nullptr;
     // TODO: apps use ModuleIdAddress if the network interface doesn't have an IP address configured, and UDP uses GNP which results in a weird error in MessageDispatcher
-    if (destAddr.getType() == L3Address::Ipv4) {
+    if (destAddr.getType() == L3Address::IPv4) {
         // send to Ipv4
         l3Protocol = &Protocol::ipv4;
     }
-    else if (destAddr.getType() == L3Address::Ipv6) {
+    else if (destAddr.getType() == L3Address::IPv6) {
         // send to Ipv6
         l3Protocol = &Protocol::ipv6;
     }
@@ -953,12 +954,12 @@ void Udp::addMulticastAddressToInterface(InterfaceEntry *ie, const L3Address& mu
     ASSERT(ie && ie->isMulticast());
     ASSERT(multicastAddr.isMulticast());
 
-    if (multicastAddr.getType() == L3Address::Ipv4) {
+    if (multicastAddr.getType() == L3Address::IPv4) {
 #ifdef WITH_IPv4
         ie->ipv4Data()->joinMulticastGroup(multicastAddr.toIpv4());
 #endif // ifdef WITH_IPv4
     }
-    else if (multicastAddr.getType() == L3Address::Ipv6) {
+    else if (multicastAddr.getType() == L3Address::IPv6) {
 #ifdef WITH_IPv6
         ie->ipv6Data()->assignAddress(multicastAddr.toIpv6(), false, SimTime::getMaxTime(), SimTime::getMaxTime());
 #endif // ifdef WITH_IPv6
@@ -1167,14 +1168,14 @@ bool Udp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCa
     Enter_Method_Silent();
 
     if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if ((NodeStartOperation::Stage)stage == NodeStartOperation::STAGE_TRANSPORT_LAYER) {
+        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_TRANSPORT_LAYER) {
             icmp = nullptr;
             icmpv6 = nullptr;
             isOperational = true;
         }
     }
     else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if ((NodeShutdownOperation::Stage)stage == NodeShutdownOperation::STAGE_TRANSPORT_LAYER) {
+        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_TRANSPORT_LAYER) {
             clearAllSockets();
             icmp = nullptr;
             icmpv6 = nullptr;
@@ -1182,7 +1183,7 @@ bool Udp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCa
         }
     }
     else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if ((NodeCrashOperation::Stage)stage == NodeCrashOperation::STAGE_CRASH) {
+        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
             clearAllSockets();
             icmp = nullptr;
             icmpv6 = nullptr;

@@ -87,6 +87,7 @@ void Gpsr::initialize(int stage)
         beaconInterval = par("beaconInterval");
         maxJitter = par("maxJitter");
         neighborValidityInterval = par("neighborValidityInterval");
+        displayBubbles = par("displayBubbles");
         // context
         host = getContainingNode(this);
         nodeStatus = dynamic_cast<NodeStatus *>(host->getSubmodule("status"));
@@ -392,7 +393,7 @@ L3Address Gpsr::getSelfAddress() const
     //TODO choose self address based on a new 'interfaces' parameter
     L3Address ret = routingTable->getRouterIdAsGeneric();
 #ifdef WITH_IPv6
-    if (ret.getType() == L3Address::Ipv6) {
+    if (ret.getType() == L3Address::IPv6) {
         for (int i = 0; i < interfaceTable->getNumInterfaces(); i++) {
             InterfaceEntry *ie = interfaceTable->getInterface(i);
             if ((!ie->isLoopback()) && ie->ipv6Data() != nullptr) {
@@ -521,6 +522,8 @@ L3Address Gpsr::findGreedyRoutingNextHop(const Ptr<const NetworkHeaderBase>& net
     }
     if (bestNeighbor.isUnspecified()) {
         EV_DEBUG << "Switching to perimeter routing: destination = " << destination << endl;
+        if (displayBubbles && hasGUI())
+            getContainingNode(host)->bubble("Switching to perimeter routing");
         // KLUDGE: TODO: const_cast<GpsrOption *>(gpsrOption)
         const_cast<GpsrOption *>(gpsrOption)->setRoutingMode(GPSR_PERIMETER_ROUTING);
         const_cast<GpsrOption *>(gpsrOption)->setPerimeterRoutingStartPosition(selfPosition);
@@ -545,6 +548,8 @@ L3Address Gpsr::findPerimeterRoutingNextHop(const Ptr<const NetworkHeaderBase>& 
     double perimeterRoutingStartDistance = (destinationPosition - perimeterRoutingStartPosition).length();
     if (selfDistance < perimeterRoutingStartDistance) {
         EV_DEBUG << "Switching to greedy routing: destination = " << destination << endl;
+        if (displayBubbles && hasGUI())
+            getContainingNode(host)->bubble("Switching to greedy routing");
         // KLUDGE: TODO: const_cast<GpsrOption *>(gpsrOption)
         const_cast<GpsrOption *>(gpsrOption)->setRoutingMode(GPSR_GREEDY_ROUTING);
         const_cast<GpsrOption *>(gpsrOption)->setPerimeterRoutingStartPosition(Coord());
@@ -581,6 +586,8 @@ L3Address Gpsr::findPerimeterRoutingNextHop(const Ptr<const NetworkHeaderBase>& 
         }
         else if (firstSenderAddress == selfAddress && firstReceiverAddress == selectedNeighborAddress) {
             EV_DEBUG << "End of perimeter reached: firstSender = " << firstSenderAddress << ", firstReceiver = " << firstReceiverAddress << ", destination = " << destination << endl;
+            if (displayBubbles && hasGUI())
+                getContainingNode(host)->bubble("End of perimeter reached");
             return L3Address();
         }
         else {
@@ -606,6 +613,8 @@ INetfilter::IHook::Result Gpsr::routeDatagram(Packet *datagram)
     datagram->addTagIfAbsent<NextHopAddressReq>()->setNextHopAddress(nextHop);
     if (nextHop.isUnspecified()) {
         EV_WARN << "No next hop found, dropping packet: source = " << source << ", destination = " << destination << endl;
+        if (displayBubbles && hasGUI())
+            getContainingNode(host)->bubble("No next hop found, dropping packet");
         return DROP;
     }
     else {
@@ -794,14 +803,14 @@ bool Gpsr::handleOperationStage(LifecycleOperation *operation, int stage, IDoneC
 {
     Enter_Method_Silent();
     if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if ((NodeStartOperation::Stage)stage == NodeStartOperation::STAGE_APPLICATION_LAYER) {
+        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER) {
             configureInterfaces();
             storeSelfPositionInGlobalRegistry();
             scheduleBeaconTimer();
         }
     }
     else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if ((NodeShutdownOperation::Stage)stage == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
+        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
             // TODO: send a beacon to remove ourself from peers neighbor position table
             neighborPositionTable.clear();
             cancelEvent(beaconTimer);
@@ -809,7 +818,7 @@ bool Gpsr::handleOperationStage(LifecycleOperation *operation, int stage, IDoneC
         }
     }
     else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if ((NodeCrashOperation::Stage)stage == NodeCrashOperation::STAGE_CRASH) {
+        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
             neighborPositionTable.clear();
             cancelEvent(beaconTimer);
             cancelEvent(purgeNeighborsTimer);

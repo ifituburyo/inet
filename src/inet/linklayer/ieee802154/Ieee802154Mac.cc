@@ -104,7 +104,8 @@ void Ieee802154Mac::initialize(int stage)
         rxAckTimer = new cMessage("timer-rxAck");
         macState = IDLE_1;
         txAttempts = 0;
-
+    }
+    else if (stage == INITSTAGE_LINK_LAYER) {
         initializeMacAddress();
         registerInterface();
 
@@ -125,9 +126,8 @@ void Ieee802154Mac::initialize(int stage)
                         SIMTIME_DBL(aTurnaroundTime), SIMTIME_DBL(rxToTx));
             }
         }
-    }
-    else if (stage == INITSTAGE_LINK_LAYER) {
         radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
+
         EV_DETAIL << "queueLength = " << queueLength
                   << " bitrate = " << bitrate
                   << " backoff method = " << par("backoffMethod").stringValue() << endl;
@@ -955,7 +955,7 @@ void Ieee802154Mac::receiveSignal(cComponent *source, simsignal_t signalID, long
 {
     Enter_Method_Silent();
     if (signalID == IRadio::transmissionStateChangedSignal) {
-        IRadio::TransmissionState newRadioTransmissionState = (IRadio::TransmissionState)value;
+        IRadio::TransmissionState newRadioTransmissionState = static_cast<IRadio::TransmissionState>(value);
         if (transmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING && newRadioTransmissionState == IRadio::TRANSMISSION_STATE_IDLE) {
             // KLUDGE: we used to get a cMessage from the radio (the identity was not important)
             executeMac(EV_FRAME_TRANSMITTED, new cMessage("Transmission over"));

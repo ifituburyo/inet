@@ -12,7 +12,9 @@
 %%\usepackage{sans}
 %%\usepackage{chancery}
 
+\usepackage[svgnames]{xcolor}	% for color text support
 \usepackage[T1]{fontenc}
+\usepackage[11pt]{moresize}
 \usepackage{setspace}
 \usepackage{ifpdf}
 \usepackage{makeidx}
@@ -101,7 +103,7 @@
   \usepackage[plainpages=false,linktocpage,bookmarksnumbered=true,pdftex]{hyperref}   %% automatic hyperlinking
   \pdfcompresslevel=9
   \pdfinfo{/Author (Andras Varga and others)
-    /Title (INET Framework Developers Guide)
+    /Title (INET Framework Developer's Guide)
     /Subject ()
     /Keywords (INET, INETMANET, OMNeT++, manual)}
 \else
@@ -145,7 +147,7 @@
 \fancyhf{}
 \renewcommand{\footrulewidth}{0.5pt}
 \renewcommand{\chaptermark}[1]{\markboth{#1}{}}
-\lhead{INET Framework Developers Guide -- \leftmark}
+\lhead{INET Framework Developer's Guide -- \leftmark}
 \rfoot{\thepage}
 
 %% this is used for chapter start pages
@@ -212,6 +214,10 @@
 \lstset{
     escapechar=`,
     basicstyle=\ttfamily,
+    identifierstyle=\color{Black},
+    stringstyle=\color{DarkBlue},
+    commentstyle=\color{SeaGreen},
+    keywordstyle=\bfseries\color{Purple},
     showstringspaces=false,
     frame=leftline,
     framesep=10pt,
@@ -219,13 +225,14 @@
     xleftmargin=15pt
 }
 
-\definecolor{NEDRulerColor}{rgb}{0.8,1.0,0.8}  % pale green
-\definecolor{MSGRulerColor}{rgb}{0.8,1.0,0.8}  % pale green
-\definecolor{CPPRulerColor}{rgb}{0.8,0.8,1.0}  % pale blue
-\definecolor{IniRulerColor}{rgb}{0.9,0.9,0.2}  % pale yellow
+\definecolor{NEDRulerColor}{rgb}{0.5,1.0,0.5}  % pale green
+\definecolor{MSGRulerColor}{rgb}{0.5,1.0,0.5}  % pale green
+\definecolor{CPPRulerColor}{rgb}{0.8,0.5,0.2}  % pale orange
+\definecolor{IniRulerColor}{rgb}{0.9,0.9,0.3}  % pale yellow
 \definecolor{FileListingRulerColor}{rgb}{0.85,0.85,0.85}  % grey
 %\definecolor{CommandLineRulerColor}{rgb}{0.9,0.9,0.2}
 \definecolor{PseudoCodeRulerColor}{rgb}{0.0,1.0,1.0}  % cyan
+\definecolor{XMLRulerColor}{rgb}{0.8,0.8,1.0}  % pale blue
 
 %% See listings.pdf,pp39
 \lstnewenvironment{ned}
@@ -249,6 +256,21 @@
 \lstnewenvironment{pseudocode}
     {\lstset{language=pseudocode,rulecolor=\color{PseudoCodeRulerColor}}}
     {}
+\lstnewenvironment{XML}
+    {\lstset{language=XML,rulecolor=\color{XMLRulerColor}}}
+    {}
+
+% add caption={#2} to display caption
+\newcommand{\xmlsnippet}[2]{%
+    \lstinputlisting[language=XML,rulecolor=\color{XMLRulerColor},linerange=<!\-\-#1\-\->-<!\-\-End\-\->,includerangemarker=false,firstnumber=0]{lib/Snippets.xml}}
+\newcommand{\cppsnippet}[2]{%
+    \lstinputlisting[language=C++,rulecolor=\color{CPPRulerColor},linerange=//!#1-//!End,includerangemarker=false,firstnumber=0]{lib/Snippets.cc}}
+\newcommand{\msgsnippet}[2]{%
+    \lstinputlisting[language=msg,rulecolor=\color{MSGRulerColor},linerange=//!#1-//!End,includerangemarker=false,firstnumber=0]{lib/Snippets.msg}}
+\newcommand{\nedsnippet}[2]{%
+    \lstinputlisting[language=ned,rulecolor=\color{NEDRulerColor},linerange=//!#1-//!End,includerangemarker=false,firstnumber=0]{lib/Snippets.ned}}
+\newcommand{\inisnippet}[2]{%
+    \lstinputlisting[language=inifile,rulecolor=\color{IniRulerColor},linerange=\#!#1-\#!End,includerangemarker=false,firstnumber=0]{lib/Snippets.ini}}
 
 %%
 %% some customization
@@ -288,6 +310,9 @@
 %%    or: \ffunc[take()]{take(obj)}
 %% the second form uses the bracketed word for the index entry
 %%
+
+\newcommand{\protocol}[1]{%
+    {#1}}
 
 %% NED type names
 \newcommand{\nedtype}[2][\DefaultOpt]{\def\DefaultOpt{#2}%
@@ -399,7 +424,19 @@
 \include{ch-usage}
 \cleardoublepage
 
-\include{ch-node-architecture}
+\include{ch-developing-models}
+\cleardoublepage
+
+\include{ch-network-interfaces}
+\cleardoublepage
+
+\include{ch-sockets}
+\cleardoublepage
+
+\include{ch-packets}
+\cleardoublepage
+
+\include{ch-cross-layer-communication}
 \cleardoublepage
 
 \include{ch-ppp}
@@ -429,6 +466,9 @@
 \include{ch-ipv6}
 \cleardoublepage
 
+\include{ch-netfilter}
+\cleardoublepage
+
 \include{ch-udp}
 \cleardoublepage
 
@@ -450,6 +490,9 @@
 \include{ch-apps}
 \cleardoublepage
 
+\include{ch-authors-guide}
+\cleardoublepage
+
 \bibliographystyle{alpha}
 \bibliography{inet-developers-guide}
 
@@ -460,8 +503,3 @@
 \printindex
 
 \end{document}
-
-%%% Local Variables:
-%%% mode: latex
-%%% TeX-master: t
-%%% End:

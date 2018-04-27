@@ -32,8 +32,6 @@
 
 namespace inet {
 
-using namespace sctp;
-
 /* For tables mapping symbolic strace strings to the corresponding
  * integer values.
  */
@@ -617,13 +615,13 @@ class INET_API PacketDrillScript
         void readScript();
         int parseScriptAndSetConfig(PacketDrillConfig *config, const char *script_buffer);
 
-        char *getBuffer() { return buffer; };
-        int getLength() const { return length; };
-        const char *getScriptPath() { return scriptPath; };
-        cQueue *getEventList() { return eventList; };
-        cQueue *getOptionList() { return optionList; };
-        void addEvent(PacketDrillEvent *evt) { eventList->insert(evt); };
-        void addOption(PacketDrillOption *opt) { optionList->insert((cObject *)opt); };
+        char *getBuffer() { return buffer; }
+        int getLength() const { return length; }
+        const char *getScriptPath() { return scriptPath; }
+        cQueue *getEventList() { return eventList; }
+        cQueue *getOptionList() { return optionList; }
+        void addEvent(PacketDrillEvent *evt) { eventList->insert(evt); }
+        void addOption(PacketDrillOption *opt) { optionList->insert((cObject *)opt); }  //FIXME Why needed the cast to cObject?
 };
 
 class INET_API PacketDrillStruct: public cObject
@@ -655,10 +653,10 @@ class INET_API PacketDrillOption: public cObject
     public:
         PacketDrillOption(char *name, char *value);
 
-        const char *getName() const { return name; };
-        void setName(char *name_) { free(name); name = strdup(name_); };
-        const char *getValue() const { return value; };
-        void setValue(char *value_) { free(value); value = strdup(value_); };
+        const char *getName() const { return name; }
+        void setName(char *name_) { free(name); name = strdup(name_); }
+        const char *getValue() const { return value; }
+        void setValue(char *value_) { free(value); value = strdup(value_); }
 
     private:
         char *name;
@@ -719,15 +717,15 @@ class INET_API PacketDrillTcpOption : public cObject
 class INET_API PacketDrillSctpChunk : public cObject
 {
     public:
-        PacketDrillSctpChunk(uint8 type_, SctpChunk *sctpChunk);
+        PacketDrillSctpChunk(uint8 type_, sctp::SctpChunk *sctpChunk);
 
     private:
         uint8 type;
-        SctpChunk *chunk;
+        sctp::SctpChunk *chunk;
 
     public:
         uint8 getType() { return type; };
-        SctpChunk *getChunk() { return chunk; };
+        sctp::SctpChunk *getChunk() { return chunk; };
 };
 
 class INET_API PacketDrillSctpParameter : public cObject

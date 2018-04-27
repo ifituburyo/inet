@@ -81,14 +81,14 @@ void PcapDump::openPcap(const char *filename, unsigned int snaplen_par, uint32 n
     fwrite(&fh, sizeof(fh), 1, dumpfile);
 }
 
-void PcapDump::writeFrame(simtime_t stime, const Packet *packet)
+void PcapDump::writePacket(simtime_t stime, const Packet *packet)
 {
     if (!dumpfile)
         throw cRuntimeError("Cannot write frame: pcap output file is not open");
 
     EV << "PcapDump::writeFrame\n";
     uint8 buf[MAXBUFLENGTH];
-    memset((void *)&buf, 0, sizeof(buf));
+    memset(buf, 0, sizeof(buf));
 
     struct pcaprec_hdr ph;
     ph.ts_sec = (int32)stime.inUnit(SIMTIME_S);

@@ -37,7 +37,7 @@ simple SctpClient like IApp
         int requestLength = default(1452); // length of a request (bytes)
         double thinkTime @unit(s) = default(0s); // time gap between requests
         double waitToClose @unit(s) = default(0s); //time to wait between last message sent and abort
-        double reconnectInterval @unit(s) = default(0);  // if connection breaks, waits this much before trying to reconnect
+        double reconnectInterval @unit(s) = default(0s);  // if connection breaks, waits this much before trying to reconnect
         int inboundStreams = default(17);
         int outboundStreams = default(1);
         bool echo = default(false);  // echoes received packages when true
@@ -56,9 +56,9 @@ simple SctpClient like IApp
         string streamRequestRatio = default("");
         string streamPriorities = default("");
         bool finishEndsSimulation = default(false);
-        @signal[packetSent](type=SctpSimpleMessage);
+        @signal[packetSent](type=Packet);
         @signal[packetReceived](type=Packet);
-        @signal[echoedPk](type=SctpSimpleMessage);
+        @signal[echoedPk](type=Packet);
         @statistic[packetReceived](title="packets received"; source=packetReceived; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[packetSent](title="packets sent"; source=packetSent; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[echoedPk](title="packets echoed"; source=echoedPk; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);

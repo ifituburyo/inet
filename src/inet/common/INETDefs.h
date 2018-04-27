@@ -46,7 +46,7 @@ using namespace omnetpp;
 #endif // if OMNETPP_VERSION < 0x0503
 
 #define INET_VERSION  0x0363
-#define INET_PATCH_LEVEL 0x02
+#define INET_PATCH_LEVEL 0x03
 
 #if defined(INET_EXPORT)
 #  define INET_API    OPP_DLLEXPORT
@@ -97,7 +97,7 @@ T *__checknull(T *p, const char *expr, const char *file, int line)
 
 inline void printElapsedTime(const char *name, long startTime)
 {
-    EV_DEBUG << "Time spent in " << name << ": " << ((double)(clock() - startTime) / CLOCKS_PER_SEC) << "s" << endl;
+    EV_DEBUG << "Time spent in " << name << ": " << (static_cast<double>(clock() - startTime) / CLOCKS_PER_SEC) << "s" << endl;
 }
 
 #define TIME(CODE)    { long startTime = clock(); CODE; printElapsedTime( #CODE, startTime); }

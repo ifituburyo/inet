@@ -42,8 +42,8 @@
 //  - network interfaces: ~EthernetInterface, ~PppInterface, ~Ieee80211Interface
 //  - <a href="ieee80211.html">IEEE 802.11 models</a>, both ad-hoc and infrastructure
 //    mode are supported
-//  - Ipv4 layer: ~Ipv4, ~Arp and ~Icmp; ~Ipv4RoutingTable
-//  - Ipv6 support: ~Ipv6, ~Ipv6NeighbourDiscovery, ~Icmpv6, ~Ipv6RoutingTable;
+//  - IPv4 layer: ~Ipv4, ~Arp and ~Icmp; ~Ipv4RoutingTable
+//  - IPv6 support: ~Ipv6, ~Ipv6NeighbourDiscovery, ~Icmpv6, ~Ipv6RoutingTable;
 //    see <a href="ipv6overview.html">Ipv6 model overview</a>
 //  - transport layer: ~Tcp, ~Udp, ~SCTP
 //  - ~InterfaceTable and ~Ipv4RoutingTable can be found in every
@@ -64,8 +64,8 @@
 //  - wireless support: ~IRadioMedium, ~Ieee80211Interface
 //  - Mobility models: ~TurtleMobility,
 //    ~BonnMotionMobility, ~AnsimMobility, ~RandomWaypointMobility, ~MassMobility
-//  - Mpls models: the core modules are ~Mpls, ~LibTable, ~Ldp, ~Rsvp, ~Ted,
-//    ~LinkStateRouting; MPLS-enabled routers are ~LdpRouter, ~RsvpRouter;
+//  - Mpls models: the core modules are ~Mpls, ~LibTable, ~Ldp, ~RsvpTe, ~Ted,
+//    ~LinkStateRouting; MPLS-enabled routers are ~LdpMplsRouter, ~RsvpMplsRouter;
 //    see also the list of <a href="standards.html">implemented standards</a>
 //  - dynamic routing is provided by the Daemon module (the Quagga routing
 //    daemon ported into the INET Framework, currently in a different project)

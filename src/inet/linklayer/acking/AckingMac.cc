@@ -88,15 +88,15 @@ void AckingMac::initialize(int stage)
         cGate *queueOut = gate("upperLayerIn")->getPathStartGate();
         queueModule = dynamic_cast<IPassiveQueue *>(queueOut->getOwnerModule());
 
-        initializeMacAddress();
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
+        initializeMacAddress();
+        registerInterface();
         radio->setRadioMode(fullDuplex ? IRadio::RADIO_MODE_TRANSCEIVER : IRadio::RADIO_MODE_RECEIVER);
         if (useAck)
             ackTimeoutMsg = new cMessage("link-break");
         if (queueModule != nullptr)
             getNextMsgFromHL();
-        registerInterface();
     }
 }
 
@@ -142,7 +142,7 @@ void AckingMac::receiveSignal(cComponent *source, simsignal_t signalID, long val
 {
     Enter_Method_Silent();
     if (signalID == IRadio::transmissionStateChangedSignal) {
-        IRadio::TransmissionState newRadioTransmissionState = (IRadio::TransmissionState)value;
+        IRadio::TransmissionState newRadioTransmissionState = static_cast<IRadio::TransmissionState>(value);
         if (transmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING && newRadioTransmissionState == IRadio::TRANSMISSION_STATE_IDLE) {
             radio->setRadioMode(fullDuplex ? IRadio::RADIO_MODE_TRANSCEIVER : IRadio::RADIO_MODE_RECEIVER);
             if (!lastSentPk && queueModule != nullptr)
@@ -273,7 +273,7 @@ void AckingMac::encapsulate(Packet *packet)
         macHeader->setSrcModuleId(getId());
     macHeader->setNetworkProtocol(ProtocolGroup::ethertype.getProtocolNumber(packet->getTag<PacketProtocolTag>()->getProtocol()));
     packet->insertAtFront(macHeader);
-    packet->getTag<PacketProtocolTag>()->setProtocol(&Protocol::ackingmac);
+    packet->getTag<PacketProtocolTag>()->setProtocol(&Protocol::ackingMac);
 }
 
 bool AckingMac::dropFrameNotForUs(Packet *packet)

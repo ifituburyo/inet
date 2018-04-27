@@ -1025,7 +1025,7 @@ void Ipv4::sendDatagramToOutput(Packet *packet)
 
 void Ipv4::arpResolutionCompleted(IArp::Notification *entry)
 {
-    if (entry->l3Address.getType() != L3Address::Ipv4)
+    if (entry->l3Address.getType() != L3Address::IPv4)
         return;
     auto it = pendingPackets.find(entry->l3Address.toIpv4());
     if (it != pendingPackets.end()) {
@@ -1046,7 +1046,7 @@ void Ipv4::arpResolutionCompleted(IArp::Notification *entry)
 
 void Ipv4::arpResolutionTimedOut(IArp::Notification *entry)
 {
-    if (entry->l3Address.getType() != L3Address::Ipv4)
+    if (entry->l3Address.getType() != L3Address::IPv4)
         return;
     auto it = pendingPackets.find(entry->l3Address.toIpv4());
     if (it != pendingPackets.end()) {
@@ -1235,15 +1235,15 @@ bool Ipv4::handleOperationStage(LifecycleOperation *operation, int stage, IDoneC
 {
     Enter_Method_Silent();
     if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if ((NodeStartOperation::Stage)stage == NodeStartOperation::STAGE_NETWORK_LAYER)
+        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_NETWORK_LAYER)
             start();
     }
     else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if ((NodeShutdownOperation::Stage)stage == NodeShutdownOperation::STAGE_NETWORK_LAYER)
+        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_NETWORK_LAYER)
             stop();
     }
     else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if ((NodeCrashOperation::Stage)stage == NodeCrashOperation::STAGE_CRASH)
+        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH)
             stop();
     }
     return true;
@@ -1279,6 +1279,8 @@ void Ipv4::flush()
         delete elem.packet;
     }
     queuedDatagramsForHooks.clear();
+
+    fragbuf.flush();
 }
 
 bool Ipv4::isNodeUp()

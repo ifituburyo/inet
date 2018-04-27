@@ -125,14 +125,15 @@ void NetPerfMeter::parseExpressionVector(std::vector<cDynamicExpression>& expres
 void NetPerfMeter::initialize()
 {
    // ====== Handle parameters ==============================================
-   ActiveMode = (bool)par("activeMode");
-   if(strcmp((const char*)par("protocol"), "TCP") == 0) {
+   ActiveMode = par("activeMode");
+   const char * protocolPar = par("protocol");
+   if(strcmp(protocolPar, "TCP") == 0) {
       TransportProtocol = TCP;
    }
-   else if(strcmp((const char*)par("protocol"), "SCTP") == 0) {
+   else if(strcmp(protocolPar, "SCTP") == 0) {
       TransportProtocol = SCTP;
    }
-   else if(strcmp((const char*)par("protocol"), "UDP") == 0) {
+   else if(strcmp(protocolPar, "UDP") == 0) {
       TransportProtocol = UDP;
    }
    else {
@@ -167,8 +168,8 @@ void NetPerfMeter::initialize()
    parseExpressionVector(FrameSizeExpressionVector, par("frameSizeString"), ";");
 
    TraceIndex = ~0;
-   if(strcmp((const char*)par("traceFile"), "") != 0) {
-      std::fstream traceFile((const char*)par("traceFile"));
+   if(strcmp(par("traceFile").stringValue(), "") != 0) {
+      std::fstream traceFile(par("traceFile").stringValue());
       if(!traceFile.good()) {
          throw cRuntimeError("Unable to load trace file");
       }
@@ -179,7 +180,7 @@ void NetPerfMeter::initialize()
         traceEntry.StreamID        = 0;
 
         char line[256];
-        traceFile.getline((char*)&line, sizeof(line), '\n');
+        traceFile.getline(line, sizeof(line), '\n');
         if(sscanf(line, "%lf %u %u", &traceEntry.InterFrameDelay, &traceEntry.FrameSize, &traceEntry.StreamID) >= 2) {
            // std::cout << "Frame: " << traceEntry.InterFrameDelay << "\t" << traceEntry.FrameSize << "\t" << traceEntry.StreamID << endl;
            TraceVector.push_back(traceEntry);
@@ -274,7 +275,7 @@ void NetPerfMeter::refreshDisplay() const {
     }
 
     char status[64];
-    snprintf((char*)&status, sizeof(status), "In: %llu, Out: %llu",
+    snprintf(status, sizeof(status), "In: %llu, Out: %llu",
            totalReceivedBytes, totalSentBytes);
     getDisplayString().setTagArg("t", 0, status);
     //TODO also was setStatusString("Connecting"), setStatusString("Closed")
@@ -410,8 +411,9 @@ void NetPerfMeter::handleMessage(cMessage* msg)
           break;
          // ------ Connection established -----------------------------------
          case SCTP_I_ESTABLISHED: {
-            const SctpConnectReq* connectInfo =
-               check_and_cast<const SctpConnectReq*>(msg->getControlInfo());
+             Message *message = check_and_cast<Message *>(msg);
+             auto& tags = getTags(message);
+             const SctpConnectReq *connectInfo = tags.getTag<SctpConnectReq>();
             ActualOutboundStreams = connectInfo->getOutboundStreams();
             if(ActualOutboundStreams > RequestedOutboundStreams) {
                ActualOutboundStreams = RequestedOutboundStreams;
@@ -597,8 +599,7 @@ void NetPerfMeter::successfullyEstablishedConnection(cMessage*          msg,
          IncomingSocketSCTP->setOutputGate(gate("sctpOut"));
       }
 
-      SctpConnectReq* connectInfo = check_and_cast<SctpConnectReq*>(msg->getControlInfo());
-      ConnectionID = connectInfo->getSocketId();
+      ConnectionID = check_and_cast<Indication *>(msg)->getTag<SocketInd>()->getSocketId();
       sendSCTPQueueRequest(QueueSize);   // Limit the send queue as given.
    }
 
@@ -931,9 +932,11 @@ unsigned long NetPerfMeter::transmitFrame(const unsigned int frameSize,
             auto dataMessage = makeShared<BytesChunk>();
             std::vector<uint8_t> vec;
             vec.resize(msgSize);
-            for (int i = 0; i < msgSize; i++)
+            for (uint32 i = 0; i < msgSize; i++)
                 vec[i] = ((i & 1) ? 'D' : 'T');
             dataMessage->setBytes(vec);
+            auto creationTimeTag = dataMessage->addTag<CreationTimeTag>();
+            creationTimeTag->setCreationTime(simTime());
             cmsg->insertAtBack(dataMessage);
 
           /*  NetPerfMeterDataMessage* dataMessage = new NetPerfMeterDataMessage;
@@ -960,8 +963,6 @@ unsigned long NetPerfMeter::transmitFrame(const unsigned int frameSize,
             command->setPrMethod( (sendUnreliable == true) ? 2 : 0 );   // PR-SCTP policy: RTX
 
             //SctpSendInfo* cmsg = new SctpSendInfo("ControlInfo");
-            auto creationTimeTag = dataMessage->addTag<CreationTimeTag>();
-            creationTimeTag->setCreationTime(simTime());
             cmsg->setKind(sendUnordered ? SCTP_C_SEND_ORDERED : SCTP_C_SEND_UNORDERED);
            /* SctpSendReq* cmsg = new SctpSendReq();
             cmsg->encapsulate(dataMessage);
@@ -1267,7 +1268,7 @@ opp_string NetPerfMeter::format(const char* formatString, ...)
    char    str[1024];
    va_list args;
    va_start(args, formatString);
-   vsnprintf((char*)&str, sizeof(str), formatString, args);
+   vsnprintf(str, sizeof(str), formatString, args);
    va_end(args);
    return(opp_string(str));
 }

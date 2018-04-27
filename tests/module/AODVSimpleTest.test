@@ -3,7 +3,6 @@ This example tests a single route request with one intermediate node
 between the sender and the receiver.
 %#--------------------------------------------------------------------------------------------------------------
 %file: test.ned
-import inet.common.lifecycle.LifecycleController;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.networklayer.ipv4.RoutingTableRecorder;
 import inet.node.aodv.AodvRouter;
@@ -30,10 +29,6 @@ network AODVTest
         routingTableRecorder: RoutingTableRecorder {
             parameters:
                 @display("p=50,150");
-        }
-        lifecycleController: LifecycleController {
-            parameters:
-                @display("p=50,200");
         }
         scenarioManager: ScenarioManager {
             parameters:
@@ -113,12 +108,12 @@ sim-time-limit = 100s
 
 %#--------------------------------------------------------------------------------------------------------------
 %contains-regex: results/General-0.rt
-\+R \d+  3\.1987\d+  8  145\.236\.0\.2  145\.236\.0\.1  32  145\.236\.0\.1
-\+R \d+  3\.2035\d+  7  145\.236\.0\.1  145\.236\.0\.2  32  145\.236\.0\.2
-\+R \d+  3\.2035\d+  9  145\.236\.0\.3  145\.236\.0\.2  32  145\.236\.0\.2
-\+R \d+  3\.2035\d+  9  145\.236\.0\.3  145\.236\.0\.1  32  145\.236\.0\.2
-\+R \d+  3\.2056\d+  8  145\.236\.0\.2  145\.236\.0\.3  32  145\.236\.0\.3
-\+R \d+  3\.2096\d+  7  145\.236\.0\.1  145\.236\.0\.3  32  145\.236\.0\.2
+\+R \d+  3\.1987\d+  7  145\.236\.0\.2  145\.236\.0\.1  32  145\.236\.0\.1
+\+R \d+  3\.2035\d+  6  145\.236\.0\.1  145\.236\.0\.2  32  145\.236\.0\.2
+\+R \d+  3\.2035\d+  8  145\.236\.0\.3  145\.236\.0\.2  32  145\.236\.0\.2
+\+R \d+  3\.2035\d+  8  145\.236\.0\.3  145\.236\.0\.1  32  145\.236\.0\.2
+\+R \d+  3\.2056\d+  7  145\.236\.0\.2  145\.236\.0\.3  32  145\.236\.0\.3
+\+R \d+  3\.2096\d+  6  145\.236\.0\.1  145\.236\.0\.3  32  145\.236\.0\.2
 %#--------------------------------------------------------------------------------------------------------------
 %not-contains: stdout
 undisposed object:

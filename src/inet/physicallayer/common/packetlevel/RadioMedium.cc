@@ -180,6 +180,8 @@ void RadioMedium::handleMessage(cMessage *message)
 
 bool RadioMedium::isRadioMacAddress(const IRadio *radio, const MacAddress address) const
 {
+    if (address.isBroadcast() || address.isMulticast())
+        return true;
     cModule *host = getContainingNode(check_and_cast<const cModule *>(radio));
     IInterfaceTable *interfaceTable = check_and_cast<IInterfaceTable *>(host->getSubmodule("interfaceTable"));
     for (int i = 0; i < interfaceTable->getNumInterfaces(); i++) {
@@ -622,7 +624,7 @@ const ITransmission *RadioMedium::getTransmission(int id) const
 const IListeningDecision *RadioMedium::listenOnMedium(const IRadio *radio, const IListening *listening) const
 {
     const IListeningDecision *decision = computeListeningDecision(radio, listening, const_cast<const std::vector<const ITransmission *> *>(&transmissions));
-    EV_DEBUG << "Listening with " << listening << " on medium by " << radio << " results in " << decision << endl;
+    EV_DEBUG << "Listening results in: " << decision << " with " << listening << " on medium by " << radio << endl;
     return decision;
 }
 
@@ -633,6 +635,7 @@ bool RadioMedium::isPotentialReceiver(const IRadio *radio, const ITransmission *
         return false;
     else if (listeningFilter && !radio->getReceiver()->computeIsReceptionPossible(getListening(radio, transmission), transmission))
         return false;
+    // TODO: where is the tag?
     else if (macAddressFilter && !isRadioMacAddress(radio, const_cast<Packet *>(transmission->getPacket())->getTag<MacAddressReq>()->getDestAddress()))
         return false;
     else if (rangeFilter == RANGE_FILTER_INTERFERENCE_RANGE) {
