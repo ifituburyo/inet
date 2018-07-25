@@ -38,8 +38,18 @@ void GenericNetworkConfigurator::initialize(int stage)
         if (par("dumpTopology"))
             TIME(dumpTopology(topology));
         // calculate shortest paths, and add corresponding static routes
-        if (par("addStaticRoutes"))
-            TIME(addStaticRoutes(topology));
+        if (par("addStaticRoutes")) {
+            cXMLElementList autorouteElements = configuration->getChildrenByTagName("autoroute");
+            if (autorouteElements.size() == 0) {
+                cXMLElement defaultAutorouteElement("autoroute", "", nullptr);
+                TIME(addStaticRoutes(topology, &defaultAutorouteElement));
+            }
+            else {
+                for (auto & autorouteElement : autorouteElements)
+                    TIME(addStaticRoutes(topology, autorouteElement));
+            }
+        }
+
         // dump routes to module output
         if (par("dumpRoutes"))
             TIME(dumpRoutes(topology));
@@ -54,8 +64,64 @@ IRoutingTable *GenericNetworkConfigurator::findRoutingTable(Node *node)
     return L3AddressResolver().findGenericRoutingTableOf(node->module);
 }
 
-void GenericNetworkConfigurator::addStaticRoutes(Topology& topology)
+void GenericNetworkConfigurator::addStaticRoutes(Topology& topology, cXMLElement *autorouteElement)
 {
+    // set node weights
+    const char *metric = autorouteElement->getAttribute("metric");
+    if (metric == nullptr)
+        metric = "hopCount";
+    cXMLElement defaultNodeElement("node", "", nullptr);
+    cXMLElementList nodeElements = autorouteElement->getChildrenByTagName("node");
+    for (int i = 0; i < topology.getNumNodes(); i++) {
+        cXMLElement *selectedNodeElement = &defaultNodeElement;
+        Node *node = (Node *)topology.getNode(i);
+        for (auto & nodeElement : nodeElements) {
+            const char* hosts = nodeElement->getAttribute("hosts");
+            if (hosts == nullptr)
+                hosts = "**";
+            Matcher nodeHostsMatcher(hosts);
+            std::string hostFullPath = node->module->getFullPath();
+            std::string hostShortenedFullPath = hostFullPath.substr(hostFullPath.find('.') + 1);
+            if (nodeHostsMatcher.matchesAny() || nodeHostsMatcher.matches(hostShortenedFullPath.c_str()) || nodeHostsMatcher.matches(hostFullPath.c_str())) {
+                selectedNodeElement = nodeElement;
+                break;
+            }
+        }
+        double weight = computeNodeWeight(node, metric, selectedNodeElement);
+        EV_DEBUG << "Setting node weight, node = " << node->module->getFullPath() << ", weight = " << weight << endl;
+        node->setWeight(weight);
+    }
+    // set link weights
+    cXMLElement defaultLinkElement("link", "", nullptr);
+    cXMLElementList linkElements = autorouteElement->getChildrenByTagName("link");
+    for (int i = 0; i < topology.getNumNodes(); i++) {
+        Node *node = (Node *)topology.getNode(i);
+        for (int j = 0; j < node->getNumInLinks(); j++) {
+            cXMLElement *selectedLinkElement = &defaultLinkElement;
+            Link *link = (Link *)node->getLinkIn(j);
+            for (auto & linkElement : linkElements) {
+                const char* interfaces = linkElement->getAttribute("interfaces");
+                if (interfaces == nullptr)
+                    interfaces = "**";
+                Matcher linkInterfaceMatcher(interfaces);
+                std::string sourceFullPath = link->sourceInterfaceInfo->getFullPath();
+                std::string sourceShortenedFullPath = sourceFullPath.substr(sourceFullPath.find('.') + 1);
+                std::string destinationFullPath = link->destinationInterfaceInfo->getFullPath();
+                std::string destinationShortenedFullPath = destinationFullPath.substr(destinationFullPath.find('.') + 1);
+                if (linkInterfaceMatcher.matchesAny() ||
+                    linkInterfaceMatcher.matches(sourceFullPath.c_str()) || linkInterfaceMatcher.matches(sourceShortenedFullPath.c_str()) ||
+                    linkInterfaceMatcher.matches(destinationFullPath.c_str()) || linkInterfaceMatcher.matches(destinationShortenedFullPath.c_str()))
+                {
+                    selectedLinkElement = linkElement;
+                    break;
+                }
+            }
+            double weight = computeLinkWeight(link, metric, selectedLinkElement);
+            EV_DEBUG << "Setting link weight, link = " << link << ", weight = " << weight << endl;
+            link->setWeight(weight);
+        }
+    }
+
     // TODO: it should be configurable (via xml?) which nodes need static routes filled in automatically
     // add static routes for all routing tables
     for (int i = 0; i < topology.getNumNodes(); i++) {

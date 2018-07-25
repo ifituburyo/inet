@@ -51,7 +51,7 @@ class INET_API GenericNetworkConfigurator : public NetworkConfiguratorBase
      * The algorithm uses Dijkstra's weighted shortest path algorithm.
      * May add default routes and subnet routes if possible and requested.
      */
-    virtual void addStaticRoutes(Topology& topology);
+    virtual void addStaticRoutes(Topology& topology, cXMLElement *autorouteElement);
 
     virtual void dumpRoutes(Topology& topology);
 };
