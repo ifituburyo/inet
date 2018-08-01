@@ -335,6 +335,14 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol
     /** @brief Assignment operator is not allowed.
      */
     Ieee802154Mac& operator=(const Ieee802154Mac&);
+
+    int successfulAck[100] = {0};
+    int missingAck[100] = {0};
+    int CCAsuccess[100] = {0};
+    int CCAfail[100] = {0};
+
+    SimTime firstCCA[100] = {0};
+
 };
 
 } // namespace inet

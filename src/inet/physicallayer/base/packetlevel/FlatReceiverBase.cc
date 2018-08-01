@@ -24,6 +24,9 @@
 #include "inet/physicallayer/common/packetlevel/ListeningDecision.h"
 #include "inet/physicallayer/common/packetlevel/ReceptionDecision.h"
 #include "inet/physicallayer/common/packetlevel/SignalTag_m.h"
+#include "inet/physicallayer/ieee802154/packetlevel/Ieee802154NarrowbandScalarReceiver.h"
+#include "inet/physicallayer/ieee802154/packetlevel/Ieee802154NarrowbandScalarTransmitter.h"
+#include "inet/linklayer/ieee802154/Ieee802154MacHeader_m.h"
 
 namespace inet {
 
@@ -85,8 +88,116 @@ bool FlatReceiverBase::computeIsReceptionPossible(const IListening *listening, c
     }
 }
 
+int extractHostId(const std::string& path) {
+    std::string signalName = "";
+    std::size_t hostStart = path.find("host[");
+    assert(hostStart != std::string::npos);
+    std::size_t hostEnd = path.find("]", hostStart);
+    assert(hostEnd != std::string::npos);
+    std::stringstream s;
+    int id = atoi(path.substr(hostStart + 5, hostEnd - hostStart - 5).c_str());
+    return id;
+}
+
+double secondsToUBP(const omnetpp::SimTime simtime) {
+    double seconds = simtime.dbl();
+    seconds *= 1000; // ms
+    seconds *= 1000; // us
+    seconds /= 16; // 16 us
+    seconds /= 20; // unit backoff periods
+    return seconds;
+}
+
 bool FlatReceiverBase::computeIsReceptionSuccessful(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const
 {
+    auto macHdr = reception->getTransmission()->getPacket()->peekAtFront<Ieee802154MacHeader>();
+    int src = macHdr->getSrcAddr().getAddressByte(5)-1;
+    int dst = macHdr->getDestAddr().getAddressByte(5)-1;
+    int receiver = extractHostId((dynamic_cast<const Ieee802154NarrowbandScalarReceiver*>(reception->getReceiver()->getReceiver()))->getFullPath());
+
+    double originalBegin = secondsToUBP(reception->getStartTime());
+    double originalDuration = secondsToUBP(reception->getDuration());
+    bool originalIsAck = originalDuration < 5;
+
+    if(dst == receiver) {
+        if(originalIsAck) {
+            const_cast<FlatReceiverBase*>(this)->totalACKReceptions[src]++;
+        }
+        else {
+            const_cast<FlatReceiverBase*>(this)->totalPacketReceptions[src]++;
+        }
+    }
+
+    if(interference->getInterferingReceptions()->size() > 0) {
+        for(auto& rec : *(interference->getInterferingReceptions())) {
+//EV_ERROR << (inet::physicallayer::FlatRadioBase*)(rec->getReceiver()) << " Interferer " << ((rec->getTransmission())) << endl;
+            //EV_ERROR << (dynamic_cast<const Ieee802154NarrowbandScalarReceiver*>(rec->getReceiver()->getReceiver()))->getFullPath() << endl;
+            int receiverB = extractHostId((dynamic_cast<const Ieee802154NarrowbandScalarReceiver*>(rec->getReceiver()->getReceiver()))->getFullPath());
+            assert(receiver == receiverB);
+            while(receiver != receiverB) {
+                EV_ERROR << "GGG" << endl;
+            }
+
+            int interferingTransmitter = extractHostId((dynamic_cast<const Ieee802154NarrowbandScalarTransmitter*>(rec->getTransmission()->getTransmitter()->getTransmitter()))->getFullPath());
+            int originalTransmitter = extractHostId((dynamic_cast<const Ieee802154NarrowbandScalarTransmitter*>(reception->getTransmission()->getTransmitter()->getTransmitter()))->getFullPath());
+            if(dst != receiver) {
+                return false; // will be dropped later anyway
+            }
+            EV_ERROR << dst << endl;
+            //EV_ERROR << reception->getDuration() << " " << rec->getDuration() << " " << secondsToSymbols(reception->getStartTime()) << " " << secondsToSymbols(rec->getStartTime()) << endl;
+            double interferenceBegin = secondsToUBP(rec->getStartTime());
+            double interferenceDuration = secondsToUBP(rec->getDuration());
+            double diff = interferenceBegin-originalBegin;
+            EV_ERROR << "diff " << diff << " " << originalDuration << " " << interferenceDuration << endl;
+            EV_ERROR << "Interference receiver " << receiver << " original transmitter " << originalTransmitter << " interfering transmitter " << interferingTransmitter << " ";
+
+            bool interferenceIsAck = interferenceDuration < 5;
+
+            if(originalIsAck) {
+                EV_ERROR << "origACK ";
+            }
+            else {
+                EV_ERROR << "origPKT ";
+            }
+
+            if(interferenceIsAck) {
+                EV_ERROR << "intACK ";
+            }
+            else {
+                EV_ERROR << "intPKT ";
+            }
+
+            bool pm2 = diff >= -2 && diff <= 2;
+            if(pm2) {
+                EV_ERROR << " short";
+            }
+            else {
+                EV_ERROR << " long";
+            }
+
+
+            EV_ERROR << endl;
+
+            if(dst == receiver) {
+                if(!originalIsAck && !interferenceIsAck) {
+                    const_cast<FlatReceiverBase*>(this)->collisionWithPacket[src]++;
+                }
+
+                if(!originalIsAck && interferenceIsAck) {
+                    const_cast<FlatReceiverBase*>(this)->collisionWithACK[src]++;
+                }
+            }
+
+            EV_ERROR << totalPacketReceptions[src] << " " << collisionWithPacket[src]/(double)totalPacketReceptions[src] << " " << collisionWithACK[src]/(double)totalPacketReceptions[src] << endl;
+            return false; // TODO ?
+            //return true;
+        }
+        return false;
+    }
+
+    //return true; // TODO
+    return true; // TODO
+
     if (!SnirReceiverBase::computeIsReceptionSuccessful(listening, reception, part, interference, snir))
         return false;
     else if (!errorModel)

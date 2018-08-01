@@ -39,6 +39,6 @@ module Ieee802154NarrowbandScalarRadioMedium extends RadioMedium
 
         // Reflects the thermal noise for the receiver sensitivity
         // TODO couple with sensitivity
-        backgroundNoise.power = default(-96.616dBm);
+        backgroundNoise.power = default(-100dBm);
         backgroundNoise.dimensions = default("time");
 }

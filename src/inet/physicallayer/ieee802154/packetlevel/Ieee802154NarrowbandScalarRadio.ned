@@ -47,26 +47,39 @@ module Ieee802154NarrowbandScalarRadio extends FlatRadioBase
         transmitter.preambleDuration = (4*8/4) * 16 us;
 
         // RSSI sensitivity (ATmega256RFR2, page 566)
-        receiver.energyDetection = default(-90dBm);
+        // Also note that if a reception power is larger than the sensitivity,
+        // the reception is started, reporting a busy medium!
+        //receiver.energyDetection = default(-90dBm);
+        receiver.energyDetection = default(-99dBm);
 
         // Receiver sensitivity (ATmega256RFR2, page 565)
         // TODO That is not quite true, because sensitivity
         //      is defined as the input signal power that yields
         //      a PER < 1% for a PSDU of 20 octets, but INET handles it
         //      as minimum reception power.
+        //receiver.sensitivity = default(-100dBm);
         receiver.sensitivity = default(-100dBm);
+        //receiver.sensitivity = default(-1000dBm);
 
         // There is no fixed boundary, because of the
         // DSSS and the capture effect. Taking the sensitivity minus some
         // arbitrary value as an approximate guess.
-        receiver.minInterferencePower = default(-120dBm);
+        //receiver.minInterferencePower = default(-120dBm);
+        //receiver.minInterferencePower = default(-1000dBm);
+        //receiver.minInterferencePower = default(-105dBm);
+        receiver.minInterferencePower = default(-100dBm);
+        //receiver.minInterferencePower = default(0dBm);
 
         // Minimum SNIR
         // -8 dB results into 98% PER for a PSDU of 20 octets
-        receiver.snirThreshold = default(-8 dB);
+        //receiver.snirThreshold = default(-8 dB);
+        //receiver.snirThreshold = default(-1 dB);
+        receiver.snirThreshold = default(-1000 dB);
+        //receiver.snirThreshold = default(0 dB);
 
         // TX Output power (typ. 3.5 dBm, ATmega256RFR2, page 564)
         transmitter.power = default(2.24mW);
+        //transmitter.power = default(1mW);
 
         @class(FlatRadioBase);
 }

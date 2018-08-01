@@ -29,7 +29,7 @@ simple GenericNetworkProtocol
         string interfaceTableModule;   // The path to the InterfaceTable module
         string routingTableModule;
         string arpModule;
-        double procDelay @unit(s) = default(0s);
+        double procDelay @unit(s); // = default(0s);
         int hopLimit = default(32);
         int headerLength @unit(B) = default(10B);
         @display("i=block/routing");

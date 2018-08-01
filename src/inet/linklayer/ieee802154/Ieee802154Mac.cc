@@ -387,12 +387,43 @@ void Ieee802154Mac::attachSignal(Packet *mac, simtime_t_cref startTime)
     mac->setDuration(duration);
 }
 
+double secondsToUBP(const omnetpp::SimTime simtime) {
+    double seconds = simtime.dbl();
+    seconds *= 1000; // ms
+    seconds *= 1000; // us
+    seconds /= 16; // 16 us
+    seconds /= 20; // unit backoff periods
+    return seconds;
+}
+
 void Ieee802154Mac::updateStatusCCA(t_mac_event event, cMessage *msg)
 {
     switch (event) {
         case EV_TIMER_CCA: {
             EV_DETAIL << "(25) FSM State CCA_3, EV_TIMER_CCA" << endl;
             bool isIdle = radio->getReceptionState() == IRadio::RECEPTION_STATE_IDLE;
+
+
+    Packet *packet = macQueue.front();
+    const auto& csmaHeader = packet->peekAtFront<Ieee802154MacHeader>();
+    int src = csmaHeader->getSrcAddr().getAddressByte(5)-1;
+    int dst = csmaHeader->getDestAddr().getAddressByte(5)-1;
+
+            if((firstCCA[dst].dbl()) == 0) {
+                firstCCA[dst] = simTime();
+            }
+
+            if(isIdle) {
+                CCAsuccess[dst]++;
+            }
+            else {
+                CCAfail[dst]++;
+            }
+
+            //std::cout << "tau " << src << " " << dst << " " << SimTime() << " " << firstCCA[dst] << " " << (CCAsuccess[dst]+CCAfail[dst])/secondsToUBP(simTime()-firstCCA[dst]) << std::endl;
+
+            //std::cout << "alpha " << src << " " << dst << " " << CCAfail[dst] << " " << CCAsuccess[dst] << " " << CCAfail[dst]/(double)(CCAfail[dst]+CCAsuccess[dst]) << std::endl;
+
             if (isIdle) {
                 EV_DETAIL << "(3) FSM State CCA_3, EV_TIMER_CCA, [Channel Idle]: -> TRANSMITFRAME_4." << endl;
                 updateMacState(TRANSMITFRAME_4);
@@ -533,8 +564,14 @@ void Ieee802154Mac::updateStatusWaitAck(t_mac_event event, cMessage *msg)
 {
     assert(useMACAcks);
 
+    Packet *packet = macQueue.front();
+    const auto& csmaHeader = packet->peekAtFront<Ieee802154MacHeader>();
+    int src = csmaHeader->getSrcAddr().getAddressByte(5)-1;
+    int dst = csmaHeader->getDestAddr().getAddressByte(5)-1;
+
     switch (event) {
         case EV_ACK_RECEIVED: {
+            successfulAck[dst]++;
             EV_DETAIL << "(5) FSM State WAITACK_5, EV_ACK_RECEIVED: "
                       << " ProcessAck, manageQueue..." << endl;
             if (rxAckTimer->isScheduled())
@@ -548,6 +585,8 @@ void Ieee802154Mac::updateStatusWaitAck(t_mac_event event, cMessage *msg)
             break;
         }
         case EV_ACK_TIMEOUT:
+            missingAck[dst]++;
+            //std::cout << "ACK " << src << " " << dst << " " << successfulAck[dst] << " " << missingAck[dst] << " " << missingAck[dst]/((double)successfulAck[dst]+missingAck[dst]) << std::endl;
             EV_DETAIL << "(12) FSM State WAITACK_5, EV_ACK_TIMEOUT:"
                       << " incrementCounter/dropPacket, manageQueue..." << endl;
             manageMissingAck(event, msg);

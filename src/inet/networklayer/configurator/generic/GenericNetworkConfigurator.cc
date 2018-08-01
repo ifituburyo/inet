@@ -100,24 +100,18 @@ void GenericNetworkConfigurator::addStaticRoutes(Topology& topology, cXMLElement
             cXMLElement *selectedLinkElement = &defaultLinkElement;
             Link *link = (Link *)node->getLinkIn(j);
             for (auto & linkElement : linkElements) {
-                const char* interfaces = linkElement->getAttribute("interfaces");
-                if (interfaces == nullptr)
-                    interfaces = "**";
-                Matcher linkInterfaceMatcher(interfaces);
-                std::string sourceFullPath = link->sourceInterfaceInfo->getFullPath();
-                std::string sourceShortenedFullPath = sourceFullPath.substr(sourceFullPath.find('.') + 1);
-                std::string destinationFullPath = link->destinationInterfaceInfo->getFullPath();
-                std::string destinationShortenedFullPath = destinationFullPath.substr(destinationFullPath.find('.') + 1);
-                if (linkInterfaceMatcher.matchesAny() ||
-                    linkInterfaceMatcher.matches(sourceFullPath.c_str()) || linkInterfaceMatcher.matches(sourceShortenedFullPath.c_str()) ||
-                    linkInterfaceMatcher.matches(destinationFullPath.c_str()) || linkInterfaceMatcher.matches(destinationShortenedFullPath.c_str()))
-                {
+                std::string from = linkElement->getAttribute("from");
+                std::string to = linkElement->getAttribute("to");
+                std::string linkFrom = link->sourceInterfaceInfo->interfaceEntry->getModulePathAddress().str();
+                std::string linkTo = link->destinationInterfaceInfo->interfaceEntry->getModulePathAddress().str();
+                if((linkFrom.compare(from) == 0 || from.compare("*") == 0)
+                    && (linkTo.compare(to) == 0 || to.compare("*") == 0)) {
                     selectedLinkElement = linkElement;
                     break;
                 }
             }
             double weight = computeLinkWeight(link, metric, selectedLinkElement);
-            EV_DEBUG << "Setting link weight, link = " << link << ", weight = " << weight << endl;
+            EV_ERROR << "Setting link weight, link = " << link << ", weight = " << weight << endl;
             link->setWeight(weight);
         }
     }

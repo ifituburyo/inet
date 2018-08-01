@@ -407,7 +407,8 @@ void Radio::startReception(cMessage *timer, IRadioSignal::SignalPart part)
     auto arrival = signal->getArrival();
     auto reception = signal->getReception();
 // TODO: should be this, but it breaks fingerprints: if (receptionTimer == nullptr && isReceiverMode(radioMode) && arrival->getStartTime(part) == simTime()) {
-    if (isReceiverMode(radioMode) && arrival->getStartTime(part) == simTime()) {
+if (receptionTimer == nullptr && isReceiverMode(radioMode) && arrival->getStartTime(part) == simTime()) {
+//    if (isReceiverMode(radioMode) && arrival->getStartTime(part) == simTime()) {
         auto transmission = signal->getTransmission();
         auto isReceptionAttempted = medium->isReceptionAttempted(this, transmission, part);
         EV_INFO << "Reception started: " << (isReceptionAttempted ? "\x1b[1mattempting\x1b[0m" : "\x1b[1mnot attempting\x1b[0m") << " " << (ISignal *)signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;

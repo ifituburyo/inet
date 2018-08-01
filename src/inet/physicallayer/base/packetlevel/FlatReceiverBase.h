@@ -36,6 +36,7 @@ class INET_API FlatReceiverBase : public NarrowbandReceiverBase
     virtual void initialize(int stage) override;
 
     virtual bool computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const override;
+    //virtual bool computeIsReceptionSuccessful(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const override;
     virtual bool computeIsReceptionSuccessful(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const override;
 
   public:
@@ -55,6 +56,12 @@ class INET_API FlatReceiverBase : public NarrowbandReceiverBase
 
     virtual W getSensitivity() const { return sensitivity; }
     virtual void setSensitivity(W sensitivity) { this->sensitivity = sensitivity; }
+
+    // only packets for me
+    int totalACKReceptions[100] = {0};
+    int totalPacketReceptions[100] = {0};
+    int collisionWithPacket[100] = {0};
+    int collisionWithACK[100] = {0};
 };
 
 } // namespace physicallayer
