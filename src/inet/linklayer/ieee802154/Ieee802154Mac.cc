@@ -45,6 +45,8 @@ using namespace physicallayer;
 
 Define_Module(Ieee802154Mac);
 
+simsignal_t packetServiceTimeSignal = cComponent::registerSignal("packetServiceTime");
+
 void Ieee802154Mac::initialize(int stage)
 {
     MacProtocolBase::initialize(stage);
@@ -248,6 +250,7 @@ void Ieee802154Mac::updateStatusIdle(t_mac_event event, cMessage *msg)
         case EV_SEND_REQUEST:
             if (macQueue.size() < queueLength) {
                 macQueue.push_back(static_cast<Packet *>(msg));
+                measureServiceTime(false);
                 EV_DETAIL << "(1) FSM State IDLE_1, EV_SEND_REQUEST and [TxBuff avail]: startTimerBackOff -> BACKOFF." << endl;
                 updateMacState(BACKOFF_2);
                 NB = 0;
@@ -381,6 +384,17 @@ void Ieee802154Mac::clearQueue()
     macQueue.clear();
 }
 
+void Ieee802154Mac::measureServiceTime(bool pop)
+{
+    SimTime now = simTime();
+    if(!pop) {
+        serviceStart = now;
+    }
+    else {
+        emit(packetServiceTimeSignal,now-serviceStart);
+    }
+}
+
 void Ieee802154Mac::attachSignal(Packet *mac, simtime_t_cref startTime)
 {
     simtime_t duration = mac->getBitLength() / bitrate;
@@ -394,6 +408,17 @@ double secondsToUBP(const omnetpp::SimTime simtime) {
     seconds /= 16; // 16 us
     seconds /= 20; // unit backoff periods
     return seconds;
+}
+
+int extractHostId(const std::string& path) {
+    std::string signalName = "";
+    std::size_t hostStart = path.find("host[");
+    assert(hostStart != std::string::npos);
+    std::size_t hostEnd = path.find("]", hostStart);
+    assert(hostEnd != std::string::npos);
+    std::stringstream s;
+    int id = atoi(path.substr(hostStart + 5, hostEnd - hostStart - 5).c_str());
+    return id;
 }
 
 void Ieee802154Mac::updateStatusCCA(t_mac_event event, cMessage *msg)
@@ -436,6 +461,15 @@ void Ieee802154Mac::updateStatusCCA(t_mac_event event, cMessage *msg)
                 nbTxFrames++;
             }
             else {
+                auto rec = radio->getReceptionInProgress();
+                if(rec) {
+                    const cModule* disturber = dynamic_cast<const cModule*>(rec->getTransmitter()->getTransmitter());
+                    if(disturber) {
+                        int disturbingTransmitter = extractHostId(disturber->getFullPath());
+                        EV_ERROR << "disturbing " << disturbingTransmitter << endl;
+                    }
+                }
+
                 // Channel was busy, increment 802.15.4 backoff timers as specified.
                 EV_DETAIL << "(7) FSM State CCA_3, EV_TIMER_CCA, [Channel Busy]: "
                           << " increment counters." << endl;
@@ -449,6 +483,7 @@ void Ieee802154Mac::updateStatusCCA(t_mac_event event, cMessage *msg)
                               << "channel. Dropping the packet." << endl;
                     cMessage *mac = macQueue.front();
                     macQueue.pop_front();
+                    measureServiceTime(true);
                     txAttempts = 0;
                     nbDroppedFrames++;
                     PacketDropDetails details;
@@ -550,6 +585,7 @@ void Ieee802154Mac::updateStatusTransmitFrame(t_mac_event event, cMessage *msg)
         else {
             EV_DETAIL << ": RadioSetupRx, manageQueue..." << endl;
             macQueue.pop_front();
+            measureServiceTime(true);
             delete packet;
             manageQueue();
         }
@@ -578,6 +614,7 @@ void Ieee802154Mac::updateStatusWaitAck(t_mac_event event, cMessage *msg)
                 cancelEvent(rxAckTimer);
             cMessage *mac = macQueue.front();
             macQueue.pop_front();
+            measureServiceTime(true);
             txAttempts = 0;
             delete mac;
             delete msg;
@@ -623,6 +660,7 @@ void Ieee802154Mac::manageMissingAck(t_mac_event    /*event*/, cMessage *    /*m
                   << " times and I never got an Ack. I drop the packet." << endl;
         cMessage *mac = macQueue.front();
         macQueue.pop_front();
+        measureServiceTime(true);
         txAttempts = 0;
         PacketDropDetails details;
         details.setReason(RETRY_LIMIT_REACHED);
@@ -757,6 +795,7 @@ void Ieee802154Mac::executeMac(t_mac_event event, cMessage *msg)
 void Ieee802154Mac::manageQueue()
 {
     if (macQueue.size() != 0) {
+        measureServiceTime(false);
         EV_DETAIL << "(manageQueue) there are " << macQueue.size() << " packets to send, entering backoff wait state." << endl;
         if (transmissionAttemptInterruptedByRx) {
             // resume a transmission cycle which was interrupted by

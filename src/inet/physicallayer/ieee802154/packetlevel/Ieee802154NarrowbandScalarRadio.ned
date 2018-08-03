@@ -50,6 +50,7 @@ module Ieee802154NarrowbandScalarRadio extends FlatRadioBase
         // Also note that if a reception power is larger than the sensitivity,
         // the reception is started, reporting a busy medium!
         //receiver.energyDetection = default(-90dBm);
+        //receiver.energyDetection = default(-0dBm);
         receiver.energyDetection = default(-99.99dBm);
 
         // Receiver sensitivity (ATmega256RFR2, page 565)

@@ -342,7 +342,8 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol
     int CCAfail[100] = {0};
 
     SimTime firstCCA[100] = {0};
-
+    SimTime serviceStart = 0;
+    void measureServiceTime(bool pop);
 };
 
 } // namespace inet

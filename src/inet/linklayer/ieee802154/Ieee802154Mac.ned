@@ -94,6 +94,8 @@ simple Ieee802154Mac extends MacProtocolBase like IMacProtocol
 
         @class(Ieee802154Mac);
         @signal[linkBroken](type=Packet);
+        @signal[packetServiceTime](type=SimTime);
+	@statistic[packetServiceTime](source=packetServiceTime; record=mean; interpolationmode=none);
         @statistic[linkBroken](title="link break"; source=linkBroken; record=count; interpolationmode=none);
         @statistic[packetDropNotAddressToUs](title="packet drop: not addressed to us"; source=packetDropReasonIsNotAddressedToUs(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetDropIncorrectlyReceived](title="packet drop: incorrectly received"; source=packetDropReasonIsIncorrectlyReceived(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
