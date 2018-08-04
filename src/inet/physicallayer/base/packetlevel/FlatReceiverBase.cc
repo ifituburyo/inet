@@ -110,6 +110,7 @@ double secondsToUBP(const omnetpp::SimTime simtime) {
 
 bool FlatReceiverBase::computeIsReceptionSuccessful(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const
 {
+#if 0
     auto macHdr = reception->getTransmission()->getPacket()->peekAtFront<Ieee802154MacHeader>();
     int src = macHdr->getSrcAddr().getAddressByte(5)-1;
     int dst = macHdr->getDestAddr().getAddressByte(5)-1;
@@ -197,6 +198,7 @@ bool FlatReceiverBase::computeIsReceptionSuccessful(const IListening *listening,
 
     //return true; // TODO
     return true; // TODO
+#endif
 
     if (!SnirReceiverBase::computeIsReceptionSuccessful(listening, reception, part, interference, snir))
         return false;

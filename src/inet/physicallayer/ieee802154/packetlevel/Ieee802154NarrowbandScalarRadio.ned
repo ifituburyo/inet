@@ -75,8 +75,8 @@ module Ieee802154NarrowbandScalarRadio extends FlatRadioBase
         // -8 dB results into 98% PER for a PSDU of 20 octets
         //receiver.snirThreshold = default(-8 dB);
         //receiver.snirThreshold = default(-1 dB);
-        receiver.snirThreshold = default(-1000 dB);
-        //receiver.snirThreshold = default(0 dB);
+        //receiver.snirThreshold = default(-1000 dB);
+        receiver.snirThreshold = default(0 dB);
 
         // TX Output power (typ. 3.5 dBm, ATmega256RFR2, page 564)
         transmitter.power = default(2.24mW);
