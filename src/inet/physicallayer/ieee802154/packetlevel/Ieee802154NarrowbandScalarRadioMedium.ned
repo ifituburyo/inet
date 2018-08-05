@@ -37,8 +37,17 @@ module Ieee802154NarrowbandScalarRadioMedium extends RadioMedium
         pathLoss.l02 = 58.5;
         pathLoss.alpha2 = 3.3;
 
-        // Reflects the thermal noise for the receiver sensitivity
-        // TODO couple with sensitivity
-        backgroundNoise.power = default(-96.616dBm);
+        // Reflects thermal noise and other noise sources of the
+        // receiver circuit.
+        //
+        // Sensitivity is specified as -100 dBm and defined as
+        // PER of 1% for a PSDU of 20 octets.
+        // The PSDU excludes preamble, SFD and PHR, but the latter
+        // two are also relevant for the PER, so the total length
+        // for the calculation is 22 octets.
+        // For 22 octets, 1% PER is achieved at 0.44 dB SNIR,
+        // so with a specified sensitivity of -100 dBm this results
+        // in a noise power of -100.44 dBm.
+        backgroundNoise.power = default(-100.44dBm);
         backgroundNoise.dimensions = default("time");
 }
