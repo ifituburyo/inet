@@ -100,21 +100,32 @@ void GenericNetworkConfigurator::addStaticRoutes(Topology& topology, cXMLElement
             cXMLElement *selectedLinkElement = &defaultLinkElement;
             Link *link = (Link *)node->getLinkIn(j);
             for (auto & linkElement : linkElements) {
-                const char* interfaces = linkElement->getAttribute("interfaces");
-                if (interfaces == nullptr)
-                    interfaces = "**";
-                Matcher linkInterfaceMatcher(interfaces);
+                const char* from = linkElement->getAttribute("from");
+                if (from == nullptr)
+                    from = "**";
+                Matcher fromLinkInterfaceMatcher(from);
+
                 std::string sourceFullPath = link->sourceInterfaceInfo->getFullPath();
                 std::string sourceShortenedFullPath = sourceFullPath.substr(sourceFullPath.find('.') + 1);
+
+                if( !fromLinkInterfaceMatcher.matchesAny() && !fromLinkInterfaceMatcher.matches(sourceFullPath.c_str()) && !fromLinkInterfaceMatcher.matches(sourceShortenedFullPath.c_str()) ) {
+                    continue;
+                }
+
+                const char* to = linkElement->getAttribute("to");
+                if (to == nullptr)
+                    to = "**";
+                Matcher toLinkInterfaceMatcher(to);
+
                 std::string destinationFullPath = link->destinationInterfaceInfo->getFullPath();
                 std::string destinationShortenedFullPath = destinationFullPath.substr(destinationFullPath.find('.') + 1);
-                if (linkInterfaceMatcher.matchesAny() ||
-                    linkInterfaceMatcher.matches(sourceFullPath.c_str()) || linkInterfaceMatcher.matches(sourceShortenedFullPath.c_str()) ||
-                    linkInterfaceMatcher.matches(destinationFullPath.c_str()) || linkInterfaceMatcher.matches(destinationShortenedFullPath.c_str()))
-                {
-                    selectedLinkElement = linkElement;
-                    break;
+
+                if( !toLinkInterfaceMatcher.matchesAny() && !toLinkInterfaceMatcher.matches(destinationFullPath.c_str()) && !toLinkInterfaceMatcher.matches(destinationShortenedFullPath.c_str()) ) {
+                    continue;
                 }
+
+                selectedLinkElement = linkElement;
+                break;
             }
             double weight = computeLinkWeight(link, metric, selectedLinkElement);
             EV_DEBUG << "Setting link weight, link = " << link << ", weight = " << weight << endl;
