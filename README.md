@@ -6,6 +6,8 @@
 INET Framework for OMNEST/OMNeT++
 =================================
 
+TEST
+
 The [INET framework](https://inet.omnetpp.org) is an open-source communication networks
 simulation package, written for the OMNEST/OMNeT++ simulation system. The INET
 framework contains models for numerous wired and wireless protocols, a detailed
