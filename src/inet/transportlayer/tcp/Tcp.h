@@ -23,17 +23,16 @@
 #include <set>
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/common/L3Address.h"
-#include "inet/transportlayer/common/CRC_m.h"
+#include "inet/transportlayer/base/TransportProtocolBase.h"
+#include "inet/transportlayer/common/CrcMode_m.h"
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
 #include "inet/transportlayer/tcp_common/TcpCrcInsertionHook.h"
 #include "inet/transportlayer/tcp_common/TcpHeader.h"
 
 namespace inet {
-
 namespace tcp {
 
 // Forward declarations:
@@ -94,21 +93,17 @@ class TcpReceiveQueue;
  * The concrete TcpAlgorithm class to use can be chosen per connection (in OPEN)
  * or in a module parameter.
  */
-class INET_API Tcp : public cSimpleModule, public ILifecycle
+class INET_API Tcp : public TransportProtocolBase
 {
   public:
     static simsignal_t tcpConnectionAddedSignal;
     static simsignal_t tcpConnectionRemovedSignal;
 
-    struct AppConnKey    // XXX this class is redundant since connId is already globally unique
-    {
-        int socketId;
-
-        inline bool operator<(const AppConnKey& b) const
-        {
-            return socketId < b.socketId;
-        }
+    enum PortRange {
+        EPHEMERAL_PORTRANGE_START = 1024,
+        EPHEMERAL_PORTRANGE_END   = 5000
     };
+
     struct SockPair
     {
         L3Address localAddr;
@@ -130,7 +125,7 @@ class INET_API Tcp : public cSimpleModule, public ILifecycle
     };
 
   protected:
-    typedef std::map<AppConnKey, TcpConnection *> TcpAppConnMap;
+    typedef std::map<int /*socketId*/, TcpConnection *> TcpAppConnMap;
     typedef std::map<SockPair, TcpConnection *> TcpConnMap;
     TcpCrcInsertion crcInsertion;
 
@@ -148,18 +143,12 @@ class INET_API Tcp : public cSimpleModule, public ILifecycle
     virtual TcpConnection *findConnForSegment(const Ptr<const TcpHeader>& tcpseg, L3Address srcAddr, L3Address destAddr);
     virtual TcpConnection *findConnForApp(int socketId);
     virtual void segmentArrivalWhileClosed(Packet *packet, const Ptr<const TcpHeader>& tcpseg, L3Address src, L3Address dest);
-    virtual void removeConnection(TcpConnection *conn);
     virtual void refreshDisplay() const override;
 
   public:
-    static bool testing;    // switches between tcpEV and testingEV
-    static bool logverbose;    // if !testing, turns on more verbose logging
-
-    bool recordStatistics = false;    // output vectors on/off
-    bool isOperational = false;    // lifecycle: node is up/down
-
     bool useDataNotification = false;
-    CrcMode crcMode = static_cast<CrcMode>(-1);
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
+    int msl;
 
   public:
     Tcp() {}
@@ -168,8 +157,12 @@ class INET_API Tcp : public cSimpleModule, public ILifecycle
   protected:
     virtual void initialize(int stage) override;
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
-    virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
+
+    virtual void handleSelfMessage(cMessage *message) override;
+    virtual void handleUpperCommand(cMessage *message) override;
+    virtual void handleUpperPacket(Packet *packet) override;
+    virtual void handleLowerPacket(Packet *packet) override;
 
   public:
     /**
@@ -177,6 +170,9 @@ class INET_API Tcp : public cSimpleModule, public ILifecycle
      * during processing of OPEN_ACTIVE or OPEN_PASSIVE.
      */
     virtual void addSockPair(TcpConnection *conn, L3Address localAddr, L3Address remoteAddr, int localPort, int remotePort);
+
+    virtual void removeConnection(TcpConnection *conn);
+    virtual void sendFromConn(cMessage *msg, const char *gatename, int gateindex = -1);
 
     /**
      * To be called from TcpConnection when socket pair (key for TcpConnMap) changes
@@ -206,16 +202,18 @@ class INET_API Tcp : public cSimpleModule, public ILifecycle
     virtual TcpReceiveQueue *createReceiveQueue();
 
     // ILifeCycle:
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
     // called at shutdown/crash
     virtual void reset();
 
-    bool checkCrc(const Ptr<const TcpHeader>& tcpHeader, Packet *pk);
+    bool checkCrc(Packet *pk);
+    int getMsl() { return msl; }
 };
 
 } // namespace tcp
-
 } // namespace inet
 
 #endif // ifndef __INET_TCP_H

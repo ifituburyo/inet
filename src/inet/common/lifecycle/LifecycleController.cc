@@ -15,12 +15,13 @@
 //
 
 #include <algorithm>
+
+#include "inet/common/INETUtils.h"
 #include "inet/common/lifecycle/LifecycleController.h"
-#include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/common/lifecycle/LifecycleOperation.h"
 #include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
-#include "inet/common/INETUtils.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
 
 namespace inet {
 
@@ -82,7 +83,7 @@ void LifecycleController::doOneStage(LifecycleOperation *operation, cModule *sub
     ILifecycle *subject = dynamic_cast<ILifecycle *>(submodule);
     if (subject) {
         Callback *callback = spareCallback ? spareCallback : new Callback();
-        bool done = subject->handleOperationStage(operation, operation->currentStage, callback);
+        bool done = subject->handleOperationStage(operation, callback);
         if (!done) {
             callback->init(this, operation, submodule);
             operation->pendingList.push_back(callback);

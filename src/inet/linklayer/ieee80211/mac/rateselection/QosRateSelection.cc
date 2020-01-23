@@ -17,7 +17,7 @@
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
-#include "QosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/rateselection/QosRateSelection.h"
 #include "inet/physicallayer/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
@@ -30,12 +30,12 @@ Define_Module(QosRateSelection);
 void QosRateSelection::initialize(int stage)
 {
     ModeSetListener::initialize(stage);
-    if (stage == INITSTAGE_LINK_LAYER_2) {
+    if (stage == INITSTAGE_LINK_LAYER) {
         dataOrMgmtRateControl = dynamic_cast<IRateControl*>(getModuleByPath(par("rateControlModule")));
         double multicastFrameBitrate = par("multicastFrameBitrate");
         multicastFrameMode = (multicastFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(multicastFrameBitrate));
         double dataFrameBitrate = par("dataFrameBitrate");
-        dataFrameMode = (dataFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(dataFrameBitrate));
+        dataFrameMode = (dataFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(dataFrameBitrate), Hz(par("dataFrameBandwidth")), par("dataFrameNumSpatialStreams"));
         double mgmtFrameBitrate = par("mgmtFrameBitrate");
         mgmtFrameMode = (mgmtFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(mgmtFrameBitrate));
         double controlFrameBitrate = par("controlFrameBitrate");
@@ -245,7 +245,7 @@ const IIeee80211Mode* QosRateSelection::computeMode(Packet *packet, const Ptr<co
 
 void QosRateSelection::receiveSignal(cComponent* source, simsignal_t signalID, cObject* obj, cObject* details)
 {
-    Enter_Method("receiveModeSetChangeNotification");
+    Enter_Method_Silent("receiveSignal");
     if (signalID == modesetChangedSignal) {
         modeSet = check_and_cast<Ieee80211ModeSet*>(obj);
         fastestMandatoryMode = modeSet->getFastestMandatoryMode();

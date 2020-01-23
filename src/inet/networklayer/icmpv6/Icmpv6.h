@@ -21,10 +21,10 @@
 
 #include "inet/common/INETDefs.h"
 #include "inet/common/IProtocolRegistrationListener.h"
-#include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/icmpv6/Icmpv6Header_m.h"
-#include "inet/transportlayer/common/CRC_m.h"
+#include "inet/transportlayer/common/CrcMode_m.h"
 
 namespace inet {
 
@@ -36,7 +36,7 @@ class PingPayload;
 /**
  * ICMPv6 implementation.
  */
-class INET_API Icmpv6 : public cSimpleModule, public ILifecycle, public IProtocolRegistrationListener
+class INET_API Icmpv6 : public cSimpleModule, public LifecycleUnsupported, public IProtocolRegistrationListener
 {
   public:
     /**
@@ -80,8 +80,6 @@ class INET_API Icmpv6 : public cSimpleModule, public ILifecycle, public IProtoco
     virtual void handleMessage(cMessage *msg) override;
     virtual void processICMPv6Message(Packet *packet);
 
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
-
     /**
      *  Respond to the machine that tried to ping us.
      */
@@ -107,7 +105,7 @@ class INET_API Icmpv6 : public cSimpleModule, public ILifecycle, public IProtoco
     void insertCrc(const Ptr<Icmpv6Header>& icmpHeader, Packet *packet) { insertCrc(crcMode, icmpHeader, packet); }
 
   protected:
-    CrcMode crcMode = static_cast<CrcMode>(-1);
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
     typedef std::map<long, int> PingMap;
     PingMap pingMap;
     std::set<int> transportProtocols;    // where to send up packets

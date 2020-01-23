@@ -21,8 +21,8 @@
 #include <algorithm>
 #include <sstream>
 
-#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
 
 namespace inet {
 
@@ -154,6 +154,7 @@ std::string Ipv4InterfaceData::RouterMulticastData::detailedInfo()
 }
 
 Ipv4InterfaceData::Ipv4InterfaceData()
+    : InterfaceProtocolData(InterfaceEntry::F_IPV4_DATA)
 {
     netmask = Ipv4Address::ALLONES_ADDRESS;
     metric = 0;
@@ -268,7 +269,7 @@ void Ipv4InterfaceData::changeMulticastGroupMembership(Ipv4Address multicastAddr
         cModule *m = ownerp ? dynamic_cast<cModule *>(ownerp->getInterfaceTable()) : nullptr;
         if (m) {
             Ipv4MulticastGroupSourceInfo info(ownerp, multicastAddress, entry->sourceList);
-            m->emit(ipv4McastChangeSignal, &info);
+            m->emit(ipv4MulticastChangeSignal, &info);
         }
 
         // Legacy notifications

@@ -1,5 +1,29 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-11-12  Zoltan Bojthe
+
+	Fixed code for nullptr exception-safe.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-10-17  Zoltan Bojthe
+
+	Changed base class of Ted to RoutingProtocolBase.
+
+2018-09-19  Zoltan Bojthe
+
+	Adapted to the new protocol specific data storage API of InterfaceEntry.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-01  Zoltan Bojthe
+
+	Added B/b units to length constants and length fields of chunks.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-01  Zoltan Bojthe
 
 	Added LsrProtocolDissector.

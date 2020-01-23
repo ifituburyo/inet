@@ -21,8 +21,8 @@
 #define __INET_IEEE8021DINTERFACEDATA_H
 
 #include "inet/common/INETDefs.h"
-#include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/linklayer/common/MacAddress.h"
+#include "inet/networklayer/common/InterfaceEntry.h"
 
 namespace inet {
 
@@ -85,7 +85,7 @@ class INET_API Ieee8021dInterfaceData : public InterfaceProtocolData
     Ieee8021dInterfaceData();
 
     virtual std::string str() const override;
-    virtual std::string detailedInfo() const override;
+    virtual std::string detailedInfo() const OMNETPP5_CODE(override);
 
     bool isLearning() const { return portData.state == LEARNING || portData.state == FORWARDING; }
 

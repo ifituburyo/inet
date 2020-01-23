@@ -16,6 +16,7 @@
 //
 
 package inet.linklayer.ieee8021d.stp;
+
 import inet.linklayer.contract.ISpanningTree;
 
 //
@@ -33,7 +34,7 @@ import inet.linklayer.contract.ISpanningTree;
 // They can be set using ~L2NetworkConfigurator. Port state is kept in the switch's
 // ~InterfaceTable.
 //
-// @see L2NetworkConfigurator, InterfaceTable
+// @see ~L2NetworkConfigurator, ~InterfaceTable
 //
 simple Stp like ISpanningTree
 {
@@ -70,3 +71,4 @@ simple Stp like ISpanningTree
         input relayIn;
         output relayOut;
 }
+

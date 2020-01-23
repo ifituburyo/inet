@@ -15,10 +15,10 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/common/geometry/common/Rotation.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/OsgScene.h"
 #include "inet/common/OsgUtils.h"
+#include "inet/common/geometry/common/RotationMatrix.h"
 #include "inet/visualizer/physicallayer/TracingObstacleLossOsgVisualizer.h"
 
 #ifdef WITH_OSG
@@ -36,13 +36,19 @@ Define_Module(TracingObstacleLossOsgVisualizer);
 
 #ifdef WITH_OSG
 
+TracingObstacleLossOsgVisualizer::~TracingObstacleLossOsgVisualizer()
+{
+    if (displayIntersections)
+        removeAllObstacleLossVisualizations();
+}
+
 void TracingObstacleLossOsgVisualizer::initialize(int stage)
 {
     TracingObstacleLossVisualizerBase::initialize(stage);
     if (!hasGUI()) return;
     if (stage == INITSTAGE_LOCAL) {
         obstacleLossNode = new osg::Group();
-        auto scene = inet::osg::TopLevelScene::getSimulationScene(visualizerTargetModule);
+        auto scene = inet::osg::TopLevelScene::getSimulationScene(visualizationTargetModule);
         scene->addChild(obstacleLossNode);
     }
 }
@@ -51,7 +57,7 @@ void TracingObstacleLossOsgVisualizer::refreshDisplay() const
 {
     TracingObstacleLossVisualizerBase::refreshDisplay();
     // TODO: switch to osg canvas when API is extended
-    visualizerTargetModule->getCanvas()->setAnimationSpeed(obstacleLossVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
+    visualizationTargetModule->getCanvas()->setAnimationSpeed(obstacleLossVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
 }
 
 const TracingObstacleLossVisualizerBase::ObstacleLossVisualization *TracingObstacleLossOsgVisualizer::createObstacleLossVisualization(const ITracingObstacleLoss::ObstaclePenetratedEvent *obstaclePenetratedEvent) const
@@ -61,8 +67,8 @@ const TracingObstacleLossVisualizerBase::ObstacleLossVisualization *TracingObsta
     auto intersection2 = obstaclePenetratedEvent->intersection2;
     auto normal1 = obstaclePenetratedEvent->normal1;
     auto normal2 = obstaclePenetratedEvent->normal2;
-    auto loss = obstaclePenetratedEvent->loss;
-    const Rotation rotation(object->getOrientation());
+    // TODO: display auto loss = obstaclePenetratedEvent->loss;
+    const RotationMatrix rotation(object->getOrientation().toEulerAngles());
     const Coord& position = object->getPosition();
     const Coord rotatedIntersection1 = rotation.rotateVector(intersection1);
     const Coord rotatedIntersection2 = rotation.rotateVector(intersection2);
@@ -93,7 +99,7 @@ void TracingObstacleLossOsgVisualizer::addObstacleLossVisualization(const Obstac
 {
     TracingObstacleLossVisualizerBase::addObstacleLossVisualization(obstacleLossVisualization);
     auto obstacleLossOsgVisualization = static_cast<const ObstacleLossOsgVisualization *>(obstacleLossVisualization);
-    auto scene = inet::osg::TopLevelScene::getSimulationScene(visualizerTargetModule);
+    auto scene = inet::osg::TopLevelScene::getSimulationScene(visualizationTargetModule);
     scene->addChild(obstacleLossOsgVisualization->node);
 }
 

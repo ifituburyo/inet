@@ -15,11 +15,10 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/physicallayer/neighborcache/GridNeighborCache.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/physicallayer/neighborcache/GridNeighborCache.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 Define_Module(GridNeighborCache);
@@ -46,7 +45,7 @@ void GridNeighborCache::initialize(int stage)
         refillPeriod = par("refillPeriod");
         refillCellsTimer = new cMessage("refillCellsTimer");
     }
-    else if (stage == INITSTAGE_LINK_LAYER_2) {
+    else if (stage == INITSTAGE_PHYSICAL_LAYER_NEIGHBOR_CACHE) {
         constraintAreaMin = radioMedium->getMediumLimitCache()->getMinConstraintArea();
         constraintAreaMax = radioMedium->getMediumLimitCache()->getMaxConstraintArea();
         maxSpeed = radioMedium->getMediumLimitCache()->getMaxSpeed().get();
@@ -157,6 +156,5 @@ GridNeighborCache::~GridNeighborCache()
 }
 
 } // namespace physicallayer
-
 } // namespace inet
 

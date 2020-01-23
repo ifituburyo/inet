@@ -20,12 +20,11 @@ package inet.networklayer.arp.ipv4;
 
 import inet.networklayer.contract.IArp;
 
-
 //
 // Implements the Address Resolution Protocol for IPv4 and IEEE 802 6-byte
 // MAC addresses.
 //
-// ARP packets are represented by the ~ARPPacket class.
+// ARP packets are represented by the ~ArpPacket class.
 //
 // Communication Between ARP and IPv4 modules:
 // IPv4 module call the ARP::getMACAddressFor(ipv4Address) method for get the MACAddress
@@ -48,16 +47,16 @@ simple Arp like IArp
     parameters:
         string interfaceTableModule;   // The path to the InterfaceTable module
         string routingTableModule;
-        double retryTimeout @unit(s) = default(1s); // number seconds ARP waits between retries to resolve an IPv4 address
-        int retryCount = default(3);   // number of times ARP will attempt to resolve an IPv4 address
+        double retryTimeout @unit(s) = default(1s);   // number seconds ARP waits between retries to resolve an IPv4 address
+        int retryCount = default(3);                  // number of times ARP will attempt to resolve an IPv4 address
         double cacheTimeout @unit(s) = default(120s); // number seconds unused entries in the cache will time out
-        bool respondToProxyARP = default(true);        // reply to proxy ARP requests (i.e. for IP addresses that this node can route)
+        string proxyArpInterfaces = default("*");     // list of interfaces that proxy ARP is enabled (all interfaces by default)
         @display("i=block/layer");
-        @signal[arpRequestSent](type=Packet);
-        @signal[arpReplySent](type=Packet);
-        @signal[arpResolutionInitiated](type=IArp::Notification);
-        @signal[arpResolutionCompleted](type=IArp::Notification);
-        @signal[arpResolutionFailed](type=IArp::Notification);
+        @signal[arpRequestSent](type=inet::Packet);
+        @signal[arpReplySent](type=inet::Packet);
+        @signal[arpResolutionInitiated](type=inet::IArp::Notification);
+        @signal[arpResolutionCompleted](type=inet::IArp::Notification);
+        @signal[arpResolutionFailed](type=inet::IArp::Notification);
         @statistic[arpRequestSent](title="ARP request sent"; source=arpRequestSent; record=count,"sum(packetBytes)","vector(packetBytes)");
         @statistic[arpReplySent](title="ARP replies sent"; source=arpReplySent; record=count,"sum(packetBytes)","vector(packetBytes)");
         @statistic[arpResolutionInitiated](title="ARP initiated resolutions"; record=count);
@@ -69,3 +68,4 @@ simple Arp like IArp
         input ifIn @labels(ArpPacket,Ieee802Ctrl);
         output ifOut @labels(ArpPacket,Ieee802Ctrl);
 }
+

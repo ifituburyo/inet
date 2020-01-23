@@ -27,10 +27,10 @@
 #define __INET_WISEROUTE_H
 
 #include "inet/common/packet/Packet.h"
-#include "inet/networklayer/contract/INetworkProtocol.h"
-#include "inet/networklayer/contract/IArp.h"
 #include "inet/networklayer/base/NetworkProtocolBase.h"
 #include "inet/networklayer/common/L3Address.h"
+#include "inet/networklayer/contract/IArp.h"
+#include "inet/networklayer/contract/INetworkProtocol.h"
 #include "inet/networklayer/wiseroute/WiseRouteHeader_m.h"
 
 namespace inet {
@@ -71,6 +71,11 @@ class INET_API WiseRoute : public NetworkProtocolBase, public INetworkProtocol
     virtual ~WiseRoute();
 
     const Protocol& getProtocol() const override { return Protocol::wiseRoute; }
+
+    // OperationalBase:
+    virtual void handleStartOperation(LifecycleOperation *operation) override {}    //TODO implementation
+    virtual void handleStopOperation(LifecycleOperation *operation) override {}    //TODO implementation
+    virtual void handleCrashOperation(LifecycleOperation *operation) override {}    //TODO implementation
 
   protected:
     enum messagesTypes {

@@ -25,34 +25,34 @@ import inet.networklayer.common.InterfaceTable;
 import inet.physicallayer.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
 import inet.visualizer.contract.IIntegratedVisualizer;
 
-
 module ThroughputClient
 {
     parameters:
         @display("i=device/wifilaptop");
         @networkNode();
         *.interfaceTableModule = "^.interfaceTable";
+        wlan.radio.antenna.mobilityModule = default("^.^.^.mobility");
     gates:
         input radioIn @directIn;
 
     submodules:
         cli: EtherAppClient {
             parameters:
-                registerSAP = false;
-                @display("b=40,24;p=180,60,col");
+                @display("p=300,100");
         }
         wlan: Ieee80211Interface {
             parameters:
-                @display("p=112,134;q=queue");
-                mgmtType = default("Ieee80211MgmtStaSimplified");
+                @display("p=250,200;q=queue");
+                mgmt.typename = "Ieee80211MgmtStaSimplified";
+                agent.typename = "";
         }
         interfaceTable: InterfaceTable {
             parameters:
-                @display("p=50,50;is=s");
+                @display("p=100,100;is=s");
         }
         mobility: StationaryMobility {
             parameters:
-                @display("p=50,141;is=s");
+                @display("p=100,200;is=s");
         }
     connections allowunconnected:
         wlan.radioIn <-- radioIn;
@@ -63,15 +63,14 @@ network Throughput
 {
     parameters:
         int numCli;
-        @display("b=297,203");
     submodules:
         visualizer: <default("IntegratedCanvasVisualizer")> like IIntegratedVisualizer if hasVisualizer() {
             parameters:
-                @display("p=100,50");
+                @display("p=100,200;is=s");
         }
         radioMedium: Ieee80211ScalarRadioMedium {
             parameters:
-                @display("p=100,150");
+                @display("p=100,100;is=s");
         }
         cliHost[numCli]: ThroughputClient {
             parameters:

@@ -15,19 +15,18 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
+#include "inet/common/ModuleAccess.h"
+#include "inet/common/Simsignals.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
-#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
-
-#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 
 #ifdef WITH_ETHERNET
 #include "inet/linklayer/ethernet/EtherFrame_m.h"
 #endif // ifdef WITH_ETHERNET
 
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.h"
 #include "inet/physicallayer/ieee80211/packetlevel/Ieee80211Radio.h"
-#include "inet/common/ModuleAccess.h"
-#include "inet/common/Simsignals.h"
 
 namespace inet {
 
@@ -76,10 +75,6 @@ void Ieee80211MgmtAp::initialize(int stage)
         // start beacon timer (randomize startup time)
         beaconTimer = new cMessage("beaconTimer");
     }
-    else if (stage == INITSTAGE_LINK_LAYER) {
-        if (isOperational)
-            scheduleAt(simTime() + uniform(0, beaconInterval), beaconTimer);
-    }
 }
 
 void Ieee80211MgmtAp::handleTimer(cMessage *msg)
@@ -98,7 +93,7 @@ void Ieee80211MgmtAp::handleCommand(int msgkind, cObject *ctrl)
     throw cRuntimeError("handleCommand(): no commands supported");
 }
 
-void Ieee80211MgmtAp::receiveSignal(cComponent *source, simsignal_t signalID, long value, cObject *details)
+void Ieee80211MgmtAp::receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details)
 {
     Enter_Method_Silent();
     if (signalID == Ieee80211Radio::radioChannelChangedSignal) {
@@ -116,8 +111,8 @@ Ieee80211MgmtAp::StaInfo *Ieee80211MgmtAp::lookupSenderSTA(const Ptr<const Ieee8
 void Ieee80211MgmtAp::sendManagementFrame(const char *name, const Ptr<Ieee80211MgmtFrame>& body, int subtype, const MacAddress& destAddr)
 {
     auto packet = new Packet(name);
-    packet->addTagIfAbsent<MacAddressReq>()->setDestAddress(destAddr);
-    packet->addTagIfAbsent<Ieee80211SubtypeReq>()->setSubtype(subtype);
+    packet->addTag<MacAddressReq>()->setDestAddress(destAddr);
+    packet->addTag<Ieee80211SubtypeReq>()->setSubtype(subtype);
     packet->insertAtBack(body);
     sendDown(packet);
 }

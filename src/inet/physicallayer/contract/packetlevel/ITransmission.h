@@ -18,17 +18,16 @@
 #ifndef __INET_ITRANSMISSION_H
 #define __INET_ITRANSMISSION_H
 
-#include "inet/common/geometry/common/Coord.h"
-#include "inet/common/geometry/common/EulerAngles.h"
-#include "inet/common/packet/Packet.h"
 #include "inet/common/Units.h"
+#include "inet/common/geometry/common/Coord.h"
+#include "inet/common/geometry/common/Quaternion.h"
+#include "inet/common/packet/Packet.h"
 #include "inet/physicallayer/contract/bitlevel/ISignalAnalogModel.h"
 #include "inet/physicallayer/contract/packetlevel/IAntennaGain.h"
 #include "inet/physicallayer/contract/packetlevel/IPrintableObject.h"
 #include "inet/physicallayer/contract/packetlevel/IRadioSignal.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 class IRadio;
@@ -142,12 +141,12 @@ class INET_API ITransmission : public IPrintableObject
     /**
      * Returns the antenna's orientation when the transmitter started this transmission.
      */
-    virtual const EulerAngles& getStartOrientation() const = 0;
+    virtual const Quaternion& getStartOrientation() const = 0;
 
     /**
      * Returns the antenna's orientation when the transmitter ended this transmission.
      */
-    virtual const EulerAngles& getEndOrientation() const = 0;
+    virtual const Quaternion& getEndOrientation() const = 0;
 
     /**
      * Returns the analog model of the transmitted signal.
@@ -156,7 +155,6 @@ class INET_API ITransmission : public IPrintableObject
 };
 
 } // namespace physicallayer
-
 } // namespace inet
 
 #endif // ifndef __INET_ITRANSMISSION_H

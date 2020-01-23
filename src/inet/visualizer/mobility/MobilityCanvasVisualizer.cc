@@ -43,9 +43,9 @@ void MobilityCanvasVisualizer::initialize(int stage)
 {
     MobilityVisualizerBase::initialize(stage);
     if (!hasGUI()) return;
-    if (stage == INITSTAGE_PHYSICAL_ENVIRONMENT) {
+    if (stage == INITSTAGE_LOCAL) {
         zIndex = par("zIndex");
-        canvasProjection = CanvasProjection::getCanvasProjection(visualizerTargetModule->getCanvas());
+        canvasProjection = CanvasProjection::getCanvasProjection(visualizationTargetModule->getCanvas());
     }
 }
 
@@ -59,15 +59,15 @@ void MobilityCanvasVisualizer::refreshDisplay() const
         auto orientation = mobility->getCurrentAngularPosition();
         auto velocity = canvasProjection->computeCanvasPoint(mobility->getCurrentVelocity());
         if (displayPositions) {
-            double radius = positionCircleRadius / getEnvir()->getZoomLevel(visualizerTargetModule);
+            double radius = positionCircleRadius / getEnvir()->getZoomLevel(visualizationTargetModule);
             mobilityVisualization->positionFigure->setBounds(cFigure::Rectangle(position.x - radius, position.y - radius, 2 * radius, 2 * radius));
         }
         if (displayOrientations) {
             // NOTE: this negation cancels out the (incorrect) CCW angle handling of cPieSliceFigure (see bug https://dev.omnetpp.org/bugs/view.php?id=1030)
-            auto angle = -orientation.alpha;
+            auto angle = -orientation.toEulerAngles().alpha;
             mobilityVisualization->orientationFigure->setStartAngle(rad(angle - rad(M_PI) * orientationPieSize).get());
             mobilityVisualization->orientationFigure->setEndAngle(rad(angle + rad(M_PI) * orientationPieSize).get());
-            double radius = orientationPieRadius / getEnvir()->getZoomLevel(visualizerTargetModule);
+            double radius = orientationPieRadius / getEnvir()->getZoomLevel(visualizationTargetModule);
             mobilityVisualization->orientationFigure->setBounds(cFigure::Rectangle(position.x - radius, position.y - radius, 2 * radius, 2 * radius));
         }
         if (displayVelocities) {
@@ -78,7 +78,7 @@ void MobilityCanvasVisualizer::refreshDisplay() const
         if (displayMovementTrails)
             extendMovementTrail(mobility, mobilityVisualization->trailFigure, position);
     }
-    visualizerTargetModule->getCanvas()->setAnimationSpeed(mobilityVisualizations.empty() ? 0 : animationSpeed, this);
+    visualizationTargetModule->getCanvas()->setAnimationSpeed(mobilityVisualizations.empty() ? 0 : animationSpeed, this);
 }
 
 MobilityCanvasVisualizer::MobilityCanvasVisualization *MobilityCanvasVisualizer::getMobilityVisualization(const IMobility *mobility) const
@@ -104,7 +104,7 @@ MobilityCanvasVisualizer::MobilityCanvasVisualization* MobilityCanvasVisualizer:
 {
     auto mobilityVisualization = getMobilityVisualization(mobility);
     if (mobilityVisualization == nullptr) {
-        auto canvas = visualizerTargetModule->getCanvas();
+        auto canvas = visualizationTargetModule->getCanvas();
         auto module = const_cast<cModule *>(check_and_cast<const cModule *>(mobility));
         cOvalFigure *positionFigure = nullptr;
         if (displayPositions) {
@@ -191,6 +191,12 @@ void MobilityCanvasVisualizer::receiveSignal(cComponent *source, simsignal_t sig
     if (signal == IMobility::mobilityStateChangedSignal) {
         if (moduleFilter.matches(check_and_cast<cModule *>(source)))
             ensureMobilityVisualization(dynamic_cast<IMobility *>(source));
+    }
+    else if (signal == PRE_MODEL_CHANGE) {
+        if (dynamic_cast<cPreModuleDeleteNotification *>(object)) {
+            if (auto mobility = dynamic_cast<IMobility *>(source))
+                removeMobilityVisualization(mobility);
+        }
     }
     else
         throw cRuntimeError("Unknown signal");

@@ -17,8 +17,8 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/networklayer/wiseroute/WiseRouteHeader_m.h"
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
+#include "inet/networklayer/wiseroute/WiseRouteHeader_m.h"
 #include "inet/networklayer/wiseroute/WiseRouteProtocolDissector.h"
 
 
@@ -26,7 +26,7 @@ namespace inet {
 
 Register_Protocol_Dissector(&Protocol::wiseRoute, WiseRouteProtocolDissector);
 
-void WiseRouteProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void WiseRouteProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     auto header = packet->popAtFront<WiseRouteHeader>();
     auto trailerPopOffset = packet->getBackOffset();

@@ -15,12 +15,11 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "Ieee80211OfdmMode.h"
 #include "inet/physicallayer/ieee80211/bitlevel/Ieee80211OfdmDefs.h"
-#include "Ieee80211OfdmModulation.h"
+#include "inet/physicallayer/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/ieee80211/mode/Ieee80211OfdmModulation.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 
@@ -361,7 +360,7 @@ const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode18MbpsCS10M
 const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode18MbpsCS20MHz(&Ieee80211OfdmCompliantCodes::ofdmCC3_4QPSKInterleaving, &Ieee80211OfdmCompliantModulations::qpskModulation, MHz(20), MHz(20));
 const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode24MbpsCS10MHz(&Ieee80211OfdmCompliantCodes::ofdmCC2_3QAM64Interleaving, &Ieee80211OfdmCompliantModulations::qam64Modulation, MHz(10), MHz(20));
 const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode24MbpsCS20MHz(&Ieee80211OfdmCompliantCodes::ofdmCC1_2QAM16Interleaving, &Ieee80211OfdmCompliantModulations::qam16Modulation, MHz(20), MHz(20));
-const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode27Mbps(&Ieee80211OfdmCompliantCodes::ofdmCC2_3QAM64Interleaving, &Ieee80211OfdmCompliantModulations::qam64Modulation, MHz(20), MHz(20));
+const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode27Mbps(&Ieee80211OfdmCompliantCodes::ofdmCC3_4QAM64Interleaving, &Ieee80211OfdmCompliantModulations::qam64Modulation, MHz(10), MHz(20));
 const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode36Mbps(&Ieee80211OfdmCompliantCodes::ofdmCC3_4QAM16Interleaving, &Ieee80211OfdmCompliantModulations::qam16Modulation, MHz(20), MHz(20));
 const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode48Mbps(&Ieee80211OfdmCompliantCodes::ofdmCC2_3QAM64Interleaving, &Ieee80211OfdmCompliantModulations::qam64Modulation, MHz(20), MHz(20));
 const Ieee80211OfdmDataMode Ieee80211OfdmCompliantModes::ofdmDataMode54Mbps(&Ieee80211OfdmCompliantCodes::ofdmCC3_4QAM64Interleaving, &Ieee80211OfdmCompliantModulations::qam64Modulation, MHz(20), MHz(20));
@@ -393,5 +392,5 @@ const Ieee80211OfdmMode Ieee80211OfdmCompliantModes::ofdmMode48Mbps("ofdmMode48M
 const Ieee80211OfdmMode Ieee80211OfdmCompliantModes::ofdmMode54Mbps("ofdmMode54Mbps", &Ieee80211OfdmCompliantModes::ofdmPreambleModeCS20MHz, &Ieee80211OfdmCompliantModes::ofdmHeaderMode6MbpsRate3, &Ieee80211OfdmCompliantModes::ofdmDataMode54Mbps, MHz(20), MHz(20));
 
 } // namespace physicallayer
-
 } // namespace inet
+

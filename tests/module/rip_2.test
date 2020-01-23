@@ -20,6 +20,7 @@ It is checked that:
 %#--------------------------------------------------------------------------------------------------------------
 %file: test.ned
 
+import inet.test.moduletest.lib.*;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.inet.StandardHost;
 import inet.node.rip.RipRouter;
@@ -74,6 +75,7 @@ network Test1
 <RIPConfig>
   <interface among="R1 RB" metric="2"/>
   <interface among="R? R?" metric="1"/>
+  <interface source="R?" dest="H?" mode="PASSIVE" metric="1"/>
 </RIPConfig>
 
 %#--------------------------------------------------------------------------------------------------------------
@@ -107,7 +109,6 @@ ned-path = .;../../../../src;../../lib
 # record-eventlog = true
 # cmdenv-express-mode = false
 # debug-on-errors = true
-tkenv-plugin-path = ../../../etc/plugins
 sim-time-limit = 600s
 
 #omnetpp 5.0 - 5.1 compatibility:
@@ -147,6 +148,7 @@ R1 220
 192.168.1.0/30 <unspec> eth0 IFACENETMASK .*
 192.168.2.0/30 10.0.0.6 eth2 RIP 4
 R1 430
+10.0.0.0/30 <unspec> eth1 IFACENETMASK .*
 10.0.0.4/30 <unspec> eth2 IFACENETMASK .*
 10.0.0.8/30 10.0.0.2 eth1 RIP 2
 10.0.0.12/30 10.0.0.6 eth2 RIP 3

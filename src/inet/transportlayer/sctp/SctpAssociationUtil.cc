@@ -16,26 +16,22 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include <string.h>
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include "inet/transportlayer/sctp/Sctp.h"
-#include "inet/transportlayer/sctp/SctpAssociation.h"
-#include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
-#include "inet/transportlayer/sctp/SctpQueue.h"
-#include "inet/transportlayer/sctp/SctpAlgorithm.h"
+#include "inet/applications/common/SocketTag_m.h"
+#include "inet/common/INETUtils.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/TimeTag_m.h"
+#include "inet/common/packet/Message.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/contract/IL3AddressType.h"
 #include "inet/networklayer/ipv4/Ipv4RoutingTable.h"
 #include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
 #include "inet/networklayer/common/InterfaceTable.h"
 #include "inet/networklayer/common/IpProtocolId_m.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
-#include "inet/transportlayer/common/L4Tools.h"
-#include "inet/applications/common/SocketTag_m.h"
-#include "inet/transportlayer/udp/UdpHeader_m.h"
-#include "inet/common/TimeTag_m.h"
-#include "inet/linklayer/common/InterfaceTag_m.h"
 
 #ifdef WITH_IPv4
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
@@ -45,10 +41,14 @@
 #include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
 #endif // ifdef WITH_IPv6
 
+#include "inet/transportlayer/common/L4Tools.h"
+#include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
 #include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
-#include "inet/common/INETUtils.h"
-#include "inet/common/ProtocolTag_m.h"
-#include "inet/common/packet/Message.h"
+#include "inet/transportlayer/sctp/Sctp.h"
+#include "inet/transportlayer/sctp/SctpAlgorithm.h"
+#include "inet/transportlayer/sctp/SctpAssociation.h"
+#include "inet/transportlayer/sctp/SctpQueue.h"
+#include "inet/transportlayer/udp/UdpHeader_m.h"
 
 namespace inet {
 
@@ -87,21 +87,21 @@ uint32 SctpAssociation::getBytesInFlightOfStream(uint16 sid)
 {
     auto streamIterator = sendStreams.find(sid);
     assert(streamIterator != sendStreams.end());
-    return (streamIterator->second)->getBytesInFlight();
+    return streamIterator->second->getBytesInFlight();
 }
 
 bool SctpAssociation::orderedQueueEmptyOfStream(uint16 sid)
 {
     auto streamIterator = sendStreams.find(sid);
     assert(streamIterator != sendStreams.end());
-    return (streamIterator->second)->getStreamQ()->isEmpty();
+    return streamIterator->second->getStreamQ()->isEmpty();
 }
 
 bool SctpAssociation::unorderedQueueEmptyOfStream(uint16 sid)
 {
     auto streamIterator = sendStreams.find(sid);
     assert(streamIterator != sendStreams.end());
-    return (streamIterator->second)->getUnorderedStreamQ()->isEmpty();
+    return streamIterator->second->getUnorderedStreamQ()->isEmpty();
 }
 
 
@@ -109,14 +109,14 @@ bool SctpAssociation::getFragInProgressOfStream(uint16 sid)
 {
     auto streamIterator = sendStreams.find(sid);
     assert(streamIterator != sendStreams.end());
-    return (streamIterator->second)->getFragInProgress();
+    return streamIterator->second->getFragInProgress();
 }
 
 void SctpAssociation::setFragInProgressOfStream(uint16 sid, bool frag)
 {
     auto streamIterator = sendStreams.find(sid);
     assert(streamIterator != sendStreams.end());
-    return (streamIterator->second)->setFragInProgress(frag);
+    return streamIterator->second->setFragInProgress(frag);
 }
 
 void SctpAssociation::checkPseudoCumAck(const SctpPathVariables *path)
@@ -146,10 +146,10 @@ void SctpAssociation::printSctpPathMap() const
     }
 }
 
-const char *SctpAssociation::stateName(const int32 state)
+const char *SctpAssociation::stateName(int32 state)
 {
 #define CASE(x)    case x: \
-        s = #x + 7; break
+        s = (char *)#x + 7; break
     const char *s = "unknown";
     switch (state) {
         CASE(SCTP_S_CLOSED);
@@ -165,10 +165,10 @@ const char *SctpAssociation::stateName(const int32 state)
 #undef CASE
 }
 
-const char *SctpAssociation::eventName(const int32 event)
+const char *SctpAssociation::eventName(int32 event)
 {
 #define CASE(x)    case x: \
-        s = #x + 7; break
+        s = (char *)#x + 7; break
     const char *s = "unknown";
     switch (event) {
         CASE(SCTP_E_OPEN_PASSIVE);
@@ -212,10 +212,10 @@ const char *SctpAssociation::eventName(const int32 event)
 }
 
 //TODO move this function to contrib
-const char *SctpAssociation::indicationName(const int32 code)
+const char *SctpAssociation::indicationName(int32 code)
 {
 #define CASE(x)    case x: \
-        s = #x + 7; break
+        s = (char *)#x + 7; break
     const char *s = "unknown";
     switch (code) {
         CASE(SCTP_I_DATA);
@@ -296,7 +296,7 @@ uint16 SctpAssociation::chunkToInt(const char *type)
 
 void SctpAssociation::printAssocBrief()
 {
-    EV_DETAIL << "Connection " << this << " "
+    EV_DETAIL << "Connection " << assocId << " "
               << localAddr << ":" << localPort << " to " << remoteAddr << ":" << remotePort
               << "  on app[" << appGateIndex << "],assocId=" << assocId
               << "  in " << stateName(fsm->getState()) << "\n";
@@ -400,7 +400,7 @@ void SctpAssociation::sendToIP(Packet *pkt, const Ptr<SctpHeader>& sctpmsg,
         auto udpHeader = makeShared<UdpHeader>();
         udpHeader->setSourcePort(SCTP_UDP_PORT);
         udpHeader->setDestinationPort(SCTP_UDP_PORT);
-        udpHeader->setTotalLengthField(B(udpHeader->getChunkLength() + pkt->getTotalLength()).get());
+        udpHeader->setTotalLengthField(udpHeader->getChunkLength() + pkt->getTotalLength());
         EV_INFO << "Packet: " << pkt << endl;
         udpHeader->setCrcMode(sctpMain->crcMode);
         insertTransportProtocolHeader(pkt, Protocol::udp, udpHeader);
@@ -442,22 +442,20 @@ void SctpAssociation::signalConnectionTimeout()
     sendIndicationToApp(SCTP_I_TIMED_OUT);
 }
 
-void SctpAssociation::sendIndicationToApp(const int32 code, const int32 value)
+void SctpAssociation::sendIndicationToApp(int32 code, int32 value)
 {
     EV_INFO << "sendIndicationToApp: " << indicationName(code) << endl;
     assert(code != SCTP_I_SENDQUEUE_ABATED);
 
-    Indication *msg = new Indication(indicationName(code));
-    msg->setKind(code);
+    Indication *msg = new Indication(indicationName(code), code);
 
-    auto& tags = getTags(msg);
-    SctpCommandReq *indication = tags.addTagIfAbsent<SctpCommandReq>();
+    SctpCommandReq *indication = msg->addTag<SctpCommandReq>();
     indication->setSocketId(assocId);
     indication->setLocalAddr(localAddr);
     indication->setLocalPort(localPort);
     indication->setRemoteAddr(remoteAddr);
     indication->setRemotePort(remotePort);
-    msg->addTagIfAbsent<SocketInd>()->setSocketId(assocId);
+    msg->addTag<SocketInd>()->setSocketId(assocId);
     sctpMain->send(msg, "appOut");
 }
 
@@ -466,11 +464,9 @@ void SctpAssociation::sendAvailableIndicationToApp()
     EV_INFO << "sendAvailableIndicationToApp: localPort="
             << localPort << " remotePort=" << remotePort << endl;
 
-    Indication *msg = new Indication(indicationName(SCTP_I_AVAILABLE));
-    msg->setKind(SCTP_I_AVAILABLE);
+    Indication *msg = new Indication(indicationName(SCTP_I_AVAILABLE), SCTP_I_AVAILABLE);
 
-    auto& tags = getTags(msg);
-    auto availableIndication = tags.addTagIfAbsent<SctpAvailableReq>();
+    auto availableIndication = msg->addTag<SctpAvailableReq>();
    // SctpAvailableInfo *availableIndication = new SctpAvailableInfo("SctpAvailableInfo");
     availableIndication->setSocketId(listeningAssocId);
     availableIndication->setLocalAddr(localAddr);
@@ -478,7 +474,7 @@ void SctpAssociation::sendAvailableIndicationToApp()
     availableIndication->setLocalPort(localPort);
     availableIndication->setRemotePort(remotePort);
     availableIndication->setNewSocketId(assocId);
-    msg->addTagIfAbsent<SocketInd>()->setSocketId(listeningAssocId);
+    msg->addTag<SocketInd>()->setSocketId(listeningAssocId);
   //  msg->setControlInfo(availableIndication);
     sctpMain->send(msg, "appOut");
 }
@@ -488,11 +484,9 @@ void SctpAssociation::sendEstabIndicationToApp()
     EV_INFO << "sendEstabIndicationToApp: localPort="
             << localPort << " remotePort=" << remotePort << " assocId=" << assocId << endl;
 
-    Indication *msg = new Indication(indicationName(SCTP_I_ESTABLISHED));
-    msg->setKind(SCTP_I_ESTABLISHED);
+    Indication *msg = new Indication(indicationName(SCTP_I_ESTABLISHED), SCTP_I_ESTABLISHED);
 
-    auto& tags = msg->getTags();
-    auto establishIndication = tags.addTagIfAbsent<SctpConnectReq>();
+    auto establishIndication = msg->addTag<SctpConnectReq>();
    // SctpConnectInfo *establishIndication = new SctpConnectInfo("ConnectInfo");
     establishIndication->setSocketId(assocId);
     establishIndication->setLocalAddr(localAddr);
@@ -503,7 +497,7 @@ void SctpAssociation::sendEstabIndicationToApp()
     establishIndication->setInboundStreams(inboundStreams);
     establishIndication->setOutboundStreams(outboundStreams);
     establishIndication->setNumMsgs(state->sendQueueLimit);
-    msg->addTagIfAbsent<SocketInd>()->setSocketId(assocId);
+    msg->addTag<SocketInd>()->setSocketId(assocId);
    // msg->setControlInfo(establishIndication);
     sctpMain->send(msg, "appOut");
 
@@ -614,16 +608,16 @@ void SctpAssociation::sendInit()
     if (localAddressList.front().isUnspecified()) {
         for (int32 i = 0; i < ift->getNumInterfaces(); ++i) {
 #ifdef WITH_IPv4
-            if (ift->getInterface(i)->ipv4Data() != nullptr) {
-                adv.push_back(ift->getInterface(i)->ipv4Data()->getIPAddress());
+            if (auto ipv4Data = ift->getInterface(i)->findProtocolData<Ipv4InterfaceData>()) {
+                adv.push_back(ipv4Data->getIPAddress());
             }
             else
 #endif // ifdef WITH_IPv4
 #ifdef WITH_IPv6
-            if (ift->getInterface(i)->ipv6Data() != nullptr) {
-                for (int32 j = 0; j < ift->getInterface(i)->ipv6Data()->getNumAddresses(); j++) {
-                    EV_DETAIL << "add address " << ift->getInterface(i)->ipv6Data()->getAddress(j) << "\n";
-                    adv.push_back(ift->getInterface(i)->ipv6Data()->getAddress(j));
+            if (auto ipv6Data = ift->getInterface(i)->findProtocolData<Ipv6InterfaceData>()) {
+                for (int32 j = 0; j < ipv6Data->getNumAddresses(); j++) {
+                    EV_DETAIL << "add address " << ipv6Data->getAddress(j) << "\n";
+                    adv.push_back(ipv6Data->getAddress(j));
                 }
             }
             else
@@ -1871,10 +1865,8 @@ void SctpAssociation::sendDataArrivedNotification(uint16 sid)
 {
     EV_INFO << "SendDataArrivedNotification\n";
 
-    Indication *cmsg = new Indication("SCTP_I_DATA_NOTIFICATION");
-    cmsg->setKind(SCTP_I_DATA_NOTIFICATION);
-    auto& tags = getTags(cmsg);
-    auto cmd = tags.addTagIfAbsent<SctpCommandReq>();
+    Indication *cmsg = new Indication("SCTP_I_DATA_NOTIFICATION", SCTP_I_DATA_NOTIFICATION);
+    auto cmd = cmsg->addTag<SctpCommandReq>();
     cmd->setSocketId(assocId);
     cmd->setSid(sid);
     cmd->setNumMsgs(1);
@@ -2044,7 +2036,7 @@ void SctpAssociation::pushUlp()
                       << ": sid=" << chunk->sid << " ssn=" << chunk->ssn << endl;
 
             SctpSimpleMessage *smsg = check_and_cast<SctpSimpleMessage *>(chunk->userData);
-            auto applicationPacket = new Packet("ApplicationPacket");
+            auto applicationPacket = new Packet("ApplicationPacket", SCTP_I_DATA);
             std::vector<uint8_t> vec;
             int sendBytes = smsg->getDataLen();
             vec.resize(sendBytes);
@@ -2052,9 +2044,8 @@ void SctpAssociation::pushUlp()
                 vec[i] = smsg->getData(i);
             auto applicationData = makeShared<BytesChunk>();
             applicationData->setBytes(vec);
-            auto& tags = getTags(applicationPacket);
-            SctpRcvReq *cmd = tags.addTagIfAbsent<SctpRcvReq>();
-            applicationPacket->setKind(SCTP_I_DATA);
+            applicationData->addTag<CreationTimeTag>()->setCreationTime(smsg->getCreationTime());
+            SctpRcvReq *cmd = applicationPacket->addTag<SctpRcvReq>();
             cmd->setSocketId(assocId);
             cmd->setGate(appGateIndex);
             cmd->setSid(chunk->sid);
@@ -2065,8 +2056,6 @@ void SctpAssociation::pushUlp()
             cmd->setPpid(chunk->ppid);
             cmd->setTsn(chunk->tsn);
             cmd->setCumTsn(state->lastTsnAck);
-            auto creationTimeTag = applicationPacket->addTagIfAbsent<CreationTimeTag>();
-            creationTimeTag->setCreationTime(smsg->getCreationTime());
             applicationPacket->insertAtBack(applicationData);
             state->numMsgsReq[count]--;
             EndToEndDelay->record(simTime() - chunk->firstSendTime);
@@ -2318,8 +2307,8 @@ void SctpAssociation::advancePeerTsn()
 }
 
 SctpDataVariables *SctpAssociation::getOutboundDataChunk(const SctpPathVariables *path,
-        const int32 availableSpace,
-        const int32 availableCwnd)
+        int32 availableSpace,
+        int32 availableCwnd)
 {
     /* are there chunks in the transmission queue ? If Yes -> dequeue and return it */
     EV_INFO << "getOutboundDataChunk(" << path->remoteAddress << "):"
@@ -2575,8 +2564,8 @@ void SctpAssociation::fragmentOutboundDataMsgs() {
 }
 
 SctpDataMsg *SctpAssociation::dequeueOutboundDataMsg(SctpPathVariables *path,
-        const int32 availableSpace,
-        const int32 availableCwnd)
+        int32 availableSpace,
+        int32 availableCwnd)
 {
     SctpDataMsg *datMsg = nullptr;
     cPacketQueue *streamQ = nullptr;
@@ -2630,7 +2619,7 @@ SctpDataMsg *SctpAssociation::dequeueOutboundDataMsg(SctpPathVariables *path,
                     state->lastMsgWasFragment = true;
             }
 
-            EV_DETAIL << "DequeueOutboundDataMsg() found chunk (" << &datMsg << ") in the stream queue " << nextStream << "(" << streamQ << ") queue size=" << streamQ->getLength() << endl;
+            EV_DETAIL << "DequeueOutboundDataMsg() found chunk (" << datMsg->str() << ") in the stream queue " << nextStream << "(" << streamQ << ") queue size=" << streamQ->getLength() << endl;
         }
     }
 
@@ -2841,10 +2830,8 @@ void SctpAssociation::pmClearPathCounter(SctpPathVariables *path)
 void SctpAssociation::pathStatusIndication(const SctpPathVariables *path,
         const bool status)
 {
-    Indication *msg = new Indication("StatusInfo");
-    msg->setKind(SCTP_I_STATUS);
-    auto& tags = getTags(msg);
-    SctpStatusReq *cmd = tags.addTagIfAbsent<SctpStatusReq>();
+    Indication *msg = new Indication("StatusInfo", SCTP_I_STATUS);
+    SctpStatusReq *cmd = msg->addTag<SctpStatusReq>();
     cmd->setPathId(path->remoteAddress);
     cmd->setSocketId(assocId);
     cmd->setActive(status);
@@ -2895,7 +2882,7 @@ bool SctpAssociation::allPathsInactive() const
 
 void SctpAssociation::removeFirstChunk(SctpHeader *sctpmsg)
 {
-    SctpChunk *chunk = sctpmsg->removeChunk();
+    SctpChunk *chunk = sctpmsg->removeFirstChunk();
     delete chunk;
 }
 
@@ -2905,7 +2892,7 @@ void SctpAssociation::disposeOf(SctpHeader *sctpmsg)
     uint32 numberOfChunks = sctpmsg->getSctpChunksArraySize();
     if (numberOfChunks > 0)
         for (uint32 i = 0; i < numberOfChunks; i++) {
-            chunk = sctpmsg->removeChunk();
+            chunk = sctpmsg->removeFirstChunk();
          /*   if (chunk->getSctpChunkType() == DATA) {
                 delete chunk->Chunk::peek<SctpSimpleMessage>(Chunk::BackwardIterator(B(0)));
             }*/

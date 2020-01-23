@@ -16,6 +16,7 @@
  */
 
 #include <ctype.h>
+
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/networklayer/common/InterfaceToken.h"
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
@@ -29,6 +30,9 @@ const MacAddress MacAddress::UNSPECIFIED_ADDRESS;
 const MacAddress MacAddress::BROADCAST_ADDRESS("ff:ff:ff:ff:ff:ff");
 const MacAddress MacAddress::MULTICAST_PAUSE_ADDRESS("01:80:C2:00:00:01");
 const MacAddress MacAddress::STP_MULTICAST_ADDRESS("01:80:C2:00:00:00");
+
+const MacAddress MacAddress::CDP_MULTICAST_ADDRESS("01:00:0C:CC:CC:CC");
+const MacAddress MacAddress::LLDP_MULTICAST_ADDRESS("01:80:C2:00:00:0E");
 
 unsigned char MacAddress::getAddressByte(unsigned int k) const
 {

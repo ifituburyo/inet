@@ -4,23 +4,18 @@
 
 package inet.node.gpsr;
 
-import inet.node.inet.WirelessHost;
+import inet.node.inet.AdhocHost;
 import inet.routing.gpsr.Gpsr;
 
-module GpsrRouter extends WirelessHost
+module GpsrRouter extends AdhocHost
 {
-    parameters:
-        @display("i=device/cellphone");
-        forwarding = true;
-        wlan[*].mgmtType = default("Ieee80211MgmtAdhoc");
-
     submodules:
         gpsr: Gpsr {
             parameters:
-                @display("p=700,300");
+                @display("p=825,226");
         }
-
     connections:
         gpsr.ipOut --> tn.in++;
         gpsr.ipIn <-- tn.out++;
 }
+

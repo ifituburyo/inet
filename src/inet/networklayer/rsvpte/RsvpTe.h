@@ -18,15 +18,14 @@
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/common/scenario/IScriptable.h"
 #include "inet/networklayer/rsvpte/IntServ_m.h"
+#include "inet/networklayer/rsvpte/IRsvpClassifier.h"
+#include "inet/networklayer/rsvpte/RsvpHelloMsg_m.h"
 #include "inet/networklayer/rsvpte/RsvpPathMsg_m.h"
 #include "inet/networklayer/rsvpte/RsvpResvMsg_m.h"
-#include "inet/networklayer/rsvpte/RsvpHelloMsg_m.h"
 #include "inet/networklayer/rsvpte/SignallingMsg_m.h"
-#include "inet/networklayer/rsvpte/IRsvpClassifier.h"
-#include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/routing/base/RoutingProtocolBase.h"
 
 namespace inet {
 
@@ -39,7 +38,7 @@ class LibTable;
 /**
  * TODO documentation
  */
-class INET_API RsvpTe : public cSimpleModule, public IScriptable, public ILifecycle
+class INET_API RsvpTe : public RoutingProtocolBase, public IScriptable
 {
   protected:
 
@@ -285,10 +284,12 @@ class INET_API RsvpTe : public cSimpleModule, public IScriptable, public ILifecy
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void handleMessageWhenUp(cMessage *msg) override;
 
     virtual void clear();
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
     // IScriptable implementation
     virtual void processCommand(const cXMLElement& node) override;

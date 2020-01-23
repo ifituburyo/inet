@@ -17,11 +17,11 @@
 // author: Zoltan Bojthe
 //
 
-
 package inet.linklayer.acking;
 
-import inet.common.queue.IOutputQueue;
+import inet.queueing.contract.IPacketQueue;
 import inet.linklayer.contract.IWirelessInterface;
+import inet.networklayer.common.InterfaceEntry;
 import inet.physicallayer.contract.packetlevel.IRadio;
 
 //
@@ -37,16 +37,14 @@ import inet.physicallayer.contract.packetlevel.IRadio;
 //
 // This module requires an ~UnitDiskRadioMedium instance in the network.
 //
-module AckingWirelessInterface like IWirelessInterface
+module AckingWirelessInterface extends InterfaceEntry like IWirelessInterface
 {
     parameters:
         @class(InterfaceEntry);
-        @display("i=block/ifcard;bgb=214,335;bgl=53");
+        @display("i=block/ifcard");
         string interfaceTableModule;
         string energySourceModule = default("");
         double bitrate @unit(bps);
-        string queueType = default("DropTailQueue");    // DropTailQueue, a Diffserv queue, etc.
-        string radioType = default("UnitDiskRadio");
         *.interfaceTableModule = default(absPath(interfaceTableModule));
         *.energySourceModule = default(absPath(energySourceModule));
         **.bitrate = bitrate;
@@ -55,23 +53,19 @@ module AckingWirelessInterface like IWirelessInterface
         output upperLayerOut;
         input radioIn @labels(Signal);
     submodules:
-        queue: <queueType> like IOutputQueue {
-            parameters:
-                @display("p=23,125;q=l2queue");
-        }
         mac: AckingMac {
             parameters:
-                @display("p=98,207");
+                @display("p=100,100");
         }
-        radio: <radioType> like IRadio {
+        radio: <default("UnitDiskRadio")> like IRadio {
             parameters:
-                @display("p=98,278");
+                @display("p=100,200");
         }
     connections:
-        upperLayerIn --> { @display("m=n"); } --> queue.in;
-        queue.out --> mac.upperLayerIn;
+        upperLayerIn --> { @display("m=n"); } --> mac.upperLayerIn;
         mac.lowerLayerOut --> radio.upperLayerIn;
         mac.upperLayerOut --> { @display("m=n"); } --> upperLayerOut;
         radioIn --> { @display("m=s"); } --> radio.radioIn;
         radio.upperLayerOut --> mac.lowerLayerIn;
 }
+

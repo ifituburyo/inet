@@ -27,7 +27,7 @@ class INET_API AttachedMobility : public MobilityBase, public cListener
   protected:
     IMobility *mobility = nullptr;
     Coord positionOffset = Coord::NIL;
-    EulerAngles orientationOffset = EulerAngles::NIL;
+    Quaternion orientationOffset = Quaternion::NIL;
     bool isZeroOffset = false;
 
   protected:
@@ -36,13 +36,13 @@ class INET_API AttachedMobility : public MobilityBase, public cListener
     virtual void handleSelfMessage(cMessage *msg) override { throw cRuntimeError("Unknown self message"); }
 
   public:
-    virtual Coord getCurrentPosition();
-    virtual Coord getCurrentVelocity();
-    virtual Coord getCurrentAcceleration();
+    virtual Coord getCurrentPosition() override;
+    virtual Coord getCurrentVelocity() override;
+    virtual Coord getCurrentAcceleration() override;
 
-    virtual EulerAngles getCurrentAngularPosition();
-    virtual EulerAngles getCurrentAngularVelocity();
-    virtual EulerAngles getCurrentAngularAcceleration();
+    virtual Quaternion getCurrentAngularPosition() override;
+    virtual Quaternion getCurrentAngularVelocity() override;
+    virtual Quaternion getCurrentAngularAcceleration() override;
 
     virtual void receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *details) override;
 };

@@ -17,9 +17,9 @@
 // Author: Benjamin Martin Seregi
 //
 
-#include "inet/linklayer/ieee8021d/tester/StpTester.h"
-#include "inet/linklayer/configurator/Ieee8021dInterfaceData.h"
 #include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/linklayer/configurator/Ieee8021dInterfaceData.h"
+#include "inet/linklayer/ieee8021d/tester/StpTester.h"
 
 namespace inet {
 
@@ -99,13 +99,15 @@ void StpTester::dfsVisit(Topology::Node *node)
         // If we found a port which is in state discarding,
         // then we do not expand this link
 
-        if (!isForwarding(node, i))
+        int localGateIndex = node->getModule()->isGateVector("ethg$o") ? i : -1;
+        if (!isForwarding(node, localGateIndex))
             continue;
 
         // If we found a port that points to a remote port which is in state
         // discarding, then we also do not expand this link
 
-        int remotePort = linkOut->getRemoteGate()->getIndex();
+        auto remoteGate = linkOut->getRemoteGate();
+        int remotePort = remoteGate->isVector() ? remoteGate->getIndex() : -1;
         if (!isForwarding(neighbor, remotePort))
             continue;
 
@@ -156,8 +158,8 @@ bool StpTester::isForwarding(Topology::Node *node, unsigned int portNum)
         return true;
 
     cGate *gate = node->getModule()->gate("ethg$o", portNum);
-    InterfaceEntry *gateIfEntry = ifTable->getInterfaceByNodeOutputGateId(gate->getId());
-    Ieee8021dInterfaceData *portData = gateIfEntry->ieee8021dData();
+    InterfaceEntry *gateIfEntry = CHK(ifTable->findInterfaceByNodeOutputGateId(gate->getId()));
+    Ieee8021dInterfaceData *portData = gateIfEntry->findProtocolData<Ieee8021dInterfaceData>();
 
     // If portData does not exist, then it implies that
     // the node is not a switch

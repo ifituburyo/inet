@@ -18,10 +18,9 @@
 
 #include <algorithm>
 
-#include "inet/networklayer/configurator/ipv6/Ipv6FlatNetworkConfigurator.h"
-
-#include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/networklayer/configurator/ipv6/Ipv6FlatNetworkConfigurator.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
 #include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
 
@@ -35,7 +34,7 @@ void Ipv6FlatNetworkConfigurator::initialize(int stage)
 {
     cSimpleModule::initialize(stage);
 
-    if (stage == INITSTAGE_NETWORK_LAYER_2) {
+    if (stage == INITSTAGE_NETWORK_CONFIGURATION) {
         cTopology topo("topo");
 
         // extract topology
@@ -94,9 +93,10 @@ void Ipv6FlatNetworkConfigurator::configureAdvPrefixes(cTopology& topo)
         // assign prefix to interfaces
         for (int k = 0; k < ift->getNumInterfaces(); k++) {
             InterfaceEntry *ie = ift->getInterface(k);
-            if (!ie->ipv6Data() || ie->isLoopback())
+            auto ipv6Data = ie->findProtocolData<Ipv6InterfaceData>();
+            if (!ipv6Data || ie->isLoopback())
                 continue;
-            if (ie->ipv6Data()->getNumAdvPrefixes() > 0)
+            if (ipv6Data->getNumAdvPrefixes() > 0)
                 continue; // already has one
 
             // add a prefix
@@ -120,11 +120,11 @@ void Ipv6FlatNetworkConfigurator::configureAdvPrefixes(cTopology& topo)
 #ifdef WITH_xMIPv6
             p.advRtrAddr = false;
 #endif
-            ie->ipv6Data()->addAdvPrefix(p);
+            ipv6Data->addAdvPrefix(p);
 
             // add a link-local address (tentative) if it doesn't have one
-            if (ie->ipv6Data()->getLinkLocalAddress().isUnspecified())
-                ie->ipv6Data()->assignAddress(Ipv6Address::formLinkLocalAddress(ie->getInterfaceToken()), true, SIMTIME_ZERO, SIMTIME_ZERO);
+            if (ipv6Data->getLinkLocalAddress().isUnspecified())
+                ipv6Data->assignAddress(Ipv6Address::formLinkLocalAddress(ie->getInterfaceToken()), true, SIMTIME_ZERO, SIMTIME_ZERO);
         }
     }
 }
@@ -156,11 +156,11 @@ void Ipv6FlatNetworkConfigurator::addOwnAdvPrefixRoutes(cTopology& topo)
 
             if (ie->isLoopback())
                 continue;
-
-            for (int y = 0; y < ie->ipv6Data()->getNumAdvPrefixes(); y++)
-                if (ie->ipv6Data()->getAdvPrefix(y).prefix.isGlobal())
-                    rt->addOrUpdateOwnAdvPrefix(ie->ipv6Data()->getAdvPrefix(y).prefix,
-                            ie->ipv6Data()->getAdvPrefix(y).prefixLength,
+            auto ipv6Data = ie->getProtocolData<Ipv6InterfaceData>();
+            for (int y = 0; y < ipv6Data->getNumAdvPrefixes(); y++)
+                if (ipv6Data->getAdvPrefix(y).prefix.isGlobal())
+                    rt->addOrUpdateOwnAdvPrefix(ipv6Data->getAdvPrefix(y).prefix,
+                            ipv6Data->getAdvPrefix(y).prefixLength,
                             ie->getInterfaceId(), SIMTIME_ZERO);
 
         }
@@ -206,10 +206,10 @@ void Ipv6FlatNetworkConfigurator::addStaticRoutes(cTopology& topo)
             if (destIf->isLoopback())
                 continue;
 
-            for (int y = 0; y < destIf->ipv6Data()->getNumAdvPrefixes(); y++)
-                if (destIf->ipv6Data()->getAdvPrefix(y).prefix.isGlobal())
-                    destPrefixes.push_back(&destIf->ipv6Data()->getAdvPrefix(y));
-
+            auto ipv6Data = destIf->getProtocolData<Ipv6InterfaceData>();
+            for (int y = 0; y < ipv6Data->getNumAdvPrefixes(); y++)
+                if (ipv6Data->getAdvPrefix(y).prefix.isGlobal())
+                    destPrefixes.push_back(&ipv6Data->getAdvPrefix(y));
         }
 
         std::string destModName = destNode->getModule()->getFullName();
@@ -241,7 +241,7 @@ void Ipv6FlatNetworkConfigurator::addStaticRoutes(cTopology& topo)
 
             // determine the local interface id
             cGate *localGate = atNode->getPath(0)->getLocalGate();
-            InterfaceEntry *localIf = ift->getInterfaceByNodeOutputGateId(localGate->getId());
+            InterfaceEntry *localIf = CHK(ift->findInterfaceByNodeOutputGateId(localGate->getId()));
 
             // determine next hop link address. That's a bit tricky because
             // the directly adjacent cTopo node might be a non-IP getNode(ethernet switch etc)
@@ -256,10 +256,10 @@ void Ipv6FlatNetworkConfigurator::addStaticRoutes(cTopology& topo)
             cGate *remoteGate = prevNode->getPath(0)->getRemoteGate();
             cModule *nextHop = remoteGate->getOwnerModule();
             IInterfaceTable *nextHopIft = L3AddressResolver().interfaceTableOf(nextHop);
-            InterfaceEntry *nextHopOnlinkIf = nextHopIft->getInterfaceByNodeInputGateId(remoteGate->getId());
+            InterfaceEntry *nextHopOnlinkIf = CHK(nextHopIft->findInterfaceByNodeInputGateId(remoteGate->getId()));
 
             // find link-local address for next hop
-            Ipv6Address nextHopLinkLocalAddr = nextHopOnlinkIf->ipv6Data()->getLinkLocalAddress();
+            Ipv6Address nextHopLinkLocalAddr = nextHopOnlinkIf->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress();
 
             // traverse through address of each node
             // add to route table

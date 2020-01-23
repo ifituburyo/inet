@@ -30,7 +30,7 @@ package inet.networklayer.ipv4;
 // IGMP messages. They must be connected to the routerIn/routerOut gates,
 // the IGMP module will pass up the unrecognized IGMP packets.
 //
-// @see Igmpv2
+// @see ~Igmpv2
 //
 moduleinterface IIgmp
 {
@@ -43,3 +43,4 @@ moduleinterface IIgmp
         input routerIn @labels(Ipv4ControlInfo/up);
         output routerOut @labels(Ipv4ControlInfo/down);
 }
+

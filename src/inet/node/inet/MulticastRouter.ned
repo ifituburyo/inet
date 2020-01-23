@@ -20,6 +20,7 @@ package inet.node.inet;
 module MulticastRouter extends Router
 {
     parameters:
-        hasPIM = default(true);
+        hasPim = default(true);
         multicastForwarding = true;
 }
+

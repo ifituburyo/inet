@@ -15,8 +15,8 @@
 // along with this program; if not, see http://www.gnu.org/licenses/.
 //
 
-#include "inet/linklayer/ieee80211/mac/fragmentation/Defragmentation.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/fragmentation/Defragmentation.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -25,11 +25,12 @@ Register_Class(Defragmentation);
 
 Packet *Defragmentation::defragmentFrames(std::vector<Packet *> *fragmentFrames)
 {
+    EV_DEBUG << "Defragmenting " << fragmentFrames->size() << " fragments.\n";
     auto defragmentedFrame = new Packet();
     const auto& defragmentedHeader = staticPtrCast<Ieee80211DataOrMgmtHeader>(fragmentFrames->at(0)->peekAtFront<Ieee80211DataOrMgmtHeader>()->dupShared());
     for (auto fragmentFrame : *fragmentFrames) {
         fragmentFrame->popAtFront<Ieee80211DataOrMgmtHeader>();
-        fragmentFrame->popAtBack<Ieee80211MacTrailer>();
+        fragmentFrame->popAtBack<Ieee80211MacTrailer>(B(4));
         defragmentedFrame->insertAtBack(fragmentFrame->peekData());
         std::string defragmentedName(fragmentFrame->getName());
         auto index = defragmentedName.find("-frag");
@@ -40,6 +41,7 @@ Packet *Defragmentation::defragmentFrames(std::vector<Packet *> *fragmentFrames)
     defragmentedHeader->setMoreFragments(false);
     defragmentedFrame->insertAtFront(defragmentedHeader);
     defragmentedFrame->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    EV_TRACE << "Created " << *defragmentedFrame << ".\n";
     return defragmentedFrame;
 }
 

@@ -16,13 +16,13 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/transportlayer/tcp_lwip/queues/TcpLwipQueues.h"
 
-#include "inet/common/serializer/tcp/TcpHeaderSerializer.h"
 #include "inet/common/packet/serializer/BytesChunkSerializer.h"
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
-#include "inet/transportlayer/tcp_lwip/TcpLwipConnection.h"
 #include "inet/transportlayer/tcp_common/TcpHeader.h"
+#include "inet/transportlayer/tcp_common/TcpHeaderSerializer.h"
+#include "inet/transportlayer/tcp_lwip/TcpLwipConnection.h"
+#include "inet/transportlayer/tcp_lwip/queues/TcpLwipQueues.h"
 
 namespace inet {
 
@@ -149,8 +149,7 @@ Packet *TcpLwipReceiveQueue::extractBytesUpTo()
     b queueLength = dataBuffer.getLength();
 
     if (queueLength > b(0)) {
-        dataMsg = new Packet("DATA");
-        dataMsg->setKind(TCP_I_DATA);
+        dataMsg = new Packet("DATA", TCP_I_DATA);
         const auto& data = dataBuffer.pop<Chunk>(queueLength);
         dataMsg->insertAtBack(data);
     }

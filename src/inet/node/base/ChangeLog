@@ -1,5 +1,42 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-11-06  Levente Mészáros
+
+	Removed numExtInterfaces parameter, ext[*] submodule vector.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-12-17  Zoltan Bojthe
+
+	Changed TransportLayerNodeBase hasUdp and hasTcp parameter default values to depend on the available modules.
+
+2018-12-17  Zoltan Bojthe
+
+	Moved IVlanInterface to linklayer/contract folder.
+
+2018-10-10  Levente Mészáros
+
+	Added vlan interfaces to network nodes.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-05  Levente Mészáros
+
+	Added deep parameter assignments for antenna.mobilityModule.
+	Replaced fooType NED parameters with foo.typename parameters.
+
+2018-04-25  Gyorgy Szaszko
+
+	Added canvasImage and canvasImageColor parameters to NodeBase.
+
+2018-04-06  Andras Varga
+
+	Added reference to hasGn parameter in NetworkLayerNodeBase submodule condition.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-07  Zoltan Bojthe
 
 	Added numPppInterfaces and numEthInterfaces to allow configuring the number

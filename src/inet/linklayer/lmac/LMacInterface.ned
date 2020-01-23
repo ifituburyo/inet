@@ -19,11 +19,10 @@ package inet.linklayer.lmac;
 
 import inet.linklayer.common.WirelessInterface;
 
-
 module LMacInterface extends WirelessInterface
 {
     parameters:
-        radioType = default("ApskScalarRadio");
-        macType = "LMac";
+        radio.typename = default("ApskScalarRadio");
+        mac.typename = "LMac";
 }
 

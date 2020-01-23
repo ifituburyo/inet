@@ -16,15 +16,14 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include <stdio.h>
 #include <sstream>
-
-#include "inet/networklayer/ipv4/Ipv4Route.h"
-#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
-#include "inet/networklayer/ipv4/Ipv4RoutingTable.h"
+#include <stdio.h>
 
 #include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
+#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
+#include "inet/networklayer/ipv4/Ipv4Route.h"
+#include "inet/networklayer/ipv4/Ipv4RoutingTable.h"
 
 namespace inet {
 
@@ -36,38 +35,63 @@ Ipv4Route::~Ipv4Route()
     delete protocolData;
 }
 
+const char* inet::Ipv4Route::getSourceTypeAbbreviation() const {
+    switch (sourceType) {
+        case IFACENETMASK:
+            return "C";
+        case MANUAL:
+            return (getDestination().isUnspecified() ? "S*": "S");
+        case ROUTER_ADVERTISEMENT:
+            return "ra";
+        case RIP:
+            return "R";
+        case OSPF:
+            return "O";
+        case BGP:
+            return "B";
+        case EIGRP:
+            return getAdminDist() < Ipv4Route::dEIGRPExternal ? "D" : "D EX";
+        case LISP:
+            return "l";
+        case BABEL:
+            return "ba";
+        case ODR:
+            return "o";
+        default:
+            return "???";
+    }
+}
+
 std::string Ipv4Route::str() const
 {
     std::stringstream out;
-
-    out << "dest:";
-    if (dest.isUnspecified())
-        out << "*  ";
+    out << getSourceTypeAbbreviation();
+    if (getDestination().isUnspecified())
+        out << " 0.0.0.0";
     else
-        out << dest << "  ";
-    out << "gw:";
+        out << " " << getDestination();
+    out << "/";
+    if (getNetmask().isUnspecified())
+        out << "0";
+    else
+        out << getNetmask().getNetmaskLength();
+    out << " gw:";
     if (gateway.isUnspecified())
-        out << "*  ";
+        out << "*";
     else
-        out << gateway << "  ";
-    out << "mask:";
-    if (netmask.isUnspecified())
-        out << "*  ";
-    else
-        out << netmask << "  ";
-    out << "metric:" << metric << " ";
-    out << "if:";
+        out << getGateway();
+    if(rt && rt->isAdminDistEnabled())
+        out << " AD:" << adminDist;
+    out << " metric:" << metric;
+    out << " if:";
     if (!interfacePtr)
         out << "*";
     else
-        out << interfacePtr->getInterfaceName();
-    if (interfacePtr && interfacePtr->ipv4Data())
-        out << "(" << interfacePtr->ipv4Data()->getIPAddress() << ")";
-    out << "  ";
-    out << (gateway.isUnspecified() ? "DIRECT" : "REMOTE");
-    out << " " << IRoute::sourceTypeName(sourceType);
+        out << getInterfaceName();
+
     if (protocolData)
         out << " " << protocolData->str();
+
     return out.str();
 }
 

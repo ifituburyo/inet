@@ -19,7 +19,7 @@
 #define __INET_GEOGRAPHICCOORDINATESYSTEM_H
 
 #include "inet/common/geometry/common/Coord.h"
-#include "inet/common/geometry/common/EulerAngles.h"
+#include "inet/common/geometry/common/Quaternion.h"
 
 #if defined(WITH_OSGEARTH) && defined(WITH_VISUALIZERS)
 #include <osgEarth/MapNode>
@@ -47,30 +47,30 @@ class INET_API GeoCoord
 class INET_API IGeographicCoordinateSystem
 {
   public:
-    virtual GeoCoord getPlaygroundPosition() const = 0;
-    virtual EulerAngles getPlaygroundOrientation() const = 0;
+    virtual GeoCoord getScenePosition() const = 0;
+    virtual Quaternion getSceneOrientation() const = 0;
 
-    virtual Coord computePlaygroundCoordinate(const GeoCoord& geographicCoordinate) const = 0;
-    virtual GeoCoord computeGeographicCoordinate(const Coord& playgroundCoordinate) const = 0;
+    virtual Coord computeSceneCoordinate(const GeoCoord& geographicCoordinate) const = 0;
+    virtual GeoCoord computeGeographicCoordinate(const Coord& sceneCoordinate) const = 0;
 };
 
 class INET_API SimpleGeographicCoordinateSystem : public cSimpleModule, public IGeographicCoordinateSystem
 {
   protected:
     double metersPerDegree = 111320;
-    deg playgroundLatitude = deg(NaN);
-    deg playgroundLongitude = deg(NaN);
-    m playgroundAltitude = m(NaN);
+    deg sceneLatitude = deg(NaN);
+    deg sceneLongitude = deg(NaN);
+    m sceneAltitude = m(NaN);
 
   protected:
     virtual void initialize(int stage) override;
 
   public:
-    virtual GeoCoord getPlaygroundPosition() const override { return GeoCoord(playgroundLatitude, playgroundLongitude, playgroundAltitude); }
-    virtual EulerAngles getPlaygroundOrientation() const override { return EulerAngles::ZERO; }
+    virtual GeoCoord getScenePosition() const override { return GeoCoord(sceneLatitude, sceneLongitude, sceneAltitude); }
+    virtual Quaternion getSceneOrientation() const override { return Quaternion::IDENTITY; }
 
-    virtual Coord computePlaygroundCoordinate(const GeoCoord& geographicCoordinate) const override;
-    virtual GeoCoord computeGeographicCoordinate(const Coord& playgroundCoordinate) const override;
+    virtual Coord computeSceneCoordinate(const GeoCoord& geographicCoordinate) const override;
+    virtual GeoCoord computeGeographicCoordinate(const Coord& sceneCoordinate) const override;
 };
 
 #if defined(WITH_OSGEARTH) && defined(WITH_VISUALIZERS)
@@ -78,8 +78,8 @@ class INET_API SimpleGeographicCoordinateSystem : public cSimpleModule, public I
 class INET_API OsgGeographicCoordinateSystem : public cSimpleModule, public IGeographicCoordinateSystem
 {
   protected:
-    GeoCoord playgroundPosition = GeoCoord::NIL;
-    EulerAngles playgroundOrientation = EulerAngles::NIL;
+    GeoCoord scenePosition = GeoCoord::NIL;
+    Quaternion sceneOrientation = Quaternion::NIL;
     osgEarth::MapNode *mapNode = nullptr;
     osg::Matrixd locatorMatrix;
     osg::Matrixd inverseLocatorMatrix;
@@ -88,11 +88,11 @@ class INET_API OsgGeographicCoordinateSystem : public cSimpleModule, public IGeo
     virtual void initialize(int stage) override;
 
   public:
-    virtual GeoCoord getPlaygroundPosition() const override { return playgroundPosition; }
-    virtual EulerAngles getPlaygroundOrientation() const override { return playgroundOrientation; }
+    virtual GeoCoord getScenePosition() const override { return scenePosition; }
+    virtual Quaternion getSceneOrientation() const override { return sceneOrientation; }
 
-    virtual Coord computePlaygroundCoordinate(const GeoCoord& geographicCoordinate) const override;
-    virtual GeoCoord computeGeographicCoordinate(const Coord& playgroundCoordinate) const override;
+    virtual Coord computeSceneCoordinate(const GeoCoord& geographicCoordinate) const override;
+    virtual GeoCoord computeGeographicCoordinate(const Coord& sceneCoordinate) const override;
 };
 
 #endif // WITH_OSGEARTH

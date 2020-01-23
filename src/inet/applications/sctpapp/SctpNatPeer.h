@@ -13,12 +13,12 @@
 
 #ifndef __INET_SCTPNATPEER_H
 #define __INET_SCTPNATPEER_H
+
 #include "inet/common/INETDefs.h"
-#include "inet/transportlayer/sctp/SctpAssociation.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
 #include "inet/transportlayer/contract/sctp/SctpSocket.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
+#include "inet/transportlayer/sctp/SctpAssociation.h"
 
 namespace inet {
 
@@ -42,7 +42,7 @@ struct nat_message
  * arrives on them.
  */
 
-class INET_API SctpNatPeer : public cSimpleModule, public SctpSocket::CallbackInterface, public ILifecycle
+class INET_API SctpNatPeer : public cSimpleModule, public SctpSocket::ICallback, public LifecycleUnsupported
 {
   protected:
     //SctpAssociation* assoc;
@@ -105,7 +105,6 @@ class INET_API SctpNatPeer : public cSimpleModule, public SctpSocket::CallbackIn
     };
     typedef std::map<L3Address, pathStatus> SctpPathStatus;
     SctpPathStatus sctpPathStatus;
-    //virtual void socketStatusArrived(int32 assocId, void *yourPtr, SctpStatusInfo *status);
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     void initialize(int stage) override;
     void handleMessage(cMessage *msg) override;
@@ -117,42 +116,41 @@ class INET_API SctpNatPeer : public cSimpleModule, public SctpSocket::CallbackIn
     void connect(L3Address connectAddress, int32 connectPort);
     void connectx(AddressVector connectAddressList, int32 connectPort);
 
+    virtual void socketAvailable(SctpSocket *socket, Indication *indication) override { throw cRuntimeError("Model error, this module doesn't use any listener SCTP sockets"); }
+
     /** Does nothing but update statistics/status. Redefine to perform or schedule first sending. */
-    void socketEstablished(int32, void *, unsigned long int buffer) override;
+    void socketEstablished(SctpSocket *socket, unsigned long int buffer) override;
 
     /**
      * Does nothing but update statistics/status. Redefine to perform or schedule next sending.
      * Beware: this funcion deletes the incoming message, which might not be what you want.
      */
-    void socketDataArrived(int32 connId, void *yourPtr, Packet *msg, bool urgent) override;
+    void socketDataArrived(SctpSocket *socket, Packet *msg, bool urgent) override;
 
-    void socketDataNotificationArrived(int connId, void *yourPtr, Message *msg) override;
+    void socketDataNotificationArrived(SctpSocket *socket, Message *msg) override;
     /** Since remote SCTP closed, invokes close(). Redefine if you want to do something else. */
-    void socketPeerClosed(int32 connId, void *yourPtr) override;
+    void socketPeerClosed(SctpSocket *socket) override;
 
     /** Does nothing but update statistics/status. Redefine if you want to do something else, such as opening a new connection. */
-    void socketClosed(int32 connId, void *yourPtr) override;
+    void socketClosed(SctpSocket *socket) override;
 
     /** Does nothing but update statistics/status. Redefine if you want to try reconnecting after a delay. */
-    void socketFailure(int32 connId, void *yourPtr, int32 code) override;
+    void socketFailure(SctpSocket *socket, int32 code) override;
 
     /** Redefine to handle incoming SctpStatusInfo. */
-    void socketStatusArrived(int connId, void *yourPtr, SctpStatusReq *status) override;
+    void socketStatusArrived(SctpSocket *socket, SctpStatusReq *status) override;
     //@}
-    void msgAbandonedArrived(int32 assocId) override;
+    void msgAbandonedArrived(SctpSocket *socket) override;
     //void setAssociation(SctpAssociation *_assoc) {assoc = _assoc;};
 
     void setPrimaryPath();
     void sendStreamResetNotification();
-    void sendRequestArrived() override;
+    void sendRequestArrived(SctpSocket *socket) override;
     void sendQueueRequest();
-    void shutdownReceivedArrived(int32 connId) override;
-    void sendqueueFullArrived(int32 connId) override;
-    void addressAddedArrived(int32 assocId, L3Address localAddr, L3Address remoteAddr) override;
+    void shutdownReceivedArrived(SctpSocket *socket) override;
+    void sendqueueFullArrived(SctpSocket *socket) override;
+    void addressAddedArrived(SctpSocket *socket, L3Address localAddr, L3Address remoteAddr) override;
     void setStatusString(const char *s);
-
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override
-    { Enter_Method_Silent(); throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName()); return true; }
 };
 
 } // namespace inet

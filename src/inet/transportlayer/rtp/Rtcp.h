@@ -18,14 +18,12 @@
 #define __INET_RTCP_H
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 #include "inet/transportlayer/contract/udp/UdpSocket.h"
 
 namespace inet {
-
 namespace rtp {
 
 //Forward declarations:
@@ -44,12 +42,11 @@ class RtpSenderInfo;
  * processing of rtcp packets. It also keeps track of this and other
  * Rtp end systems.
  */
-class INET_API Rtcp : public cSimpleModule, public ILifecycle
+class INET_API Rtcp : public cSimpleModule, public LifecycleUnsupported
 {
   public:
     Rtcp();
     virtual ~Rtcp();
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
 
   protected:
     /**
@@ -241,7 +238,6 @@ class INET_API Rtcp : public cSimpleModule, public ILifecycle
 };
 
 } // namespace rtp
-
 } // namespace inet
 
 #endif // ifndef __INET_RTCP_H

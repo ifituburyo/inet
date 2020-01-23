@@ -19,15 +19,8 @@ package inet.applications.httptools.browser;
 
 import inet.applications.contract.IApp;
 
-
 //
-// The component is derived from HttpBrowseBase and is intended to be used
-// with the INET frameworks StandardHost and TCP/IP stack modeling.
-//
-// See the API documentation for HttpBrowserBase and HttpBrowser for further details.
-// See the INET documentation for more information on StandardHost and the TCP/IP stack.
-//
-// The purpose of the HttpBrowser component is to simulate a browser operating on a single host.
+// HttpBrowser simulates a browser operating on a single host.
 // It operates in conjunction with the server component to provide a realistic simulation of Web
 // usage patterns.
 //
@@ -116,6 +109,7 @@ simple HttpBrowser like IApp
         double activationTime @unit(s) = default(0s); // The initial activation delay. Zero to disable. This is the time at which the browser first comes to life in a simulation scenario. Note that this can be any random distribution which OMNeT++ supports.
         xml config;                                     // The XML config file
         string httpControllerModule = default("httpController"); // the absolute path to the http browser controller, @see HttpController
+        @lifecycleSupport;
     gates:
         input socketIn;
         output socketOut;

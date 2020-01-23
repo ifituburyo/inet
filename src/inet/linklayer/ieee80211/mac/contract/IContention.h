@@ -39,6 +39,12 @@ class Ieee80211MacHeader;
 class INET_API IContention
 {
     public:
+        static simsignal_t backoffPeriodGeneratedSignal;
+        static simsignal_t backoffStartedSignal;
+        static simsignal_t backoffStoppedSignal;
+        static simsignal_t channelAccessGrantedSignal;
+
+    public:
         class ICallback
         {
             public:

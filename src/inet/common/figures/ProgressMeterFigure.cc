@@ -16,8 +16,8 @@
 //
 //
 
-#include "ProgressMeterFigure.h"
 #include "inet/common/INETUtils.h"
+#include "inet/common/figures/ProgressMeterFigure.h"
 
 namespace inet {
 
@@ -130,7 +130,7 @@ void ProgressMeterFigure::setLabel(const char *text)
     labelFigure->setText(text);
 }
 
-const int ProgressMeterFigure::getLabelOffset() const
+int ProgressMeterFigure::getLabelOffset() const
 {
     return labelOffset;
 }

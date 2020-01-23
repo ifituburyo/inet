@@ -1,5 +1,26 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-09-28  Levente Mészáros
+
+	Renamed initstage to INITSTAGE_NETWORK_CONFIGURATION.
+
+2018-09-27  Levente Mészáros
+
+	Split INITSTAGE_NETWORK_LAYER_2 into INITSTAGE_NETWORK_CONFIGURATOR,
+	INITSTAGE_NETWORK_ADDRESS_ASSIGNMENT, INITSTAGE_STATIC_ROUTING.
+
+2018-09-19  Zoltan Bojthe
+
+	Adapted to the new protocol specific data storage API of InterfaceEntry.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-02-12  Zoltan Bojthe
 
 	Renamed functions to use camel case.

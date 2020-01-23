@@ -15,11 +15,11 @@
 //
 
 #include "inet/applications/rtpapp/RtpApplication.h"
-
-#include "inet/networklayer/common/L3AddressResolver.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
+#include "inet/applications/rtpapp/RtpApplication_m.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/lifecycle/LifecycleOperation.h"
 #include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/rtp/RtpInterfacePacket_m.h"
 
 namespace inet {
@@ -62,9 +62,9 @@ void RtpApplication::initialize(int stage)
         isActiveSession = false;
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
 
@@ -79,7 +79,7 @@ void RtpApplication::initialize(int stage)
                   << "fileName" << fileName << endl
                   << "payloadType" << payloadType << endl;
 
-        cMessage *selfMsg = new cMessage("enterSession", ENTER_SESSION);
+        cMessage *selfMsg = new cMessage("enterSession", RTPAPP_ENTER_SESSION);
         scheduleAt(simTime() + sessionEnterDelay, selfMsg);
     }
 }
@@ -90,7 +90,7 @@ void RtpApplication::handleMessage(cMessage *msgIn)
 
     if (msgIn->isSelfMessage()) {
         switch (msgIn->getKind()) {
-            case ENTER_SESSION:
+            case RTPAPP_ENTER_SESSION:
                 EV_INFO << "enterSession" << endl;
                 if (isActiveSession) {
                     EV_WARN << "Session already entered\n";
@@ -109,7 +109,7 @@ void RtpApplication::handleMessage(cMessage *msgIn)
                 }
                 break;
 
-            case START_TRANSMISSION:
+            case RTPAPP_START_TRANSMISSION:
                 EV_INFO << "startTransmission" << endl;
                 if (!isActiveSession) {
                     EV_WARN << "Session already left\n";
@@ -122,12 +122,12 @@ void RtpApplication::handleMessage(cMessage *msgIn)
                     msg->setControlInfo(ci);
                     send(msg, "rtpOut");
 
-                    cMessage *selfMsg = new cMessage("stopTransmission", STOP_TRANSMISSION);
+                    cMessage *selfMsg = new cMessage("stopTransmission", RTPAPP_STOP_TRANSMISSION);
                     scheduleAt(simTime() + transmissionStopDelay, selfMsg);
                 }
                 break;
 
-            case STOP_TRANSMISSION:
+            case RTPAPP_STOP_TRANSMISSION:
                 EV_INFO << "stopTransmission" << endl;
                 if (!isActiveSession) {
                     EV_WARN << "Session already left\n";
@@ -142,7 +142,7 @@ void RtpApplication::handleMessage(cMessage *msgIn)
                 }
                 break;
 
-            case LEAVE_SESSION:
+            case RTPAPP_LEAVE_SESSION:
                 EV_INFO << "leaveSession" << endl;
                 if (!isActiveSession) {
                     EV_WARN << "Session already left\n";
@@ -179,7 +179,7 @@ void RtpApplication::handleMessage(cMessage *msgIn)
                         send(msg, "rtpOut");
                     }
                     else {
-                        cMessage *selfMsg = new cMessage("leaveSession", LEAVE_SESSION);
+                        cMessage *selfMsg = new cMessage("leaveSession", RTPAPP_LEAVE_SESSION);
                         EV_INFO << "Receiver Module : leaveSession" << endl;
                         scheduleAt(simTime() + sessionLeaveDelay, selfMsg);
                     }
@@ -188,7 +188,7 @@ void RtpApplication::handleMessage(cMessage *msgIn)
 
                 case RTP_IFP_SENDER_MODULE_CREATED: {
                     EV_INFO << "Sender Module Created" << endl;
-                    cMessage *selfMsg = new cMessage("startTransmission", START_TRANSMISSION);
+                    cMessage *selfMsg = new cMessage("startTransmission", RTPAPP_START_TRANSMISSION);
                     scheduleAt(simTime() + transmissionStartDelay, selfMsg);
                 }
                 break;
@@ -203,13 +203,13 @@ void RtpApplication::handleMessage(cMessage *msgIn)
 
                         case RTP_SENDER_STATUS_FINISHED:
                             EV_INFO << "FINISHED" << endl;
-                            selfMsg = new cMessage("leaveSession", LEAVE_SESSION);
+                            selfMsg = new cMessage("leaveSession", RTPAPP_LEAVE_SESSION);
                             scheduleAt(simTime() + sessionLeaveDelay, selfMsg);
                             break;
 
                         case RTP_SENDER_STATUS_STOPPED:
                             EV_INFO << "STOPPED" << endl;
-                            selfMsg = new cMessage("leaveSession", LEAVE_SESSION);
+                            selfMsg = new cMessage("leaveSession", RTPAPP_LEAVE_SESSION);
                             scheduleAt(simTime() + sessionLeaveDelay, selfMsg);
                             break;
 
@@ -237,14 +237,6 @@ void RtpApplication::handleMessage(cMessage *msgIn)
         delete obj;
     }
     delete msgIn;
-}
-
-bool RtpApplication::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
-{
-    Enter_Method_Silent();
-
-    throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
 }
 
 } // namespace inet

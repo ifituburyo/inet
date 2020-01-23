@@ -24,7 +24,7 @@ import inet.physicallayer.base.packetlevel.NarrowbandReceiverBase;
 // supports switching channels, configuring different operation modes, and
 // preamble modes.
 //
-// See also ~Ieee80211TransmitterBase, ~Ieee80211ScalarReceiver, and
+// @see ~Ieee80211TransmitterBase, ~Ieee80211ScalarReceiver,
 // ~Ieee80211DimensionalReceiver.
 //
 module Ieee80211ReceiverBase extends NarrowbandReceiverBase
@@ -34,7 +34,8 @@ module Ieee80211ReceiverBase extends NarrowbandReceiverBase
         string bandName @enum("2.4 GHz", "5 GHz", "5 GHz (20 MHz)", "5 GHz (40 MHz)", "5 GHz (80 MHz)", "5 GHz (160 MHz)", "5.9 GHz");
         int channelNumber;
         modulation = default("BPSK"); // TODO: this is simply wrong
-        errorModelType = default("Ieee80211NistErrorModel");
+        errorModel.typename = default("Ieee80211NistErrorModel");
         // TODO: remove when opMode is removed from the error model
         *.opMode = opMode;
 }
+

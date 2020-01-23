@@ -15,20 +15,17 @@
 #define __INET_SCTPCRCINSERTIONHOOK_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/common/Protocol.h"
 #include "inet/networklayer/contract/INetfilter.h"
-#include "inet/transportlayer/common/CRC_m.h"
+#include "inet/transportlayer/common/CrcMode_m.h"
 #include "inet/transportlayer/sctp/SctpCrcInsertionHook.h"
 #include "inet/transportlayer/sctp/SctpHeader.h"
 
-
 namespace inet {
-
 namespace sctp {
 
 class SctpCrcInsertion : public NetfilterBase::HookBase {
-    CrcMode crcMode = static_cast<CrcMode>(-1);
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
   public:
     SctpCrcInsertion() {}
     void setCrcMode(CrcMode crcModeP) { crcMode = crcModeP; }
@@ -45,7 +42,6 @@ class SctpCrcInsertion : public NetfilterBase::HookBase {
 };
 
 } // namespace tcp
-
 } // namespace inet
 
 #endif // ifndef __INET_TCPCRCINSERTIONHOOK_H

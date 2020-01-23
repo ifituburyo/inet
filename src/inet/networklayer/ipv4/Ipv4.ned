@@ -15,8 +15,16 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-
 package inet.networklayer.ipv4;
+
+moduleinterface IIpv4
+{
+    gates:
+        input transportIn @labels(Ipv4ControlInfo/down,TcpHeader,UdpHeader,SctpHeader);
+        output transportOut @labels(Ipv4ControlInfo/up,TcpHeader,UdpHeader,SctpHeader);
+        input queueIn @labels(Ipv4Header,ArpPacket,Ieee802Ctrl);
+        output queueOut @labels(Ipv4Header,ArpPacket,Ieee802Ctrl);
+}
 
 //
 // Implements the IPv4 protocol. The protocol header is represented
@@ -25,12 +33,12 @@ package inet.networklayer.ipv4;
 // <b>Interfacing with higher layer protocols</b>
 //
 // To send a packet over IPv4 from a higher layer protocol, the module should
-// fill in an ~Ipv4ControlInfo object, attach it to the packet with cMessage's
-// setControlInfo() method, the send it to the ~Ipv4 module.
+// fill in an ~L3AddressReq object, attach it to the packet with the Packets's
+// addTag() method, then send the packet to the ~Ipv4 module.
 //
 // When ~Ipv4 sends up a packet to a higher layer protocol, it will also attach
-// an ~Ipv4ControlInfo to the packet, with the source and destination IPv4 address,
-// etc. of the IPv4 datagram in which the packet arrived.
+// an ~L3AddressInd to the packet, with the source and destination IPv4 addresses
+// of the IPv4 datagram in which the packet arrived.
 //
 // ~Ipv4 can serve several higher-layer protocols. The higher layer protocols
 // should call registerProtocol with their gate towards the ~Ipv4 module,
@@ -45,8 +53,7 @@ package inet.networklayer.ipv4;
 // calling C++ methods (such as findBestMatchingRoute(destAddress)) of ~Ipv4RoutingTable.
 // No message exchange with ~Ipv4RoutingTable takes place.
 //
-// A routed datagram will be sent to the queueOut gate, with an
-// ~Ipv4ControlInfo  object attached. queueOut is expected to be
+// A routed datagram will be sent to the queueOut, which is expected to be
 // connected to ~INetworkInterface modules.
 //
 // Routing protocol implementations (e.g. OSPF and ISIS) can also query
@@ -77,11 +84,11 @@ package inet.networklayer.ipv4;
 // method which determines processing time for a packet, or (2) use a
 // different base class.
 //
-// @see ~Ipv4RoutingTable, ~Ipv4ControlInfo, ~Arp
+// @see ~Ipv4RoutingTable, ~Arp
 //
 // @author Andras Varga
 //
-simple Ipv4
+simple Ipv4 like IIpv4
 {
     parameters:
         string interfaceTableModule;   // The path to the InterfaceTable module
@@ -93,18 +100,18 @@ simple Ipv4
         int timeToLive = default(32);
         int multicastTimeToLive = default(32);
         double fragmentTimeout @unit(s) = default(60s);
-        bool forceBroadcast = default(false);
-        bool useProxyARP = default(true);
+        bool limitedBroadcast = default(false); // send out limited broadcast packets comming from higher layer
+        string directBroadcastInterfaces = default("");   // list of interfaces that direct broadcast is enabled (by default direct broadcast is disabled on all interfaces)
         @display("i=block/routing");
         @signal[packetSentToUpper](type=cPacket);
         @signal[packetReceivedFromUpper](type=cPacket);
         @signal[packetSentToLower](type=cPacket);
         @signal[packetReceivedFromLower](type=cPacket);
         @signal[packetDropped](type=cPacket);
-        @signal[ipv4NewMulticast](type=Ipv4Header);
-        @signal[ipv4DataOnNonrpf](type=Ipv4Header);
-        @signal[ipv4DataOnRpf](type=Ipv4Header);
-        @signal[ipv4MdataRegister](type=Packet);
+        @signal[ipv4NewMulticast](type=inet::Ipv4Header);
+        @signal[ipv4DataOnNonrpf](type=inet::Ipv4Header);
+        @signal[ipv4DataOnRpf](type=inet::Ipv4Header);
+        @signal[ipv4MdataRegister](type=inet::Packet);
         @statistic[packetDropAddressResolutionFailed](title="packet drop: address resolution failed"; source=packetDropReasonIsAddressResolutionFailed(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetDropHopLimitReached](title="packet drop: hop limit reached"; source=packetDropReasonIsHopLimitReached(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetDropForwardingDisabled](title="packet drop: forwarding disabled"; source=packetDropReasonIsForwardingDisabled(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
@@ -117,3 +124,4 @@ simple Ipv4
         input queueIn @labels(Ipv4Header,ArpPacket,Ieee802Ctrl);
         output queueOut @labels(Ipv4Header,ArpPacket,Ieee802Ctrl);
 }
+

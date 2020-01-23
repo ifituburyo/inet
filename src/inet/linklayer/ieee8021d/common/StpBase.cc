@@ -15,11 +15,11 @@
 // Author: Zsolt Prontvai
 //
 
+#include "inet/common/ModuleAccess.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/linklayer/ieee8021d/common/StpBase.h"
 #include "inet/networklayer/common/InterfaceEntry.h"
-#include "inet/common/ModuleAccess.h"
-#include "inet/common/lifecycle/NodeOperations.h"
-#include "inet/common/lifecycle/NodeStatus.h"
 
 namespace inet {
 
@@ -33,6 +33,13 @@ StpBase::StpBase()
 
 void StpBase::initialize(int stage)
 {
+    if (stage == INITSTAGE_LINK_LAYER) {    // "auto" MAC addresses assignment takes place in stage 0
+        numPorts = ifTable->getNumInterfaces();
+        switchModule->subscribe(interfaceStateChangedSignal, this);
+    }
+
+    OperationalBase::initialize(stage);
+
     if (stage == INITSTAGE_LOCAL) {
         visualize = par("visualize");
         bridgePriority = par("bridgePriority");
@@ -45,22 +52,10 @@ void StpBase::initialize(int stage)
         ifTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
         switchModule = getContainingNode(this);
     }
-
-    if (stage == INITSTAGE_LINK_LAYER_2) {    // "auto" MAC addresses assignment takes place in stage 0
-        numPorts = ifTable->getNumInterfaces();
-        switchModule->subscribe(interfaceStateChangedSignal, this);
-
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(switchModule->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
-
-        if (isOperational)
-            start();
-    }
 }
 
 void StpBase::start()
 {
-    isOperational = true;
     ie = chooseInterface();
 
     if (ie)
@@ -71,7 +66,6 @@ void StpBase::start()
 
 void StpBase::stop()
 {
-    isOperational = false;
     ie = nullptr;
 }
 
@@ -85,6 +79,8 @@ void StpBase::colorLink(InterfaceEntry *ie, bool forwarding) const
         cGate *inGatePrev = inGate ? inGate->getPreviousGate() : nullptr;
         cGate *inGatePrev2 = inGatePrev ? inGatePrev->getPreviousGate() : nullptr;
 
+        //TODO The Gate::getDisplayString() has a side effect: create a channel when gate currently not connected.
+        //     Should check the channel existing with Gate::getChannel() before use the Gate::getDisplayString().
         if (outGate && inGate && inGatePrev && outGateNext && outGatePrev && inGatePrev2) {
             if (forwarding) {
                 outGatePrev->getDisplayString().setTagArg("ls", 0, ENABLED_LINK_COLOR);
@@ -113,11 +109,11 @@ void StpBase::refreshDisplay() const
         for (unsigned int i = 0; i < numPorts; i++) {
             InterfaceEntry *ie = ifTable->getInterface(i);
             cModule *nicModule = ie;
-            if (isOperational) {
+            if (isUp()) {
                 const Ieee8021dInterfaceData *port = getPortInterfaceData(ie->getInterfaceId());
 
                 // color link
-                colorLink(ie, isOperational && (port->getState() == Ieee8021dInterfaceData::FORWARDING));
+                colorLink(ie, isUp() && (port->getState() == Ieee8021dInterfaceData::FORWARDING));
 
                 // label ethernet interface with port status and role
                 if (nicModule != nullptr) {
@@ -138,7 +134,7 @@ void StpBase::refreshDisplay() const
         }
 
         // mark root switch
-        if (isOperational && getRootInterfaceId() == -1)
+        if (isUp() && getRootInterfaceId() == -1)
             switchModule->getDisplayString().setTagArg("i", 1, ROOT_SWITCH_COLOR);
         else
             switchModule->getDisplayString().setTagArg("i", 1, "");
@@ -147,7 +143,7 @@ void StpBase::refreshDisplay() const
 
 Ieee8021dInterfaceData *StpBase::getPortInterfaceData(unsigned int interfaceId)
 {
-    Ieee8021dInterfaceData *portData = getPortInterfaceEntry(interfaceId)->ieee8021dData();
+    Ieee8021dInterfaceData *portData = getPortInterfaceEntry(interfaceId)->getProtocolData<Ieee8021dInterfaceData>();
     if (!portData)
         throw cRuntimeError("Ieee8021dInterfaceData not found!");
 
@@ -167,7 +163,7 @@ int StpBase::getRootInterfaceId() const
 {
     for (unsigned int i = 0; i < numPorts; i++) {
         InterfaceEntry *ie = ifTable->getInterface(i);
-        if (ie->ieee8021dData()->getRole() == Ieee8021dInterfaceData::ROOT)
+        if (ie->getProtocolData<Ieee8021dInterfaceData>()->getRole() == Ieee8021dInterfaceData::ROOT)
             return ie->getInterfaceId();
     }
 
@@ -188,26 +184,19 @@ InterfaceEntry *StpBase::chooseInterface()
     return nullptr;
 }
 
-bool StpBase::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void StpBase::handleStartOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
+    start();
+}
 
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_LINK_LAYER)
-            start();
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_LINK_LAYER)
-            stop();
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH)
-            stop();
-    }
-    else
-        throw cRuntimeError("Unsupported operation '%s'", operation->getClassName());
+void StpBase::handleStopOperation(LifecycleOperation *operation)
+{
+    stop();
+}
 
-    return true;
+void StpBase::handleCrashOperation(LifecycleOperation *operation)
+{
+    stop();
 }
 
 } // namespace inet

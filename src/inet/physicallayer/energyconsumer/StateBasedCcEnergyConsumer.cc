@@ -59,11 +59,11 @@ void StateBasedCcEnergyConsumer::initialize(int stage)
         currentConsumption = A(0);
         WATCH(currentConsumption);
     }
-    else if (stage == INITSTAGE_PHYSICAL_ENVIRONMENT)
+    else if (stage == INITSTAGE_POWER)
         energySource->addEnergyConsumer(this);
 }
 
-void StateBasedCcEnergyConsumer::receiveSignal(cComponent *source, simsignal_t signal, long value, cObject *details)
+void StateBasedCcEnergyConsumer::receiveSignal(cComponent *source, simsignal_t signal, intval_t value, cObject *details)
 {
     if (signal == IRadio::radioModeChangedSignal ||
         signal == IRadio::receptionStateChangedSignal ||

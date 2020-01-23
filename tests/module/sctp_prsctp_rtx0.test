@@ -7,10 +7,9 @@ Testing PR-SCTP: prMethod=PR_RTX prValue=0
 %inifile: omnetpp.ini
 
 [General]
-network=SctpFeatureTest
+network = inet.test.moduletest.lib.SctpFeatureTest
 cmdenv-event-banners=false
 cmdenv-express-mode = false
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 
 #omnetpp 5.0 - 5.1 compatibility:
@@ -57,8 +56,8 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 **.sctp.sctpAlgorithmClass = "SctpAlg"
 
 # NIC configuration
-#**.ppp[*].queueType = "DropTailQueue" # in routers
-#**.ppp[*].queue.frameCapacity = 100  # in routers
+#**.ppp[*].ppp.queue.typename = "DropTailQueue" # in routers
+#**.ppp[*].ppp.queue.packetCapacity = 100  # in routers
 #**.ppp[*].ppp.mtu = 1500 B
 
 

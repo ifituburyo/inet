@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2013 OpenSim Ltd
+// Copyright (C) 2013 OpenSim Ltd.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -32,16 +32,16 @@ import inet.physicallayer.common.packetlevel.Radio;
 // also supports an ideal communication channel where all transmissions are
 // received sucessfully independent of distance and interfering transmissions.
 //
-// See also ~UnitDiskRadioMedium, ~UnitDiskAnalogModel, ~UnitDiskTransmitter, and
+// @see ~UnitDiskRadioMedium, ~UnitDiskAnalogModel, ~UnitDiskTransmitter,
 // ~UnitDiskReceiver.
 //
 module UnitDiskRadio extends Radio
 {
     parameters:
-        antennaType = default("IsotropicAntenna");
-        transmitterType = default("UnitDiskTransmitter");
-        receiverType = default("UnitDiskReceiver");
+        transmitter.typename = default("UnitDiskTransmitter");
+        receiver.typename = default("UnitDiskReceiver");
         separateTransmissionParts = default(false);
         separateReceptionParts = default(false);
         @class(UnitDiskRadio);
 }
+

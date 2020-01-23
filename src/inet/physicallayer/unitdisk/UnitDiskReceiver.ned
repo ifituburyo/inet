@@ -25,7 +25,7 @@ import inet.physicallayer.contract.packetlevel.IReceiver;
 // range. It also supports an ideal communication channel with configuring the
 // receiver to ignore interfering transmissions.
 //
-// See also ~UnitDiskTransmitter, ~UnitDiskRadio, ~UnitDiskRadioMedium, and
+// @see ~UnitDiskTransmitter, ~UnitDiskRadio, ~UnitDiskRadioMedium,
 // ~UnitDiskAnalogModel.
 //
 module UnitDiskReceiver like IReceiver
@@ -35,3 +35,4 @@ module UnitDiskReceiver like IReceiver
         @class(UnitDiskReceiver);
         @display("i=block/wrx");
 }
+

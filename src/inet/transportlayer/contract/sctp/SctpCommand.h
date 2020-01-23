@@ -19,6 +19,8 @@
 #ifndef __INET_SCTPCOMMAND_H
 #define __INET_SCTPCOMMAND_H
 
+#include "inet/common/INETDefs.h"
+
 namespace inet {
 
 //
@@ -51,7 +53,8 @@ enum SctpCommandCode {
     SCTP_C_GETSOCKETOPTIONS = 22,
     SCTP_C_ACCEPT = 23,
     SCTP_C_SET_RTO_INFO = 24,
-    SCTP_C_ACCEPT_SOCKET_ID = 25
+    SCTP_C_ACCEPT_SOCKET_ID = 25,
+    SCTP_C_DESTROY = 26    // destroy socket
 };
 
 //

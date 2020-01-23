@@ -1,5 +1,25 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-11-07  Zoltan Bojthe
+
+	Fixed bug #477.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-09-27  Levente Mészáros
+
+	Merged INITSTAGE_NETWORK_LAYER and INITSTAGE_NETWORK_LAYER_3.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-03-14  Zoltan Bojthe
+
+	Added WiseRouteProtocolPrinter.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-02  Zoltan Bojthe
 
 	Added payloadLength field to header.

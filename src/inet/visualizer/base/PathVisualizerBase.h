@@ -18,6 +18,7 @@
 #ifndef __INET_PATHVISUALIZERBASE_H
 #define __INET_PATHVISUALIZERBASE_H
 
+#include "inet/common/StringFormat.h"
 #include "inet/common/geometry/common/Coord.h"
 #include "inet/common/packet/PacketFilter.h"
 #include "inet/visualizer/base/VisualizerBase.h"
@@ -25,7 +26,6 @@
 #include "inet/visualizer/util/ColorSet.h"
 #include "inet/visualizer/util/LineManager.h"
 #include "inet/visualizer/util/NetworkNodeFilter.h"
-#include "inet/visualizer/util/StringFormat.h"
 
 namespace inet {
 
@@ -50,12 +50,11 @@ class INET_API PathVisualizerBase : public VisualizerBase, public cListener
     class DirectiveResolver : public StringFormat::IDirectiveResolver {
       protected:
         const cPacket *packet = nullptr;
-        std::string result;
 
       public:
         DirectiveResolver(const cPacket *packet) : packet(packet) { }
 
-        virtual const char *resolveDirective(char directive) override;
+        virtual const char *resolveDirective(char directive) const override;
     };
 
   protected:

@@ -19,14 +19,13 @@ package inet.node.bgp;
 
 import inet.node.inet.Router;
 
-
 //
 // IP router with BGPv4 and OSPFv4 support.
 //
 module BgpRouter extends Router
 {
     parameters:
-        hasBGP = true;
-        hasOSPF = true;
+        hasBgp = true;
+        hasOspf = true;
 }
 

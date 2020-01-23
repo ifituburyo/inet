@@ -51,6 +51,7 @@ extern INET_API simsignal_t    // admin
     interfaceGnpConfigChangedSignal,
     interfaceIpv4ConfigChangedSignal,
     interfaceIpv6ConfigChangedSignal,
+    interfaceClnsConfigChangedSignal,
     tedChangedSignal,
 
 // layer 3 - Routing Table
@@ -62,9 +63,9 @@ extern INET_API simsignal_t    // admin
     mrouteChangedSignal,
 
 // layer 3 - Ipv4
+    ipv4MulticastChangeSignal,
     ipv4MulticastGroupJoinedSignal,
     ipv4MulticastGroupLeftSignal,
-    ipv4McastChangeSignal,
     ipv4MulticastGroupRegisteredSignal,
     ipv4MulticastGroupUnregisteredSignal,
 
@@ -85,6 +86,9 @@ extern INET_API simsignal_t    // admin
     ipv6MulticastGroupRegisteredSignal,
     ipv6MulticastGroupUnregisteredSignal,
 
+//layer 3 - ISIS
+    isisAdjChangedSignal,
+
 // - layer 4 (transport)
 //...
 
@@ -92,6 +96,9 @@ extern INET_API simsignal_t    // admin
 //...
 
 // general
+    packetCreatedSignal,
+    packetAddedSignal,
+    packetRemovedSignal,
     packetDroppedSignal,
 
     packetSentToUpperSignal,
@@ -104,12 +111,16 @@ extern INET_API simsignal_t    // admin
     packetReceivedFromPeerSignal,
 
     packetSentSignal,
-    packetReceivedSignal;
+    packetReceivedSignal,
+
+    packetPushedSignal,
+    packetPoppedSignal;
 
 /**
  * Utility function
  */
-void printSignalBanner(simsignal_t signalID, const cObject *obj);
+void printSignalBanner(simsignal_t signalID, const cObject *obj, const cObject *details);
+void printSignalBanner(simsignal_t signalID, intval_t value, const cObject *details);
 
 } // namespace inet
 

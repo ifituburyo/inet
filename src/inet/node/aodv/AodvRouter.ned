@@ -17,9 +17,8 @@
 
 package inet.node.aodv;
 
-import inet.node.inet.WirelessHost;
+import inet.node.inet.AdhocHost;
 import inet.routing.aodv.Aodv;
-
 
 //
 // It models a ~WirelessHost extended with ~Aodv submodule.
@@ -32,23 +31,19 @@ import inet.routing.aodv.Aodv;
 // Scenerios where AODV routing is desired use this module as a
 // host module.
 //
-// For more info about Aodv, see the corresponding module:
-// ~Aodv and its C++ implementation with the same name.
-//
 // The AODV v.2 (known as Dymo) is also implemented: ~Dymo,
 // ~DymoRouter.
 //
-module AodvRouter extends WirelessHost
+// @see ~Aodv, ~Dymo, ~DymoRouter.
+//
+module AodvRouter extends AdhocHost
 {
-    parameters:
-        @display("i=device/cellphone");
-        forwarding = true;
-        wlan[*].mgmtType = default("Ieee80211MgmtAdhoc");
     submodules:
         aodv: Aodv {
-            @display("p=700,300");
+            @display("p=825,226");
         }
     connections:
-        aodv.ipOut --> tn.in++;
-        aodv.ipIn <-- tn.out++;
+        aodv.socketOut --> at.in++;
+        aodv.socketIn <-- at.out++;
 }
+

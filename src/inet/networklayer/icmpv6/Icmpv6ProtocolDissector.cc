@@ -17,10 +17,10 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/networklayer/icmpv6/Icmpv6ProtocolDissector.h"
 
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/networklayer/icmpv6/Icmpv6.h"
+#include "inet/networklayer/icmpv6/Icmpv6ProtocolDissector.h"
 #include "inet/networklayer/ipv6/Ipv6Header.h"
 
 
@@ -28,7 +28,7 @@ namespace inet {
 
 Register_Protocol_Dissector(&Protocol::icmpv6, Icmpv6ProtocolDissector);
 
-void Icmpv6ProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void Icmpv6ProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     bool isBadPacket = !Icmpv6::verifyCrc(packet);
     const auto& header = packet->popAtFront<Icmpv6Header>();

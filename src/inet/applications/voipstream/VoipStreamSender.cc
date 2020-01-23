@@ -17,12 +17,17 @@
 //
 
 #include "inet/applications/voipstream/VoipStreamSender.h"
-
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 
 namespace inet {
+
+#if defined(__clang__)
+#  pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__GNUC__)
+#  pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 extern "C" {
 #include <libavutil/opt.h>
@@ -99,21 +104,34 @@ void VoipStreamSender::initialize(int stage)
         EV_DEBUG << "libavresample: " << LIBAVRESAMPLE_VERSION_MAJOR << "." << LIBAVRESAMPLE_VERSION_MINOR << "." << LIBAVRESAMPLE_VERSION_MICRO << endl;
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
 
         // say HELLO to the world
         EV_TRACE << "VoIPSourceApp -> initialize(" << stage << ")" << endl;
 
-        // Hack for create results folder
+        // KLUDGE: TODO: hack to create results folder (doesn't work when record-scalars = false)
         recordScalar("hackForCreateResultsFolder", 0);
 
         destAddress = L3AddressResolver().resolve(par("destAddress"));
         socket.setOutputGate(gate("socketOut"));
+
         socket.bind(localPort);
+
+        int timeToLive = par("timeToLive");
+        if (timeToLive != -1)
+            socket.setTimeToLive(timeToLive);
+
+        int dscp = par("dscp");
+        if (dscp != -1)
+            socket.setDscp(dscp);
+
+        int tos = par("tos");
+        if (tos != -1)
+            socket.setTos(tos);
 
         simtime_t startTime = par("startTime");
 
@@ -310,7 +328,6 @@ Packet *VoipStreamSender::generatePacket()
     int samples = std::min(sampleBuffer.length() / (bytesPerInSample), samplesPerPacket);
     int inBytes = samples * bytesPerInSample;
     bool isSilent = checkSilence(pEncoderCtx->sample_fmt, sampleBuffer.readPtr(), samples);
-    Packet *pk = new Packet();
     const auto& vp = makeShared<VoipStreamPacket>();
 
     AVPacket opacket;
@@ -341,17 +358,22 @@ Packet *VoipStreamSender::generatePacket()
         outFile.write(sampleBuffer.readPtr(), inBytes);
     sampleBuffer.notifyRead(inBytes);
 
-    vp->getBytesForUpdate().setDataFromBuffer(opacket.data, opacket.size);
-
+    Packet *pk = new Packet();
     if (isSilent) {
         pk->setName("SILENCE");
         vp->setType(SILENCE);
         vp->setChunkLength(B(voipSilencePacketSize));
+        vp->setHeaderLength(voipSilencePacketSize);
+        vp->setDataLength(0);
     }
     else {
         pk->setName("VOICE");
         vp->setType(VOICE);
-        vp->setChunkLength(B(voipHeaderSize + opacket.size));
+        vp->setDataLength(opacket.size);
+        vp->setChunkLength(B(voipHeaderSize));
+        vp->setHeaderLength(voipHeaderSize);
+        const auto& voice = makeShared<BytesChunk>(opacket.data, opacket.size);
+        pk->insertAtFront(voice);
     }
 
     vp->setTimeStamp(pktID);
@@ -361,7 +383,7 @@ Packet *VoipStreamSender::generatePacket()
     vp->setSampleBits(pEncoderCtx->bits_per_coded_sample);
     vp->setSamplesPerPacket(samplesPerPacket);
     vp->setTransmitBitrate(compressedBitRate);
-    pk->insertAtBack(vp);
+    pk->insertAtFront(vp);
 
     pktID++;
 

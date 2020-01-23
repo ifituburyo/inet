@@ -15,18 +15,17 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/physicallayer/contract/packetlevel/IRadioMedium.h"
 #include "inet/physicallayer/base/packetlevel/ApskModulationBase.h"
 #include "inet/physicallayer/base/packetlevel/FlatReceiverBase.h"
-#include "inet/physicallayer/base/packetlevel/FlatTransmissionBase.h"
 #include "inet/physicallayer/base/packetlevel/FlatReceptionBase.h"
+#include "inet/physicallayer/base/packetlevel/FlatTransmissionBase.h"
 #include "inet/physicallayer/base/packetlevel/NarrowbandNoiseBase.h"
 #include "inet/physicallayer/common/packetlevel/ListeningDecision.h"
 #include "inet/physicallayer/common/packetlevel/ReceptionDecision.h"
-#include "inet/physicallayer/common/packetlevel/SignalTag_m.h"
+#include "inet/physicallayer/contract/packetlevel/IRadioMedium.h"
+#include "inet/physicallayer/contract/packetlevel/SignalTag_m.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 FlatReceiverBase::FlatReceiverBase() :
@@ -42,8 +41,8 @@ void FlatReceiverBase::initialize(int stage)
     NarrowbandReceiverBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         errorModel = dynamic_cast<IErrorModel *>(getSubmodule("errorModel"));
-        energyDetection = mW(math::dBm2mW(par("energyDetection")));
-        sensitivity = mW(math::dBm2mW(par("sensitivity")));
+        energyDetection = mW(math::dBmW2mW(par("energyDetection")));
+        sensitivity = mW(math::dBmW2mW(par("sensitivity")));
     }
 }
 
@@ -112,7 +111,14 @@ const IReceptionResult *FlatReceiverBase::computeReceptionResult(const IListenin
     return receptionResult;
 }
 
-} // namespace physicallayer
+Packet *FlatReceiverBase::computeReceivedPacket(const ISnir *snir, bool isReceptionSuccessful) const
+{
+    if (errorModel == nullptr || isReceptionSuccessful)
+        return ReceiverBase::computeReceivedPacket(snir, isReceptionSuccessful);
+    else
+        return errorModel->computeCorruptedPacket(snir);
+}
 
+} // namespace physicallayer
 } // namespace inet
 

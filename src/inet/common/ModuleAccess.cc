@@ -86,9 +86,9 @@ cModule *findModuleUnderContainingNode(const cModule *from)
 InterfaceEntry *findContainingNicModule(const cModule *from)
 {
     for (cModule *curmod = const_cast<cModule *>(from); curmod; curmod = curmod->getParentModule()) {
-        cProperties *props = curmod->getProperties();
         if (auto interfaceEntry = dynamic_cast<InterfaceEntry *>(curmod))
             return interfaceEntry;
+        cProperties *props = curmod->getProperties();
         if (props && props->getAsBool("networkNode"))
             break;
     }
@@ -99,7 +99,7 @@ InterfaceEntry *getContainingNicModule(const cModule *from)
 {
     auto interfaceEntry = findContainingNicModule(from);
     if (!interfaceEntry)
-        throw cRuntimeError("getContainingNicModule(): nic module not found (it should have a property named nic) for module '%s'", from ? from->getFullPath().c_str() : "<nullptr>");
+        throw cRuntimeError("getContainingNicModule(): nic module not found (it should be an InterfaceEntry class) for module '%s'", from ? from->getFullPath().c_str() : "<nullptr>");
     return interfaceEntry;
 }
 

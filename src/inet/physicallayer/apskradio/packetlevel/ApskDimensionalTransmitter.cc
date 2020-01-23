@@ -49,9 +49,10 @@ std::ostream& ApskDimensionalTransmitter::printToStream(std::ostream& stream, in
 const ITransmission *ApskDimensionalTransmitter::createTransmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime) const
 {
     auto phyHeader = packet->peekAtFront<ApskPhyHeader>();
+    ASSERT(phyHeader->getChunkLength() == headerLength);
     auto dataLength = packet->getTotalLength() - phyHeader->getChunkLength();
     W transmissionPower = computeTransmissionPower(packet);
-    Hz transmissionCarrierFrequency = computeCarrierFrequency(packet);
+    Hz transmissionCenterFrequency = computeCenterFrequency(packet);
     Hz transmissionBandwidth = computeBandwidth(packet);
     bps transmissionBitrate = computeTransmissionDataBitrate(packet);
     const simtime_t headerDuration = b(headerLength).get() / bps(transmissionBitrate).get();
@@ -61,10 +62,10 @@ const ITransmission *ApskDimensionalTransmitter::createTransmission(const IRadio
     IMobility *mobility = transmitter->getAntenna()->getMobility();
     const Coord startPosition = mobility->getCurrentPosition();
     const Coord endPosition = mobility->getCurrentPosition();
-    const EulerAngles startOrientation = mobility->getCurrentAngularPosition();
-    const EulerAngles endOrientation = mobility->getCurrentAngularPosition();
-    const ConstMapping *powerMapping = createPowerMapping(startTime, endTime, carrierFrequency, bandwidth, transmissionPower);
-    return new ApskDimensionalTransmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, modulation, headerLength, dataLength, transmissionCarrierFrequency, transmissionBandwidth, transmissionBitrate, powerMapping);
+    const Quaternion startOrientation = mobility->getCurrentAngularPosition();
+    const Quaternion endOrientation = mobility->getCurrentAngularPosition();
+    const auto& powerFunction = createPowerFunction(startTime, endTime, centerFrequency, bandwidth, transmissionPower);
+    return new ApskDimensionalTransmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, modulation, headerLength, dataLength, transmissionCenterFrequency, transmissionBandwidth, transmissionBitrate, powerFunction);
 }
 
 } // namespace physicallayer

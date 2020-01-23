@@ -1,5 +1,55 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-09-02  Zoltan Bojthe
+
+	Optimized Tag usage.
+
+2019-07-01  Marcell Juhász
+
+	Fixed srcaddress, it was unfilled.
+
+2019-06-27  Marcell Juhász
+
+	Fixed chunkLength for Join, Prune and Graft messages in PimDm.
+
+2019-06-27  Zoltan Bojthe
+
+	Insert CRC values into packets.
+	Added Pim class for compound module, added CRC calculation.
+
+2019-06-26  Marcell Juhász
+
+	Removed extra 2 bytes from chunkLength in PimBase.
+
+2019-06-26  Zoltan Bojthe
+
+	Added crcMode parameter.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2019-01-14  Zoltan Bojthe
+
+	Fixed infinite recursion.
+
+2018-11-29  Mani Amoozadeh
+
+	Refactored code to better reflect code execution flow.
+	Added WATCHes for important variables.
+
+2018-10-05  Zoltan Bojthe
+
+	Changed base class of PimBase to RoutingProtocolBase.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-01  Zoltan Bojthe
+
+	Added B/b units to length constants and length fields of chunks.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-02-19  Zoltan Bojthe
 
 	Renamed functions to use camel case.

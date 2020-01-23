@@ -24,6 +24,7 @@
 #include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/common/packet/Message.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/common/TimeTag_m.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
 
@@ -54,9 +55,9 @@ void TcpGenericServerApp::initialize(int stage)
         socket.bind(localAddress[0] ? L3AddressResolver().resolve(localAddress) : L3Address(), localPort);
         socket.listen();
 
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
     }
@@ -101,14 +102,14 @@ void TcpGenericServerApp::handleMessage(cMessage *msg)
         int connId = check_and_cast<Indication *>(msg)->getTag<SocketInd>()->getSocketId();
         delete msg;
         auto request = new Request("close", TCP_C_CLOSE);
-        request->addTagIfAbsent<SocketReq>()->setSocketId(connId);
+        request->addTag<SocketReq>()->setSocketId(connId);
         sendOrSchedule(request, delay + maxMsgDelay);
     }
     else if (msg->getKind() == TCP_I_DATA || msg->getKind() == TCP_I_URGENT_DATA) {
         Packet *packet = check_and_cast<Packet *>(msg);
         int connId = packet->getTag<SocketInd>()->getSocketId();
         ChunkQueue &queue = socketQueue[connId];
-        auto chunk = packet->peekDataAt(B(0));
+        auto chunk = packet->peekDataAt(B(0), packet->getTotalLength());
         queue.push(chunk);
         emit(packetReceivedSignal, packet);
 
@@ -116,19 +117,19 @@ void TcpGenericServerApp::handleMessage(cMessage *msg)
         while (const auto& appmsg = queue.pop<GenericAppMsg>(b(-1), Chunk::PF_ALLOW_NULLPTR)) {
             msgsRcvd++;
             bytesRcvd += B(appmsg->getChunkLength()).get();
-            long requestedBytes = appmsg->getExpectedReplyLength();
+            B requestedBytes = appmsg->getExpectedReplyLength();
             simtime_t msgDelay = appmsg->getReplyDelay();
             if (msgDelay > maxMsgDelay)
                 maxMsgDelay = msgDelay;
 
-            if (requestedBytes > 0) {
-                Packet *outPacket = new Packet(msg->getName());
-                outPacket->addTagIfAbsent<SocketReq>()->setSocketId(connId);
-                outPacket->setKind(TCP_C_SEND);
+            if (requestedBytes > B(0)) {
+                Packet *outPacket = new Packet(msg->getName(), TCP_C_SEND);
+                outPacket->addTag<SocketReq>()->setSocketId(connId);
                 const auto& payload = makeShared<GenericAppMsg>();
-                payload->setChunkLength(B(requestedBytes));
-                payload->setExpectedReplyLength(0);
+                payload->setChunkLength(requestedBytes);
+                payload->setExpectedReplyLength(B(0));
                 payload->setReplyDelay(0);
+                payload->addTag<CreationTimeTag>()->setCreationTime(simTime());
                 outPacket->insertAtBack(payload);
                 sendOrSchedule(outPacket, delay + msgDelay);
             }
@@ -142,7 +143,7 @@ void TcpGenericServerApp::handleMessage(cMessage *msg)
         if (doClose) {
             auto request = new Request("close", TCP_C_CLOSE);
             TcpCommand *cmd = new TcpCommand();
-            request->addTagIfAbsent<SocketReq>()->setSocketId(connId);
+            request->addTag<SocketReq>()->setSocketId(connId);
             request->setControlInfo(cmd);
             sendOrSchedule(request, delay + maxMsgDelay);
         }

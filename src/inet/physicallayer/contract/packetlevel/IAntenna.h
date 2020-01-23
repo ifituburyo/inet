@@ -19,12 +19,11 @@
 #define __INET_IANTENNA_H
 
 #include "inet/common/INETDefs.h"
-#include "inet/physicallayer/contract/packetlevel/IPrintableObject.h"
-#include "inet/physicallayer/contract/packetlevel/IAntennaGain.h"
 #include "inet/mobility/contract/IMobility.h"
+#include "inet/physicallayer/contract/packetlevel/IAntennaGain.h"
+#include "inet/physicallayer/contract/packetlevel/IPrintableObject.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 /**
@@ -41,6 +40,11 @@ class INET_API IAntenna : public IPrintableObject
     virtual IMobility *getMobility() const = 0;
 
     /**
+     * Returns true if the antenna has directional selectivity (i.e. the gain is not always 1).
+     */
+    virtual bool isDirectional() const = 0;
+
+    /**
      * Returns the antenna's gain calculator for directional selectivity.
      * This object may be copied as needed, i.e. IAntennaGain objects are
      * expected to have no reference to other objects.
@@ -54,7 +58,6 @@ class INET_API IAntenna : public IPrintableObject
 };
 
 } // namespace physicallayer
-
 } // namespace inet
 
 #endif // ifndef __INET_IANTENNA_H

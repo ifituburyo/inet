@@ -18,22 +18,15 @@
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 
-
 package inet.node.xmipv6;
 
 import inet.node.ipv6.StandardHost6;
 
-
 //
-// Ipv6 compatible node with MIPv6 support.
+// IPv6 compatible node with MIPv6 support.
 // Models a host with one wireless (802.11b) card in infrastructure mode, supports handovers and MIPv6 protocol.
-// This module is basically a StandardHost with an Ieee80211NicSTA and MobileIPLayer6
-// added. It should be used in conjunction with WirelessAPSimplified,
-// or any other AP model which contains Ieee80211NicAPSimplified.
 //
-// @see AccessPoint
-// @see WirelessHost
-// @see AdhocHost
+// @see ~AccessPoint, ~WirelessHost, ~AdhocHost
 //
 module WirelessHost6 extends StandardHost6
 {

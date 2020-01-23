@@ -20,9 +20,8 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#include "inet/networklayer/xmipv6/BindingUpdateList.h"
-
 #include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/xmipv6/BindingUpdateList.h"
 
 namespace inet {
 
@@ -283,7 +282,7 @@ bool BindingUpdateList::isHomeTokenAvailable(const Ipv6Address& dest, InterfaceE
     ASSERT(entry != nullptr);
 
     return entry->tokenH != UNDEFINED_TOKEN &&
-           (entry->sentHoTI + ie->ipv6Data()->_getMaxTokenLifeTime()) > simTime();
+           (entry->sentHoTI + ie->getProtocolData<Ipv6InterfaceData>()->_getMaxTokenLifeTime()) > simTime();
 }
 
 bool BindingUpdateList::isCareOfTokenAvailable(const Ipv6Address& dest, InterfaceEntry *ie)
@@ -292,7 +291,7 @@ bool BindingUpdateList::isCareOfTokenAvailable(const Ipv6Address& dest, Interfac
     ASSERT(entry != nullptr);
 
     return entry->tokenC != UNDEFINED_TOKEN &&
-           (entry->sentCoTI + ie->ipv6Data()->_getMaxTokenLifeTime()) > simTime();
+           (entry->sentCoTI + ie->getProtocolData<Ipv6InterfaceData>()->_getMaxTokenLifeTime()) > simTime();
 }
 
 bool BindingUpdateList::isInBindingUpdateList(const Ipv6Address& dest) const
@@ -391,7 +390,7 @@ bool BindingUpdateList::recentlySentCOTI(const Ipv6Address& dest, InterfaceEntry
 
     ASSERT(entry != nullptr);
 
-    return entry->sentCoTI + ie->ipv6Data()->_getMaxTokenLifeTime() / 3 > simTime();
+    return entry->sentCoTI + ie->getProtocolData<Ipv6InterfaceData>()->_getMaxTokenLifeTime() / 3 > simTime();
 }
 
 bool BindingUpdateList::recentlySentHOTI(const Ipv6Address& dest, InterfaceEntry *ie)
@@ -400,7 +399,7 @@ bool BindingUpdateList::recentlySentHOTI(const Ipv6Address& dest, InterfaceEntry
 
     ASSERT(entry != nullptr);
 
-    return entry->sentHoTI + ie->ipv6Data()->_getMaxTokenLifeTime() / 3 > simTime();
+    return entry->sentHoTI + ie->getProtocolData<Ipv6InterfaceData>()->_getMaxTokenLifeTime() / 3 > simTime();
 }
 
 void BindingUpdateList::resetBindingCacheEntry(BindingUpdateListEntry& entry)

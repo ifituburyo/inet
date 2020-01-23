@@ -41,8 +41,11 @@ enum IpProtocolId
     IP_PROT_RSVP = 46;
     IP_PROT_IPv6_ICMP = 58;
     IP_PROT_NONE = 59;
+    IP_PROT_EIGRP = 88;
     IP_PROT_OSPF = 89;
+    IP_PROT_OSPFv3 = 90;
     IP_PROT_PIM = 103;
+    IP_PROT_VRRP = 112;
     IP_PROT_SCTP = 132;
     IP_PROT_DSR  = 48;
     IP_PROT_MANET = 138;
@@ -58,7 +61,7 @@ enum IpProtocolId
     IP_PROT_FLOODING = 250;    // INET specific: Probabilistic Network Protocol
     IP_PROT_PROBABILISTIC = 251;    // INET specific: Probabilistic Network Protocol
     IP_PROT_WISE = 252;    // INET specific: Probabilistic Network Protocol
-    IP_PROT_GNP = 253; // INET specific: Generic Network Protocol
+    IP_PROT_NEXT_HOP_FORWARDING = 253; // INET specific: Next Hop Forwarding
     IP_PROT_ECHO = 254; // INET specific: Echo Protocol
 }
 

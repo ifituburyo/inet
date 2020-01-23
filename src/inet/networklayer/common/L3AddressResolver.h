@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/networklayer/common/L3Address.h"
 #include "inet/networklayer/contract/IRoutingTable.h"
 
@@ -32,7 +31,7 @@ class IInterfaceTable;
 class InterfaceEntry;
 class IIpv4RoutingTable;
 class Ipv6RoutingTable;
-class GenericRoutingTable;
+class NextHopRoutingTable;
 
 #define DEFAULT_ADDR_TYPE    (ADDR_IPv4 | ADDR_IPv6 | ADDR_MODULEPATH | ADDR_MODULEID)
 
@@ -74,6 +73,8 @@ class INET_API L3AddressResolver
     virtual bool getInterfaceModulePathAddress(L3Address& ret, InterfaceEntry *ie, bool mask);
     // internal
     virtual bool getInterfaceModuleIdAddress(L3Address& ret, InterfaceEntry *ie, bool mask);
+    // internal
+    virtual void doCollectNetworkNodes(cModule *parent, std::vector<cModule*>& result);
 
   public:
     enum {
@@ -115,6 +116,8 @@ class INET_API L3AddressResolver
 
     /** @name Utility functions supporting resolve() */
     //@{
+    bool tryParse(L3Address& result, const char *addr, int addrType = DEFAULT_ADDR_TYPE);
+
     /**
      * Returns Ipv4 or Ipv6 address of the given host or router.
      *
@@ -192,12 +195,27 @@ class INET_API L3AddressResolver
     /**
      * Like interfaceTableOf(), but doesn't throw error if not found.
      */
-    virtual GenericRoutingTable *findGenericRoutingTableOf(cModule *host);
+    virtual NextHopRoutingTable *findNextHopRoutingTableOf(cModule *host);
+
+    /**
+     * Collect modules that represent network nodes, as denoted by the @networkNode(true) annotation.
+     */
+    virtual std::vector<cModule*> collectNetworkNodes();
 
     /**
      * Find the Host with the specified address.
      */
     virtual cModule *findHostWithAddress(const L3Address& addr);
+
+    /**
+     * Find the interface with the specified MAC address. Returns nullptr if not found.
+     */
+    virtual InterfaceEntry *findInterfaceWithMacAddress(const MacAddress& addr);
+
+    /**
+     * Find the host with the specified MAC address. Returns nullptr if not found.
+     */
+    virtual cModule *findHostWithMacAddress(const MacAddress& addr);
     //@}
 };
 

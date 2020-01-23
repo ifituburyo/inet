@@ -19,7 +19,6 @@
 #define __INET_ETHERMACFULLDUPLEX_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/linklayer/ethernet/EtherMacBase.h"
 
 namespace inet {
@@ -40,7 +39,7 @@ class INET_API EtherMacFullDuplex : public EtherMacBase
     virtual void initialize(int stage) override;
     virtual void initializeStatistics() override;
     virtual void initializeFlags() override;
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void handleMessageWhenUp(cMessage *msg) override;
 
     // finish
     virtual void finish() override;
@@ -49,11 +48,11 @@ class INET_API EtherMacFullDuplex : public EtherMacBase
     virtual void handleEndIFGPeriod();
     virtual void handleEndTxPeriod();
     virtual void handleEndPausePeriod();
-    virtual void handleSelfMessage(cMessage *msg);
+    virtual void handleSelfMessage(cMessage *msg) override;
 
     // helpers
     virtual void startFrameTransmission();
-    virtual void processFrameFromUpperLayer(Packet *pk);
+    virtual void handleUpperPacket(Packet *pk) override;
     virtual void processMsgFromNetwork(EthernetSignal *signal);
     virtual void processReceivedDataFrame(Packet *packet, const Ptr<const EthernetMacHeader>& frame);
     virtual void processPauseCommand(int pauseUnits);

@@ -16,10 +16,8 @@
 #include "inet/common/IProtocolRegistrationListener.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
-#include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
-#include "inet/networklayer/contract/L3Socket.h"
 #include "inet/routing/dsdv/Dsdv.h"
 
 namespace inet {
@@ -47,29 +45,25 @@ Dsdv::~Dsdv()
 
 void Dsdv::initialize(int stage)
 {
-    cSimpleModule::initialize(stage);
+    RoutingProtocolBase::initialize(stage);
 
     //reads from omnetpp.ini
     if (stage == INITSTAGE_LOCAL)
     {
         sequencenumber = 0;
         host = getContainingNode(this);
-        nodeStatus = dynamic_cast<NodeStatus *>(host->getSubmodule("status"));
         ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
         rt = getModuleFromPar<IIpv4RoutingTable>(par("routingTableModule"), this);
 
         routeLifetime = par("routeLifetime").doubleValue();
         helloInterval = par("helloInterval");
+        forwardList = new std::list<ForwardEntry *>();
+        event = new cMessage("event");
     }
     else if (stage == INITSTAGE_ROUTING_PROTOCOLS)
     {
         registerService(Protocol::manet, nullptr, gate("ipIn"));
         registerProtocol(Protocol::manet, gate("ipOut"), nullptr);
-        L3Socket socket(&Protocol::manet, gate("ipOut"));
-        forwardList = new std::list<ForwardEntry *>();
-        event = new cMessage("event");
-        if (isNodeUp())
-            start();
     }
 }
 
@@ -110,7 +104,7 @@ void Dsdv::start()
                 rt->deleteRoute(entry);
         }
     }
-    CHK(interface80211ptr->ipv4Data())->joinMulticastGroup(Ipv4Address::LL_MANET_ROUTERS);
+    CHK(interface80211ptr->getProtocolData<Ipv4InterfaceData>())->joinMulticastGroup(Ipv4Address::LL_MANET_ROUTERS);
 
     // schedules a random periodic event: the hello message broadcast from DSDV module
 
@@ -158,7 +152,7 @@ void Dsdv::handleSelfMessage(cMessage *msg)
 
         // Filling the DsdvHello fields
         // Ipv4Address source = (ie->ipv4()->getIPAddress());
-        Ipv4Address source = (interface80211ptr->ipv4Data()->getIPAddress());
+        Ipv4Address source = (interface80211ptr->getProtocolData<Ipv4InterfaceData>()->getIPAddress());
         hello->setChunkLength(b(128)); ///size of Hello message in bits
         hello->setSrcAddress(source);
         sequencenumber += 2;
@@ -180,11 +174,12 @@ void Dsdv::handleSelfMessage(cMessage *msg)
         */
         //new control info for DsdvHello
         auto packet = new Packet("Hello", hello);
-        packet->addTagIfAbsent<L3AddressReq>()->setDestAddress(Ipv4Address(255, 255, 255, 255)); //let's try the limited broadcast 255.255.255.255 but multicast goes from 224.0.0.0 to 239.255.255.255
-        packet->addTagIfAbsent<L3AddressReq>()->setSrcAddress(source); //let's try the limited broadcast
-        packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(interface80211ptr->getInterfaceId());
-        packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::manet);
-        packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::ipv4);
+        auto addressReq = packet->addTag<L3AddressReq>();
+        addressReq->setDestAddress(Ipv4Address(255, 255, 255, 255)); //let's try the limited broadcast 255.255.255.255 but multicast goes from 224.0.0.0 to 239.255.255.255
+        addressReq->setSrcAddress(source); //let's try the limited broadcast
+        packet->addTag<InterfaceReq>()->setInterfaceId(interface80211ptr->getInterfaceId());
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::manet);
+        packet->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::ipv4);
 
         //broadcast to other nodes the hello message
         send(packet, "ipOut");
@@ -213,16 +208,8 @@ void Dsdv::handleSelfMessage(cMessage *msg)
     }
 }
 
-void Dsdv::handleMessage(cMessage *msg)
+void Dsdv::handleMessageWhenUp(cMessage *msg)
 {
-    if (!isNodeUp()) {
-        if (msg->isSelfMessage())
-            throw cRuntimeError("Model error: self message arrived in node down status");
-        EV_ERROR << "Message " << msg->getName() << "(" << msg->getClassName() << ") arrived in node down status, ignored\n";
-        delete msg;
-        return;
-    }
-
     if (msg->isSelfMessage())
     {
         handleSelfMessage(msg);
@@ -234,11 +221,12 @@ void Dsdv::handleMessage(cMessage *msg)
         // When DSDV module receives DsdvHello from other host
         // it adds/replaces the information in routing table for the one contained in the message
         // but only if it's useful/up-to-date. If not the DSDV module ignores the message.
-        packet->addTagIfAbsent<L3AddressReq>()->setDestAddress(Ipv4Address(255, 255, 255, 255)); //let's try the limited broadcast 255.255.255.255 but multicast goes from 224.0.0.0 to 239.255.255.255
-        packet->addTagIfAbsent<L3AddressReq>()->setSrcAddress(interface80211ptr->ipv4Data()->getIPAddress());
-        packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(interface80211ptr->getInterfaceId());
-        packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::manet);
-        packet->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::ipv4);
+        auto addressReq = packet->addTag<L3AddressReq>();
+        addressReq->setDestAddress(Ipv4Address(255, 255, 255, 255)); //let's try the limited broadcast 255.255.255.255 but multicast goes from 224.0.0.0 to 239.255.255.255
+        addressReq->setSrcAddress(interface80211ptr->getProtocolData<Ipv4InterfaceData>()->getIPAddress());
+        packet->addTag<InterfaceReq>()->setInterfaceId(interface80211ptr->getInterfaceId());
+        packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::manet);
+        packet->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::ipv4);
         ForwardEntry *fhp = nullptr;
         auto recHello = !isForwardHello ? staticPtrCast<DsdvHello>(check_and_cast<Packet *>(msg)->peekData<DsdvHello>()->dupShared()) : nullptr;
         if (isForwardHello) {
@@ -249,7 +237,7 @@ void Dsdv::handleMessage(cMessage *msg)
         if (msg->arrivedOn("ipIn")) {
             ASSERT((!isForwardHello && recHello) || (isForwardHello && fhp->hello));
             bubble("Received hello message");
-            Ipv4Address source = interface80211ptr->ipv4Data()->getIPAddress();
+            Ipv4Address source = interface80211ptr->getProtocolData<Ipv4InterfaceData>()->getIPAddress();
 
             //reads DSDV hello message fields
             Ipv4Address src;
@@ -265,6 +253,7 @@ void Dsdv::handleMessage(cMessage *msg)
                 if (src == source) {
                     EV_INFO << "Hello msg dropped. This message returned to the original creator.\n";
                     delete packet;
+                    delete fhp;
                     delete msg;
                     return;
                 }
@@ -353,40 +342,6 @@ void Dsdv::handleMessage(cMessage *msg)
     }
     else
         throw cRuntimeError("Message not supported %s", msg->getName());
-}
-
-//
-// configuration
-//
-
-bool Dsdv::isNodeUp() const
-{
-    return !nodeStatus || nodeStatus->getState() == NodeStatus::UP;
-}
-
-//
-// lifecycle
-//
-bool Dsdv::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
-{
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER)
-            start();
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
-            stop();
-        }
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
-            stop();
-        }
-    }
-    else
-        throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
 }
 
 

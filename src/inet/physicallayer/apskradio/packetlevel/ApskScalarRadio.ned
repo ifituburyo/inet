@@ -23,12 +23,13 @@ package inet.physicallayer.apskradio.packetlevel;
 // error correction, interleaving, spreading, etc. It must be used in
 // conjunction with the ~ApskScalarRadioMedium model.
 //
-// See also ~ApskScalarRadioMedium, ~ScalarAnalogModel, ~ApskScalarTransmitter,
-// and ~ApskScalarReceiver.
+// @see ~ApskScalarRadioMedium, ~ScalarAnalogModel, ~ApskScalarTransmitter,
+//  ~ApskScalarReceiver.
 //
 module ApskScalarRadio extends ApskRadio
 {
     parameters:
-        transmitterType = default("ApskScalarTransmitter");
-        receiverType = default("ApskScalarReceiver");
+        transmitter.typename = default("ApskScalarTransmitter");
+        receiver.typename = default("ApskScalarReceiver");
 }
+

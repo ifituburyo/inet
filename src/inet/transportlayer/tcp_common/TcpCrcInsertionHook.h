@@ -15,27 +15,20 @@
 #define __INET_TCPCRCINSERTIONHOOK_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/common/Protocol.h"
 #include "inet/networklayer/contract/INetfilter.h"
-#include "inet/transportlayer/common/CRC_m.h"
+#include "inet/transportlayer/common/CrcMode_m.h"
 #include "inet/transportlayer/tcp_common/TcpCrcInsertionHook.h"
 #include "inet/transportlayer/tcp_common/TcpHeader.h"
 
-
 namespace inet {
-
 namespace tcp {
 
 class TcpCrcInsertion : public NetfilterBase::HookBase {
-    CrcMode crcMode = static_cast<CrcMode>(-1);
   public:
-    TcpCrcInsertion() {}
-    void setCrcMode(CrcMode crcModeP) { crcMode = crcModeP; }
-    void insertCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<TcpHeader>& tcpHeader, Packet *packet);
-    uint16_t computeCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<const TcpHeader>& tcpHeader, const Ptr<const Chunk>& tcpData);
+    static void insertCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<TcpHeader>& tcpHeader, Packet *tcpPayload);
+    static uint16_t computeCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<const TcpHeader>& tcpHeader, const Ptr<const Chunk>& tcpData);
 
-  public:
     virtual Result datagramPreRoutingHook(Packet *packet) override { return ACCEPT; }
     virtual Result datagramForwardHook(Packet *packet) override { return ACCEPT; }
     virtual Result datagramPostRoutingHook(Packet *packet) override;
@@ -44,7 +37,6 @@ class TcpCrcInsertion : public NetfilterBase::HookBase {
 };
 
 } // namespace tcp
-
 } // namespace inet
 
 #endif // ifndef __INET_TCPCRCINSERTIONHOOK_H

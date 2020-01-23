@@ -19,43 +19,40 @@
 #ifndef __INET_UDP_H
 #define __INET_UDP_H
 
-#include <map>
 #include <list>
+#include <map>
 
-#include "inet/common/lifecycle/ILifecycle.h"
 #include "inet/common/Protocol.h"
-#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/packet/Message.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/networklayer/contract/INetfilter.h"
-#include "inet/transportlayer/common/CRC_m.h"
+#include "inet/transportlayer/base/TransportProtocolBase.h"
+#include "inet/transportlayer/common/CrcMode_m.h"
 #include "inet/transportlayer/common/TransportPseudoHeader_m.h"
 #include "inet/transportlayer/contract/udp/UdpControlInfo.h"
 
 namespace inet {
 
 class IInterfaceTable;
-class Ipv4ControlInfo;
-class Ipv6ControlInfo;
 class Icmp;
 class Icmpv6;
 class UdpHeader;
 class InterfaceEntry;
 
 const bool DEFAULT_MULTICAST_LOOP = true;
+const uint16_t UDP_MAX_MESSAGE_SIZE = 65535; // bytes
 
 /**
  * Implements the Udp protocol: encapsulates/decapsulates user data into/from Udp.
  *
  * More info in the NED file.
  */
-class INET_API Udp : public cSimpleModule, public ILifecycle
+class INET_API Udp : public TransportProtocolBase
 {
   public:
     class CrcInsertion : public NetfilterBase::HookBase {
-      public:
-        Udp *udp = nullptr;
-
       public:
         virtual Result datagramPreRoutingHook(Packet *packet) override { return ACCEPT; }
         virtual Result datagramForwardHook(Packet *packet) override { return ACCEPT; }
@@ -99,7 +96,8 @@ class INET_API Udp : public cSimpleModule, public ILifecycle
         int multicastOutputInterfaceId = -1;
         bool multicastLoop = DEFAULT_MULTICAST_LOOP;
         int ttl = -1;
-        unsigned char typeOfService = 0;
+        short dscp = -1;
+        short tos = -1;
         MulticastMembershipTable multicastMembershipTable;
 
         MulticastMembershipTable::iterator findFirstMulticastMembership(const L3Address& multicastAddress);
@@ -108,12 +106,14 @@ class INET_API Udp : public cSimpleModule, public ILifecycle
         void deleteMulticastMembership(MulticastMembership *membership);
     };
 
+    friend std::ostream& operator<<(std::ostream& os, const Udp::SockDesc& sd);
+
     typedef std::list<SockDesc *> SockDescList;    // might contain duplicated local addresses if their reuseAddr flag is set
     typedef std::map<int, SockDesc *> SocketsByIdMap;
     typedef std::map<int, SockDescList> SocketsByPortMap;
 
   protected:
-    CrcMode crcMode = static_cast<CrcMode>(-1);
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
     CrcInsertion crcInsertion;
 
     // sockets
@@ -132,8 +132,6 @@ class INET_API Udp : public cSimpleModule, public ILifecycle
     int numDroppedWrongPort = 0;
     int numDroppedBadChecksum = 0;
 
-    bool isOperational = false;
-
   protected:
     // utility: show current statistics above the icon
     virtual void refreshDisplay() const override;
@@ -145,9 +143,12 @@ class INET_API Udp : public cSimpleModule, public ILifecycle
     virtual void bind(int sockId, int gateIndex, const L3Address& localAddr, int localPort);
     virtual void connect(int sockId, int gateIndex, const L3Address& remoteAddr, int remotePort);
     virtual void close(int sockId);
+    virtual void destroySocket(int sockId);
+    void destroySocket(SocketsByIdMap::iterator it);
     virtual void clearAllSockets();
     virtual void setTimeToLive(SockDesc *sd, int ttl);
-    virtual void setTypeOfService(SockDesc *sd, int typeOfService);
+    virtual void setDscp(SockDesc *sd, short dscp);
+    virtual void setTos(SockDesc *sd, short tos);
     virtual void setBroadcast(SockDesc *sd, bool broadcast);
     virtual void setMulticastOutputInterface(SockDesc *sd, int interfaceId);
     virtual void setMulticastLoop(SockDesc *sd, bool loop);
@@ -180,19 +181,25 @@ class INET_API Udp : public cSimpleModule, public ILifecycle
     virtual void processUDPPacket(Packet *udpPacket);
 
     // process packets from application
-    virtual void processPacketFromApp(Packet *appData);
+    virtual void handleUpperPacket(Packet *appData) override;
+
+    // process packets from network layr
+    virtual void handleLowerPacket(Packet *appData) override;
 
     // process commands from application
-    virtual void processCommandFromApp(cMessage *msg);
+    virtual void handleUpperCommand(cMessage *msg) override;
 
     // create a blank Udp packet; override to subclass UdpHeader
     virtual UdpHeader *createUDPPacket();
 
     // ILifeCycle:
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
+  public:
     // crc
-    virtual void insertCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<UdpHeader>& udpHeader, Packet *packet);
+    static void insertCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<UdpHeader>& udpHeader, Packet *udpPayload);
     static bool verifyCrc(const Protocol *networkProtocol, const Ptr<const UdpHeader>& udpHeader, Packet *packet);
     static uint16_t computeCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<const UdpHeader>& udpHeader, const Ptr<const Chunk>& udpData);
 
@@ -205,7 +212,6 @@ class INET_API Udp : public cSimpleModule, public ILifecycle
   protected:
     virtual void initialize(int stage) override;
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
-    virtual void handleMessage(cMessage *msg) override;
 };
 
 } // namespace inet

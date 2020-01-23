@@ -16,11 +16,12 @@
 //
 
 #include <algorithm>
-#include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
-#include "inet/networklayer/contract/IInterfaceTable.h"
+
+#include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/networklayer/configurator/ipv4/Ipv4FlatNetworkConfigurator.h"
-#include "inet/networklayer/common/InterfaceEntry.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
 
 namespace inet {
@@ -33,7 +34,7 @@ void Ipv4FlatNetworkConfigurator::initialize(int stage)
 {
     cSimpleModule::initialize(stage);
 
-    if (stage == INITSTAGE_NETWORK_LAYER_2) {
+    if (stage == INITSTAGE_NETWORK_CONFIGURATION) {
         cTopology topo("topo");
         NodeInfoVector nodeInfo;    // will be of size topo.nodes[]
 
@@ -99,8 +100,8 @@ void Ipv4FlatNetworkConfigurator::assignAddresses(cTopology& topo, NodeInfoVecto
         for (int k = 0; k < ift->getNumInterfaces(); k++) {
             InterfaceEntry *ie = ift->getInterface(k);
             if (!ie->isLoopback()) {
-                ie->ipv4Data()->setIPAddress(Ipv4Address(addr));
-                ie->ipv4Data()->setNetmask(Ipv4Address::ALLONES_ADDRESS);    // full address must match for local delivery
+                ie->getProtocolData<Ipv4InterfaceData>()->setIPAddress(Ipv4Address(addr));
+                ie->getProtocolData<Ipv4InterfaceData>()->setNetmask(Ipv4Address::ALLONES_ADDRESS);    // full address must match for local delivery
             }
         }
     }
@@ -181,7 +182,7 @@ void Ipv4FlatNetworkConfigurator::fillRoutingTables(cTopology& topo, NodeInfoVec
             IInterfaceTable *ift = nodeInfo[j].ift;
 
             int outputGateId = atNode->getPath(0)->getLocalGate()->getId();
-            InterfaceEntry *ie = ift->getInterfaceByNodeOutputGateId(outputGateId);
+            InterfaceEntry *ie = ift->findInterfaceByNodeOutputGateId(outputGateId);
             if (!ie)
                 throw cRuntimeError("%s has no interface for output gate id %d", ift->getFullPath().c_str(), outputGateId);
 

@@ -21,18 +21,16 @@
 #define __INET_LOOPBACK_H
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/linklayer/base/MacBase.h"
+#include "inet/linklayer/base/MacProtocolBase.h"
 
 namespace inet {
 
 class InterfaceEntry;
-class IPassiveQueue;
 
 /**
  * Loopback interface implementation.
  */
-class INET_API Loopback : public MacBase
+class INET_API Loopback : public MacProtocolBase
 {
   protected:
     // statistics
@@ -40,10 +38,7 @@ class INET_API Loopback : public MacBase
     long numRcvdOK = 0;
 
   protected:
-    virtual InterfaceEntry *createInterfaceEntry() override;
-    virtual void flushQueue() override;
-    virtual void clearQueue() override;
-    virtual bool isUpperMsg(cMessage *msg) override;
+    virtual void configureInterfaceEntry() override;
 
   public:
     Loopback() {}
@@ -52,7 +47,7 @@ class INET_API Loopback : public MacBase
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void handleUpperPacket(Packet *packet) override;
     virtual void refreshDisplay() const override;
 };
 

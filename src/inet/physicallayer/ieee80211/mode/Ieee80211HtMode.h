@@ -20,10 +20,10 @@
 
 #define DI DelayedInitializer
 
+#include "inet/common/DelayedInitializer.h"
+#include "inet/physicallayer/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/ieee80211/mode/Ieee80211HtCode.h"
 #include "inet/physicallayer/ieee80211/mode/Ieee80211OfdmMode.h"
-#include "inet/physicallayer/ieee80211/mode/IIeee80211Mode.h"
-#include "inet/common/DelayedInitializer.h"
 
 namespace inet {
 namespace physicallayer {
@@ -153,7 +153,6 @@ class INET_API Ieee80211HtPreambleMode : public IIeee80211PreambleMode, public I
         virtual const Ieee80211HtSignalMode *getSignalMode() const { return highThroughputSignalMode; }
         virtual const Ieee80211OfdmSignalMode *getLegacySignalMode() const { return legacySignalMode; }
         virtual const Ieee80211HtSignalMode* getHighThroughputSignalMode() const { return highThroughputSignalMode; }
-        virtual inline unsigned int getNumberOfHTLongTrainings() const { return numberOfHTLongTrainings; }
 
         virtual const inline simtime_t getDoubleGIDuration() const { return 2 * getGIDuration(); } // GI2
         virtual const inline simtime_t getLSIGDuration() const { return getSymbolInterval(); } // L-SIG
@@ -163,7 +162,7 @@ class INET_API Ieee80211HtPreambleMode : public IIeee80211PreambleMode, public I
         virtual const inline simtime_t getHTShortTrainingFieldDuration() const { return 4E-6; } // HT-STF
         virtual const simtime_t getFirstHTLongTrainingFieldDuration() const;
         virtual const inline simtime_t getSecondAndSubsequentHTLongTrainingFielDuration() const { return 4E-6; } // HT-LTFs, s = 2,3,..,n
-        virtual const inline unsigned int getNumberOfHtLongTrainings() const { return numberOfHTLongTrainings; }
+        virtual inline unsigned int getNumberOfHtLongTrainings() const { return numberOfHTLongTrainings; }
 
         virtual const simtime_t getDuration() const override;
 
@@ -217,7 +216,7 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
         b getServiceFieldLength() const { return b(16); }
         b getTailFieldLength() const { return b(6) * numberOfBccEncoders; }
 
-        virtual Hz getBandwidth() const { return bandwidth; }
+        virtual Hz getBandwidth() const override { return bandwidth; }
         virtual int getNumberOfSpatialStreams() const override { return Ieee80211HtModeBase::getNumberOfSpatialStreams(); }
         virtual b getPaddingLength(b dataLength) const override { return b(0); }
         virtual b getCompleteLength(b dataLength) const override;
@@ -241,14 +240,14 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
     protected:
         const Ieee80211HtPreambleMode *preambleMode;
         const Ieee80211HtDataMode *dataMode;
-        const BandMode carrierFrequencyMode;
+        const BandMode centerFrequencyMode;
 
     protected:
         virtual inline int getLegacyCwMin() const override { return 15; }
         virtual inline int getLegacyCwMax() const override { return 1023; }
 
     public:
-        Ieee80211HtMode(const char *name, const Ieee80211HtPreambleMode *preambleMode, const Ieee80211HtDataMode *dataMode, const BandMode carrierFrequencyMode);
+        Ieee80211HtMode(const char *name, const Ieee80211HtPreambleMode *preambleMode, const Ieee80211HtDataMode *dataMode, const BandMode centerFrequencyMode);
         virtual ~Ieee80211HtMode() { delete preambleMode; delete dataMode; }
 
         virtual const Ieee80211HtDataMode* getDataMode() const override { return dataMode; }
@@ -267,7 +266,7 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
         virtual inline const simtime_t getPreambleLength() const override { return 16E-6; }
         virtual inline const simtime_t getPlcpHeaderLength() const override { return 4E-6; }
         virtual inline int getMpduMaxLength() const override { return 65535; } // in octets
-        virtual BandMode getCarrierFrequencyMode() const { return carrierFrequencyMode; }
+        virtual BandMode getCenterFrequencyMode() const { return centerFrequencyMode; }
 
         virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + dataMode->getDuration(dataLength); }
 };
@@ -474,7 +473,7 @@ class INET_API Ieee80211HtCompliantModes
         Ieee80211HtCompliantModes();
         virtual ~Ieee80211HtCompliantModes();
 
-        static const Ieee80211HtMode *getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode carrierFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType);
+        static const Ieee80211HtMode *getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode centerFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType);
 
 };
 

@@ -22,6 +22,7 @@ import inet.linklayer.common.WirelessInterface;
 module ShortcutInterface extends WirelessInterface
 {
     parameters:
-        radioType = "";
-        macType = "ShortcutMac";
+        radio.typename = "";
+        mac.typename = "ShortcutMac";
 }
+

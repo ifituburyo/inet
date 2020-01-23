@@ -2,11 +2,10 @@
 EtherMac module: tests framebursting in half duplex mode on gigabit ethernet
 
 
-%inifile: {}.ini
+%inifile: omnetpp.ini
 [General]
-#preload-ned-files = *.ned ../../*.ned @../../../../nedfiles.lst
 ned-path = .;../../../../src;../../lib
-network = EthTestNetwork
+network = inet.test.moduletest.lib.EthTestNetwork
 
 record-eventlog = true
 
@@ -16,27 +15,25 @@ output-scalar-file = "${resultdir}/${configname}-${runnumber}.sca"
 output-vector-file = "${resultdir}/${configname}-${runnumber}.vec"
 snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 
-#[Cmdenv]
 cmdenv-event-banners=false
 cmdenv-express-mode=false
 
-#[Parameters]
 
 **.ethch*.datarate = 1Gbps
 
 *.host1.app.destAddr = "AA-00-00-00-00-02"
 *.host1.app.script = "10:80 10:214 10:214 10:980 10:980 10:980 10:980 10:980 10:980 10:980 10:980 10:980 20:80 20:214 20:214 20:980 20:980 20:980 20:980 20:980 20:980 20:980 20:980 20:980"
-*.host1.mac.address = "AA-00-00-00-00-01"
+*.host1.eth.mac.address = "AA-00-00-00-00-01"
 
 
 *.host2.app.destAddr = "AA-00-00-00-00-01"
 *.host2.app.script = ""
-*.host2.mac.address = "AA-00-00-00-00-02"
+*.host2.eth.mac.address = "AA-00-00-00-00-02"
 
-*.host*.macType = "EtherMac"    # ${"EtherMac","EtherMacFullDuplex"}
-*.host*.queueType = ${queue="", "DropTailQueue"}
-*.host*.mac.duplexMode = false     # Half duplex
-*.host*.mac.frameBursting = true
+*.host*.eth.csmacdSupport.typename = true
+*.host*.eth.queue.typename = ${queue="", "DropTailQueue"}
+*.host*.eth.mac.duplexMode = false     # Half duplex
+*.host*.eth.mac.frameBursting = true
 
 #*.host1.ethg$o.channel.logfile="logfile-${runnumber}.txt"
 **.ethch2.logfile="logfile-${runnumber}.txt"

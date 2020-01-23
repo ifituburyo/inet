@@ -19,16 +19,14 @@
 #ifndef __INET_SIMPLEVOIPRECEIVER_H
 #define __INET_SIMPLEVOIPRECEIVER_H
 
-#include <string.h>
 #include <list>
-
+#include <string.h>
 
 #include "inet/common/INETDefs.h"
 #include "inet/common/INETMath.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/contract/udp/UdpSocket.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
 
 namespace inet {
 
@@ -37,7 +35,7 @@ class SimpleVoipPacket;
 /**
  * Implements a simple VoIP source. See the NED file for more information.
  */
-class INET_API SimpleVoipReceiver : public cSimpleModule, public ILifecycle
+class INET_API SimpleVoipReceiver : public cSimpleModule, public LifecycleUnsupported, public UdpSocket::ICallback
 {
   private:
     class VoipPacketInfo
@@ -106,8 +104,10 @@ class INET_API SimpleVoipReceiver : public cSimpleModule, public ILifecycle
     void handleMessage(cMessage *msg) override;
     virtual void finish() override;
 
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override
-    { Enter_Method_Silent(); throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName()); return true; }
+    //UdpSocket::ICallback methods
+    virtual void socketDataArrived(UdpSocket *socket, Packet *packet) override;
+    virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) override;
+    virtual void socketClosed(UdpSocket *socket) override {}
 
   public:
     SimpleVoipReceiver();

@@ -24,13 +24,14 @@
  * part of:    Modifications to the MF-2 framework by CSEM
  **************************************************************************/
 
-#ifndef __INET_CSMA_H
-#define __INET_CSMA_H
+#ifndef __INET_IEEE802154MAC_H
+#define __INET_IEEE802154MAC_H
 
-#include "inet/physicallayer/contract/packetlevel/IRadio.h"
-#include "inet/linklayer/contract/IMacProtocol.h"
-#include "inet/linklayer/common/MacAddress.h"
+#include "inet/queueing/contract/IPacketQueue.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/linklayer/contract/IMacProtocol.h"
+#include "inet/physicallayer/contract/packetlevel/IRadio.h"
 
 namespace inet {
 
@@ -81,8 +82,6 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol
         , initialCW(0)
         , txPower(0)
         , NB(0)
-        , macQueue()
-        , queueLength(0)
         , txAttempts(0)
         , bitrate(0)
         , ackLength(0)
@@ -109,11 +108,9 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol
     virtual void handleSelfMessage(cMessage *) override;
 
     /** @brief Handle control messages from lower layer */
-    virtual void receiveSignal(cComponent *source, simsignal_t signalID, long value, cObject *details) override;
+    virtual void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
 
   protected:
-    typedef std::list<Packet *> MacQueue;
-
     /** @name Different tracked statistics.*/
     /*@{*/
     long nbTxFrames;
@@ -208,9 +205,6 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol
     t_mac_states macState;
     t_mac_status status;
 
-    /** @brief The MAC address of the interface. */
-    MacAddress address;
-
     /** @brief The radio. */
     physicallayer::IRadio *radio;
     physicallayer::IRadio::TransmissionState transmissionState;
@@ -268,13 +262,6 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol
     /** @brief number of backoff performed until now for current frame */
     int NB;
 
-    /** @brief A queue to store packets from upper layer in case another
-       packet is still waiting for transmission..*/
-    MacQueue macQueue;
-
-    /** @brief length of the queue*/
-    unsigned int queueLength;
-
     /** @brief count the number of tx attempts
      *
      * This holds the number of transmission attempts for the current frame.
@@ -289,13 +276,8 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol
 
   protected:
     /** @brief Generate new interface address*/
-    virtual void initializeMacAddress();
-    virtual InterfaceEntry *createInterfaceEntry() override;
+    virtual void configureInterfaceEntry() override;
     virtual void handleCommand(cMessage *msg) {}
-
-    virtual void flushQueue();
-
-    virtual void clearQueue();
 
     // FSM functions
     void fsmError(t_mac_event event, cMessage *msg);
@@ -339,5 +321,5 @@ class INET_API Ieee802154Mac : public MacProtocolBase, public IMacProtocol
 
 } // namespace inet
 
-#endif // ifndef __INET_CSMA_H
+#endif // ifndef __INET_IEEE802154MAC_H
 

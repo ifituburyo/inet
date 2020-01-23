@@ -18,15 +18,14 @@
 
 //  Cleanup and rewrite: Andras Varga, 2004
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
-
-#include "inet/networklayer/ipv4/RoutingTableParser.h"
 
 #include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
+#include "inet/networklayer/ipv4/RoutingTableParser.h"
 
 namespace inet {
 
@@ -66,16 +65,15 @@ void RoutingTableParser::skipBlanks(char *str, int& charptr)
 
 int RoutingTableParser::readRoutingTableFromFile(const char *filename)
 {
-    FILE *fp;
+    FILE *fp = fopen(filename, "r");
+    if (fp == nullptr)
+        throw cRuntimeError("Error opening routing table file `%s'", filename);
+
     int charpointer;
     char *file = new char[MAX_FILESIZE];
     char *ifconfigFile = nullptr;
     char *routeFile = nullptr;
     int c;
-
-    fp = fopen(filename, "r");
-    if (fp == nullptr)
-        throw cRuntimeError("Error opening routing table file `%s'", filename);
 
     // read the whole into the file[] char-array
     for (charpointer = 0; (c = getc(fp)) != EOF; charpointer++)
@@ -164,10 +162,10 @@ void RoutingTableParser::parseInterfaces(char *ifconfigFile)
         if (streq(ifconfigFile + charpointer, "name:")) {
             // find existing interface with this name
             char *name = parseEntry(ifconfigFile, "name:", charpointer, buf);
-            ie = ift->getInterfaceByName(name);
+            ie = ift->findInterfaceByName(name);
             if (!ie)
                 throw cRuntimeError("Error in routing file: interface name `%s' not registered by any L2 module", name);
-            if (!ie->ipv4Data())
+            if (!ie->findProtocolData<Ipv4InterfaceData>())
                 throw cRuntimeError("Error in routing file: interface name `%s' doesn't have Ipv4 data fields", name);
 
             continue;
@@ -195,7 +193,7 @@ void RoutingTableParser::parseInterfaces(char *ifconfigFile)
         if (streq(ifconfigFile + charpointer, "inet_addr:")) {
             if (!ie)
                 throw cRuntimeError("Error in routing file: missing the `name:' entry");
-            ie->ipv4Data()->setIPAddress(Ipv4Address(parseEntry(ifconfigFile, "inet_addr:", charpointer, buf)));
+            ie->getProtocolData<Ipv4InterfaceData>()->setIPAddress(Ipv4Address(parseEntry(ifconfigFile, "inet_addr:", charpointer, buf)));
             continue;
         }
 
@@ -212,7 +210,7 @@ void RoutingTableParser::parseInterfaces(char *ifconfigFile)
         if (streq(ifconfigFile + charpointer, "Mask:")) {
             if (!ie)
                 throw cRuntimeError("Error in routing file: missing the `name:' entry");
-            ie->ipv4Data()->setNetmask(Ipv4Address(parseEntry(ifconfigFile, "Mask:", charpointer, buf)));
+            ie->getProtocolData<Ipv4InterfaceData>()->setNetmask(Ipv4Address(parseEntry(ifconfigFile, "Mask:", charpointer, buf)));
             continue;
         }
 
@@ -237,7 +235,7 @@ void RoutingTableParser::parseInterfaces(char *ifconfigFile)
         if (streq(ifconfigFile + charpointer, "Metric:")) {
             if (!ie)
                 throw cRuntimeError("Error in routing file: missing the `name:' entry");
-            ie->ipv4Data()->setMetric(atoi(parseEntry(ifconfigFile, "Metric:", charpointer, buf)));
+            ie->getProtocolData<Ipv4InterfaceData>()->setMetric(atoi(parseEntry(ifconfigFile, "Metric:", charpointer, buf)));
             continue;
         }
 
@@ -297,7 +295,7 @@ void RoutingTableParser::parseMulticastGroups(char *groupStr, InterfaceEntry *it
     cStringTokenizer tokenizer(groupStr, ":");
     const char *token;
     while ((token = tokenizer.nextToken()) != nullptr)
-        itf->ipv4Data()->joinMulticastGroup(Ipv4Address(token));
+        itf->getProtocolData<Ipv4InterfaceData>()->joinMulticastGroup(Ipv4Address(token));
 }
 
 void RoutingTableParser::parseRouting(char *routeFile)
@@ -370,7 +368,7 @@ void RoutingTableParser::parseRouting(char *routeFile)
         interfaceName.reserve(MAX_ENTRY_STRING_SIZE);
         pos += strcpyword(interfaceName.buffer(), routeFile + pos);
         skipBlanks(routeFile, pos);
-        InterfaceEntry *ie = ift->getInterfaceByName(interfaceName.c_str());
+        InterfaceEntry *ie = ift->findInterfaceByName(interfaceName.c_str());
         if (!ie)
             throw cRuntimeError("Syntax error in routing file: 6th column: `%s' is not an existing interface", interfaceName.c_str());
 

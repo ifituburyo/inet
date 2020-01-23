@@ -8,13 +8,14 @@
 #ifndef __INET_PROBABILISTICBROADCAST_H
 #define __INET_PROBABILISTICBROADCAST_H
 
-#include <set>
 #include <map>
+#include <set>
+
 #include "inet/common/packet/Packet.h"
-#include "inet/networklayer/contract/INetworkProtocol.h"
 #include "inet/networklayer/base/NetworkProtocolBase.h"
-#include "inet/networklayer/probabilistic/ProbabilisticBroadcastHeader_m.h"
 #include "inet/networklayer/common/L3Address.h"
+#include "inet/networklayer/contract/INetworkProtocol.h"
+#include "inet/networklayer/probabilistic/ProbabilisticBroadcastHeader_m.h"
 
 namespace inet {
 
@@ -157,6 +158,11 @@ class INET_API ProbabilisticBroadcast : public NetworkProtocolBase, public INetw
      * @param pDestAddr The MAC address of the message receiver.
      */
     virtual void setDownControlInfo(Packet *const pMsg, const MacAddress& pDestAddr);
+
+    // OperationalBase:
+    virtual void handleStartOperation(LifecycleOperation *operation) override {}    //TODO implementation
+    virtual void handleStopOperation(LifecycleOperation *operation) override {}    //TODO implementation
+    virtual void handleCrashOperation(LifecycleOperation *operation) override {}    //TODO implementation
 
     /**
      * @brief Period (in sim time) between two broadcast attempts.

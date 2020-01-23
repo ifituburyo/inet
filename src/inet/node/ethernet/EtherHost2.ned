@@ -18,9 +18,8 @@
 package inet.node.ethernet;
 
 import inet.applications.ethernet.EtherTrafGen;
-import inet.linklayer.contract.IEtherMac;
-import inet.linklayer.ethernet.EtherQosQueue;
-import inet.linklayer.ethernet.IEtherEncap;
+import inet.linklayer.contract.IEthernetInterface;
+import inet.networklayer.common.InterfaceTable;
 
 
 //
@@ -33,11 +32,10 @@ module EtherHost2
 {
     parameters:
         bool csmacdSupport = default(true);  // by default use CSMA/CD
-        string macType = default(csmacdSupport ? "EtherMac" : "EtherMacFullDuplex"); // ~EtherMac or ~EtherMacFullDuplex
-        string queueType = default(""); // DropTailQueue, DiffServQueue, or "" to use the internal queue
-        string fcsMode @enum("declaredCorrect", "declaredIncorrect", "computed") = default("declaredCorrect");
-        *.interfaceTableModule = default("");
+        string fcsMode @enum("declared","computed") = default("declared");
+        *.interfaceTableModule = default(absPath(".interfaceTable"));
         *.fcsMode = fcsMode;
+        eth.csmacdSupport = csmacdSupport;
         @networkNode();
         @labels(node,ethernet-node);
         @display("i=device/pc2");
@@ -45,28 +43,19 @@ module EtherHost2
         inout ethg @labels(EtherFrame-conn);
     submodules:
         app: EtherTrafGen {
-            @display("p=155,59");
+            @display("p=200,100");
         }
-        encap: <default("EtherEncap")> like IEtherEncap {
-            @display("p=155,146");
-        }
-        queue: EtherQosQueue if queueType != "" {
+        interfaceTable: InterfaceTable {
             parameters:
-                dataQueueType = queueType;
-                @display("p=87,207;q=l2queue");
+                @display("p=125,240;is=s");
         }
-        mac: <macType> like IEtherMac {
-            queueModule = (queueType == "" ? "" : "^.queue");
-            @display("p=155,272;q=txQueue");
+        eth: <default("EthernetInterface")> like IEthernetInterface {
+            parameters:
+                @display("p=200,239,row,150;q=txQueue");
         }
     connections:
-        app.out --> encap.upperLayerIn;
-        app.in <-- encap.upperLayerOut;
-
-        encap.lowerLayerOut --> queue.in if queueType != "";
-        queue.out --> mac.upperLayerIn if queueType != "";
-        encap.lowerLayerOut --> mac.upperLayerIn if queueType == "";
-        mac.upperLayerOut --> encap.lowerLayerIn;
-
-        mac.phys <--> ethg;
+        app.out --> eth.upperLayerIn;
+        app.in <-- eth.upperLayerOut;
+        eth.phys <--> { @display("m=s"); } <--> ethg;
 }
+

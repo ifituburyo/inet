@@ -18,11 +18,12 @@
 
 #include "inet/applications/base/ApplicationPacket_m.h"
 #include "inet/applications/udpapp/UdpBasicApp.h"
-#include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/ModuleAccess.h"
-#include "inet/common/packet/Packet.h"
 #include "inet/common/TagBase_m.h"
 #include "inet/common/TimeTag_m.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/networklayer/common/FragmentationTag_m.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 
@@ -50,6 +51,7 @@ void UdpBasicApp::initialize(int stage)
         startTime = par("startTime");
         stopTime = par("stopTime");
         packetName = par("packetName");
+        dontFragment = par("dontFragment");
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
         selfMsg = new cMessage("sendTimer");
@@ -69,14 +71,18 @@ void UdpBasicApp::setSocketOptions()
     if (timeToLive != -1)
         socket.setTimeToLive(timeToLive);
 
-    int typeOfService = par("typeOfService");
-    if (typeOfService != -1)
-        socket.setTypeOfService(typeOfService);
+    int dscp = par("dscp");
+    if (dscp != -1)
+        socket.setDscp(dscp);
+
+    int tos = par("tos");
+    if (tos != -1)
+        socket.setTos(tos);
 
     const char *multicastInterface = par("multicastInterface");
     if (multicastInterface[0]) {
         IInterfaceTable *ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
-        InterfaceEntry *ie = ift->getInterfaceByName(multicastInterface);
+        InterfaceEntry *ie = ift->findInterfaceByName(multicastInterface);
         if (!ie)
             throw cRuntimeError("Wrong multicastInterface setting: no interface named \"%s\"", multicastInterface);
         socket.setMulticastOutputInterface(ie->getInterfaceId());
@@ -91,6 +97,7 @@ void UdpBasicApp::setSocketOptions()
         MulticastGroupList mgl = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this)->collectMulticastGroups();
         socket.joinLocalMulticastGroups(mgl);
     }
+    socket.setCallback(this);
 }
 
 L3Address UdpBasicApp::chooseDestAddr()
@@ -107,11 +114,12 @@ void UdpBasicApp::sendPacket()
     std::ostringstream str;
     str << packetName << "-" << numSent;
     Packet *packet = new Packet(str.str().c_str());
+    if(dontFragment)
+        packet->addTag<FragmentationReq>()->setDontFragment(true);
     const auto& payload = makeShared<ApplicationPacket>();
     payload->setChunkLength(B(par("messageLength")));
     payload->setSequenceNumber(numSent);
-    auto creationTimeTag = payload->addTag<CreationTimeTag>();
-    creationTimeTag->setCreationTime(simTime());
+    payload->addTag<CreationTimeTag>()->setCreationTime(simTime());
     packet->insertAtBack(payload);
     L3Address destAddr = chooseDestAddr();
     emit(packetSentSignal, packet);
@@ -191,21 +199,32 @@ void UdpBasicApp::handleMessageWhenUp(cMessage *msg)
                 throw cRuntimeError("Invalid kind %d in self message", (int)selfMsg->getKind());
         }
     }
-    else if (msg->getKind() == UDP_I_DATA) {
-        // process incoming packet
-        processPacket(check_and_cast<Packet *>(msg));
-    }
-    else if (msg->getKind() == UDP_I_ERROR) {
-        EV_WARN << "Ignoring UDP error report\n";
-        delete msg;
-    }
-    else {
-        throw cRuntimeError("Unrecognized message (%s)%s", msg->getClassName(), msg->getName());
-    }
+    else
+        socket.processMessage(msg);
+}
+
+void UdpBasicApp::socketDataArrived(UdpSocket *socket, Packet *packet)
+{
+    // process incoming packet
+    processPacket(packet);
+}
+
+void UdpBasicApp::socketErrorArrived(UdpSocket *socket, Indication *indication)
+{
+    EV_WARN << "Ignoring UDP error report " << indication->getName() << endl;
+    delete indication;
+}
+
+void UdpBasicApp::socketClosed(UdpSocket *socket)
+{
+    if (operationalState == State::STOPPING_OPERATION)
+        startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
 }
 
 void UdpBasicApp::refreshDisplay() const
 {
+    ApplicationBase::refreshDisplay();
+
     char buf[100];
     sprintf(buf, "rcvd: %d pks\nsent: %d pks", numReceived, numSent);
     getDisplayString().setTagArg("t", 0, buf);
@@ -219,28 +238,26 @@ void UdpBasicApp::processPacket(Packet *pk)
     numReceived++;
 }
 
-bool UdpBasicApp::handleNodeStart(IDoneCallback *doneCallback)
+void UdpBasicApp::handleStartOperation(LifecycleOperation *operation)
 {
     simtime_t start = std::max(startTime, simTime());
     if ((stopTime < SIMTIME_ZERO) || (start < stopTime) || (start == stopTime && startTime == stopTime)) {
         selfMsg->setKind(START);
         scheduleAt(start, selfMsg);
     }
-    return true;
 }
 
-bool UdpBasicApp::handleNodeShutdown(IDoneCallback *doneCallback)
+void UdpBasicApp::handleStopOperation(LifecycleOperation *operation)
 {
-    if (selfMsg)
-        cancelEvent(selfMsg);
-    //TODO if(socket.isOpened()) socket.close();
-    return true;
+    cancelEvent(selfMsg);
+    socket.close();
+    delayActiveOperationFinish(par("stopOperationTimeout"));
 }
 
-void UdpBasicApp::handleNodeCrash()
+void UdpBasicApp::handleCrashOperation(LifecycleOperation *operation)
 {
-    if (selfMsg)
-        cancelEvent(selfMsg);
+    cancelEvent(selfMsg);
+    socket.destroy();         //TODO  in real operating systems, program crash detected by OS and OS closes sockets of crashed programs.
 }
 
 } // namespace inet

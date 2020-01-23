@@ -36,13 +36,19 @@ LinkCanvasVisualizerBase::LinkCanvasVisualization::~LinkCanvasVisualization()
     delete figure;
 }
 
+LinkCanvasVisualizerBase::~LinkCanvasVisualizerBase()
+{
+    if (displayLinks)
+        removeAllLinkVisualizations();
+}
+
 void LinkCanvasVisualizerBase::initialize(int stage)
 {
     LinkVisualizerBase::initialize(stage);
     if (!hasGUI()) return;
     if (stage == INITSTAGE_LOCAL) {
         zIndex = par("zIndex");
-        auto canvas = visualizerTargetModule->getCanvas();
+        auto canvas = visualizationTargetModule->getCanvas();
         lineManager = LineManager::getCanvasLineManager(canvas);
         canvasProjection = CanvasProjection::getCanvasProjection(canvas);
         linkGroup = new cGroupFigure("links");
@@ -69,7 +75,7 @@ void LinkCanvasVisualizerBase::refreshDisplay() const
             figure->setEnd(canvasProjection->computeCanvasPoint(destinationPosition + shift));
         }
     }
-    visualizerTargetModule->getCanvas()->setAnimationSpeed(linkVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
+    visualizationTargetModule->getCanvas()->setAnimationSpeed(linkVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
 }
 
 const LinkVisualizerBase::LinkVisualization *LinkCanvasVisualizerBase::createLinkVisualization(cModule *source, cModule *destination, cPacket *packet) const

@@ -26,7 +26,7 @@ simsignal_t TcpAppBase::connectSignal = registerSignal("connect");
 
 void TcpAppBase::initialize(int stage)
 {
-    cSimpleModule::initialize(stage);
+    ApplicationBase::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL) {
         numSessions = numBroken = packetsSent = packetsRcvd = bytesSent = bytesRcvd = 0;
@@ -44,12 +44,12 @@ void TcpAppBase::initialize(int stage)
         int localPort = par("localPort");
         socket.bind(*localAddress ? L3AddressResolver().resolve(localAddress) : L3Address(), localPort);
 
-        socket.setCallbackObject(this);
+        socket.setCallback(this);
         socket.setOutputGate(gate("socketOut"));
     }
 }
 
-void TcpAppBase::handleMessage(cMessage *msg)
+void TcpAppBase::handleMessageWhenUp(cMessage *msg)
 {
     if (msg->isSelfMessage())
         handleTimer(msg);
@@ -65,6 +65,18 @@ void TcpAppBase::connect()
     const char *localAddress = par("localAddress");
     int localPort = par("localPort");
     socket.bind(*localAddress ? L3AddressResolver().resolve(localAddress) : L3Address(), localPort);
+
+    int timeToLive = par("timeToLive");
+    if (timeToLive != -1)
+        socket.setTimeToLive(timeToLive);
+
+    int dscp = par("dscp");
+    if (dscp != -1)
+        socket.setDscp(dscp);
+
+    int tos = par("tos");
+    if (tos != -1)
+        socket.setTos(tos);
 
     // connect
     const char *connectAddress = par("connectAddress");
@@ -104,16 +116,17 @@ void TcpAppBase::sendPacket(Packet *msg)
 
 void TcpAppBase::refreshDisplay() const
 {
+    ApplicationBase::refreshDisplay();
     getDisplayString().setTagArg("t", 0, TcpSocket::stateName(socket.getState()));
 }
 
-void TcpAppBase::socketEstablished(int, void *)
+void TcpAppBase::socketEstablished(TcpSocket *)
 {
     // *redefine* to perform or schedule first sending
     EV_INFO << "connected\n";
 }
 
-void TcpAppBase::socketDataArrived(int, void *, Packet *msg, bool)
+void TcpAppBase::socketDataArrived(TcpSocket *, Packet *msg, bool)
 {
     // *redefine* to perform or schedule next sending
     packetsRcvd++;
@@ -122,8 +135,9 @@ void TcpAppBase::socketDataArrived(int, void *, Packet *msg, bool)
     delete msg;
 }
 
-void TcpAppBase::socketPeerClosed(int, void *)
+void TcpAppBase::socketPeerClosed(TcpSocket *socket_)
 {
+    ASSERT(socket_ == &socket);
     // close the connection (if not already closed)
     if (socket.getState() == TcpSocket::PEER_CLOSED) {
         EV_INFO << "remote TCP closed, closing here as well\n";
@@ -131,13 +145,13 @@ void TcpAppBase::socketPeerClosed(int, void *)
     }
 }
 
-void TcpAppBase::socketClosed(int, void *)
+void TcpAppBase::socketClosed(TcpSocket *)
 {
     // *redefine* to start another session etc.
     EV_INFO << "connection closed\n";
 }
 
-void TcpAppBase::socketFailure(int, void *, int code)
+void TcpAppBase::socketFailure(TcpSocket *, int code)
 {
     // subclasses may override this function, and add code try to reconnect after a delay.
     EV_WARN << "connection broken\n";

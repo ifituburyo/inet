@@ -17,17 +17,15 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/routing/rip/RipProtocolDissector.h"
-
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/routing/rip/RipPacket_m.h"
-
+#include "inet/routing/rip/RipProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::rip, RipProtocolDissector);
 
-void RipProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void RipProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     const auto& chunk = packet->popAtFront<RipPacket>();
     callback.startProtocolDataUnit(&Protocol::rip);

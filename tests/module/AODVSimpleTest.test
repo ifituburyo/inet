@@ -55,7 +55,6 @@ network AODVTest
 [General]
 network = AODVTest
 record-eventlog = true
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 
 #omnetpp 5.0 - 5.1 compatibility:
@@ -71,11 +70,11 @@ num-rngs = 3
 sim-time-limit = 100s
 
 # channel physical parameters
-*.radioMedium.mediumLimitCache.carrierFrequency = 2.4GHz
+*.radioMedium.mediumLimitCache.centerFrequency = 2.4GHz
 *.radioMedium.mediumLimitCache.maxTransmissionPower = 2.0mW
 
 # mobility
-**.mobilityType = "StationaryMobility"
+*.*.mobility.typename = "StationaryMobility"
 **.mobility.constraintAreaMinZ = 0m
 **.mobility.constraintAreaMaxZ = 0m
 **.mobility.constraintAreaMinX = 0m
@@ -93,13 +92,9 @@ sim-time-limit = 100s
 # nic settings
 **.wlan[*].bitrate = 2Mbps
 
-**.wlan[*].mgmt.frameCapacity = 10
 **.wlan[*].mac.address = "auto"
-**.wlan[*].mac.maxQueueSize = 14
+**.wlan[*].mac.queue.packetCapacity = 14
 **.wlan[*].mac.rtsThresholdBytes = 3000B
-**.wlan[*].mac.retryLimit = 7
-**.wlan[*].mac.cwMinData = 7
-**.wlan[*].mac.cwMinMulticast = 31
 
 **.wlan[*].radio.transmitter.power = 2mW
 **.wlan[*].radio.transmitter.headerLength = 4b
@@ -112,8 +107,8 @@ sim-time-limit = 100s
 \+R \d+  3\.2035\d+  6  145\.236\.0\.1  145\.236\.0\.2  32  145\.236\.0\.2
 \+R \d+  3\.2035\d+  8  145\.236\.0\.3  145\.236\.0\.2  32  145\.236\.0\.2
 \+R \d+  3\.2035\d+  8  145\.236\.0\.3  145\.236\.0\.1  32  145\.236\.0\.2
-\+R \d+  3\.2056\d+  7  145\.236\.0\.2  145\.236\.0\.3  32  145\.236\.0\.3
-\+R \d+  3\.2096\d+  6  145\.236\.0\.1  145\.236\.0\.3  32  145\.236\.0\.2
+\+R \d+  3\.2061\d+  7  145\.236\.0\.2  145\.236\.0\.3  32  145\.236\.0\.3
+\+R \d+  3\.2107\d+  6  145\.236\.0\.1  145\.236\.0\.3  32  145\.236\.0\.2
 %#--------------------------------------------------------------------------------------------------------------
 %not-contains: stdout
 undisposed object:

@@ -1,5 +1,17 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-09-17  Levente Mészáros
+
+	Replaced EulerAngles with Quaternion in angular position, velocity and acceleration.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-20  Levente Mészáros
 
 	Renamed speed to velocity where appropriate. Speed is a scalar, velocity is a vector quantity.

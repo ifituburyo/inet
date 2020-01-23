@@ -25,14 +25,13 @@ import inet.physicallayer.common.packetlevel.RadioMedium;
 // error correction, interleaving, spreading, etc. It must be used in
 // conjunction with the ~ApskDimensionalRadio model.
 //
-// See also ~ApskDimensionalRadio, ~DimensionalAnalogModel,
-// ~ApskDimensionalTransmitter, and ~ApskDimensionalReceiver.
+// @see ~ApskDimensionalRadio, ~DimensionalAnalogModel,
+// ~ApskDimensionalTransmitter, ~ApskDimensionalReceiver.
 //
 module ApskDimensionalRadioMedium extends RadioMedium
 {
     parameters:
-        propagationType = default("ConstantSpeedPropagation");
-        pathLossType = default("FreeSpacePathLoss");
-        analogModelType = default("DimensionalAnalogModel");
-        backgroundNoiseType = default("IsotropicDimensionalBackgroundNoise");
+        analogModel.typename = default("DimensionalAnalogModel");
+        backgroundNoise.typename = default("IsotropicDimensionalBackgroundNoise");
 }
+

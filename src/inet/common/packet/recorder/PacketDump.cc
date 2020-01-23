@@ -21,21 +21,8 @@
 
 #include <errno.h>
 
-#include "inet/common/packet/recorder/PacketDump.h"
 #include "inet/common/packet/Packet.h"
-
-#ifdef WITH_UDP
-#include "inet/transportlayer/udp/UdpHeader_m.h"
-#endif // ifdef WITH_UDP
-
-#ifdef WITH_SCTP
-#include "inet/transportlayer/sctp/SctpHeader.h"
-#include "inet/transportlayer/sctp/SctpAssociation.h"
-#endif // ifdef WITH_SCTP
-
-#ifdef WITH_TCP_COMMON
-#include "inet/transportlayer/tcp_common/TcpHeader.h"
-#endif // ifdef WITH_TCP_COMMON
+#include "inet/common/packet/recorder/PacketDump.h"
 
 #ifdef WITH_IPv4
 #include "inet/networklayer/arp/ipv4/ArpPacket_m.h"
@@ -46,6 +33,19 @@
 #ifdef WITH_IPv6
 #include "inet/networklayer/ipv6/Ipv6Header.h"
 #endif // ifdef WITH_IPv6
+
+#ifdef WITH_SCTP
+#include "inet/transportlayer/sctp/SctpAssociation.h"
+#include "inet/transportlayer/sctp/SctpHeader.h"
+#endif // ifdef WITH_SCTP
+
+#ifdef WITH_TCP_COMMON
+#include "inet/transportlayer/tcp_common/TcpHeader.h"
+#endif // ifdef WITH_TCP_COMMON
+
+#ifdef WITH_UDP
+#include "inet/transportlayer/udp/UdpHeader_m.h"
+#endif // ifdef WITH_UDP
 
 
 namespace inet {
@@ -360,17 +360,17 @@ void PacketDump::dump(const char *label, const char *msg)
     out << buf << msg << endl;
 }
 
-void PacketDump::dumpPacket(bool l2r, cPacket *msg)
+void PacketDump::dumpPacket(bool l2r, const cPacket *msg)
 {
     std::ostream& out = *outp;
-    auto packet = dynamic_cast<Packet *>(msg);
+    auto packet = dynamic_cast<const Packet *>(msg);
     if (packet == nullptr)
         return;
 
     std::string leftAddr = "A";
     std::string rightAddr = "B";
-    packet = packet->dup();
-    while(const auto& chunk = packet->popAtFront(b(-1), Chunk::PF_ALLOW_NULLPTR)) {
+    auto packetCopy = packet->dup();
+    while(const auto& chunk = packetCopy->popAtFront(b(-1), Chunk::PF_ALLOW_NULLPTR)) {
 #ifdef WITH_IPv4
         if (const auto& ipv4Hdr = dynamicPtrCast<const Ipv4Header>(chunk)) {
             leftAddr = ipv4Hdr->getSourceAddress().str();
@@ -395,7 +395,7 @@ void PacketDump::dumpPacket(bool l2r, cPacket *msg)
 #endif // ifdef WITH_IPv6
 #ifdef WITH_SCTP
         if (const auto& sctpMessage = dynamicPtrCast<const sctp::SctpHeader>(chunk)) {
-            sctpDump("", packet, sctpMessage, std::string(l2r ? leftAddr : rightAddr), std::string(l2r ?  rightAddr: leftAddr));
+            sctpDump("", packetCopy, sctpMessage, std::string(l2r ? leftAddr : rightAddr), std::string(l2r ?  rightAddr: leftAddr));
         }
         else
 #endif // ifdef WITH_SCTP
@@ -409,7 +409,7 @@ void PacketDump::dumpPacket(bool l2r, cPacket *msg)
             out << chunk->str();
         }
     }
-    delete packet;
+    delete packetCopy;
 }
 
 #ifdef WITH_UDP
@@ -434,7 +434,7 @@ void PacketDump::udpDump(bool l2r, const char *label, const Ptr<const UdpHeader>
     }
 
     //out << endl;
-    out << "UDP: Payload length=" << udpHeader->getTotalLengthField() - UDP_HEADER_BYTES << endl;
+    out << "UDP: Payload length=" << udpHeader->getTotalLengthField() - UDP_HEADER_LENGTH << endl;
 
     // comment
     if (comment)
@@ -530,7 +530,7 @@ void PacketDump::tcpDump(bool l2r, const char *label, const Ptr<const tcp::TcpHe
         out << srcAddr << "." << tcpHeader->getSrcPort() << ": ";
     }
 
-    int payloadLength = tcpLength - tcpHeader->getHeaderLength();
+    int payloadLength = tcpLength - B(tcpHeader->getHeaderLength()).get();
 
     // flags
     bool flags = false;
@@ -580,16 +580,45 @@ void PacketDump::tcpDump(bool l2r, const char *label, const Ptr<const tcp::TcpHe
         out << "urg " << tcpHeader->getUrgentPointer() << " ";
 
     // options present?
-    if (tcpHeader->getHeaderLength() > 20) {
-        const char *direction = l2r ? "sent" : "received";
-
+    if (tcpHeader->getHeaderLength() > TCP_MIN_HEADER_LENGTH) {
         if (verbose) {
             unsigned short numOptions = tcpHeader->getHeaderOptionArraySize();
-            out << "\n  TCP Header Option(s) " << direction << ":\n";
+            out << "  Option(s):";
 
             for (int i = 0; i < numOptions; i++) {
                 const TcpOption *option = tcpHeader->getHeaderOption(i);
-                out << "    " << (i + 1) << ". option kind=" << option->getKind() << " length=" << option->getLength() << "\n";
+                switch (option->getKind()) {
+                    case TCPOPTION_END_OF_OPTION_LIST:
+                        break;
+                    case TCPOPTION_NO_OPERATION:
+                        out << " NOP";
+                        break;
+                    case TCPOPTION_MAXIMUM_SEGMENT_SIZE:
+                        out << " MaxSegSize";
+                        break;
+                    case TCPOPTION_WINDOW_SCALE:
+                        out << " WinScale";
+                        break;
+                    case TCPOPTION_SACK_PERMITTED:
+                        out << " SackPermitted";
+                        break;
+                    case TCPOPTION_SACK: {
+                        auto sackOpt = check_and_cast<const TcpOptionSack *>(option);
+                        out << " SACK";
+                        for (size_t k = 0; k < sackOpt->getSackItemArraySize(); k++) {
+                            const auto& sackItem = sackOpt->getSackItem(k);
+                            out << "[" << sackItem.getStart() << "," << sackItem.getEnd() << ")";
+                        }
+                        break;
+                    }
+                    case TCPOPTION_TIMESTAMP: {
+                        auto tsOpt = check_and_cast<const TcpOptionTimestamp *>(option);
+                        out << " TS(" << tsOpt->getSenderTimestamp() << "," << tsOpt->getEchoedTimestamp() << ")";
+                        break;
+                    }
+                    default:
+                        out << " (kind=" << option->getKind() << " length=" << option->getLength() << ")"; break;
+                }
             }
         }
     }

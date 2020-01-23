@@ -20,7 +20,8 @@
 #define __INET_GLOBALARP_H
 
 #include <map>
-#include "inet/common/lifecycle/ILifecycle.h"
+
+#include "inet/common/lifecycle/OperationalBase.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/networklayer/common/L3Address.h"
@@ -32,7 +33,7 @@ namespace inet {
 /**
  * This class provides an IArp implementation whithout exchanging packets.
  */
-class INET_API GlobalArp : public cSimpleModule, public IArp, public ILifecycle, public cListener
+class INET_API GlobalArp : public OperationalBase, public IArp, public cListener
 {
   public:
     class ArpCacheEntry;
@@ -47,7 +48,6 @@ class INET_API GlobalArp : public cSimpleModule, public IArp, public ILifecycle,
     };
 
   protected:
-    bool isUp = false;
     IInterfaceTable *interfaceTable = nullptr;
     L3Address::AddressType addressType = static_cast<L3Address::AddressType>(-1);
 
@@ -74,15 +74,17 @@ class INET_API GlobalArp : public cSimpleModule, public IArp, public ILifecycle,
 
   protected:
     virtual void initialize(int stage) override;
-    virtual void handleMessage(cMessage *msg) override;
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleMessageWhenUp(cMessage *msg) override;
     virtual void handleSelfMessage(cMessage *msg);
     virtual void handlePacket(Packet *packet);
-    virtual void handleMessageWhenDown(cMessage *msg);
 
-    virtual bool isNodeUp();
-    virtual void stop();
-    virtual void start();
+    // Lifecycle methods
+    virtual bool isInitializeStage(int stage) override { return stage == INITSTAGE_NETWORK_LAYER; }
+    virtual bool isModuleStartStage(int stage) override { return stage == ModuleStartOperation::STAGE_NETWORK_LAYER; }
+    virtual bool isModuleStopStage(int stage) override { return stage == ModuleStopOperation::STAGE_NETWORK_LAYER; }
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 };
 
 } // namespace inet

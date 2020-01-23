@@ -20,16 +20,14 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "inet/linklayer/loopback/Loopback.h"
-#include "inet/linklayer/common/InterfaceTag_m.h"
-
 #include "inet/common/INETUtils.h"
 #include "inet/common/ModuleAccess.h"
-#include "inet/networklayer/contract/IInterfaceTable.h"
-#include "inet/common/queue/IPassiveQueue.h"
-#include "inet/common/Simsignals.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Simsignals.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/loopback/Loopback.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
 
 namespace inet {
 
@@ -41,78 +39,50 @@ Loopback::~Loopback()
 
 void Loopback::initialize(int stage)
 {
-    MacBase::initialize(stage);
-
-    // all initialization is done in the first stage
+    MacProtocolBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
+        lowerLayerInGateId = -1;
+        lowerLayerOutGateId = -1;
         numSent = numRcvdOK = 0;
         WATCH(numSent);
         WATCH(numRcvdOK);
     }
-    else if (stage == INITSTAGE_LINK_LAYER) {
-        // register our interface entry in IInterfaceTable
-        registerInterface();
-    }
 }
 
-InterfaceEntry *Loopback::createInterfaceEntry()
+void Loopback::configureInterfaceEntry()
 {
-    InterfaceEntry *ie = getContainingNicModule(this);
-
 //    // generate a link-layer address to be used as interface token for IPv6
 //    InterfaceToken token(0, getSimulation()->getUniqueNumber(), 64);
 //    ie->setInterfaceToken(token);
 
     // capabilities
-    ie->setMtu(par("mtu"));
-    ie->setLoopback(true);
-
-    return ie;
+    interfaceEntry->setMtu(par("mtu"));
+    interfaceEntry->setLoopback(true);
 }
 
-void Loopback::handleMessage(cMessage *msg)
+void Loopback::handleUpperPacket(Packet *packet)
 {
-    if (!isOperational) {
-        handleMessageWhenDown(msg);
-        return;
-    }
-
-    auto packet = check_and_cast<Packet *>(msg);
-    emit(packetReceivedFromUpperSignal, packet);
     EV << "Received " << packet << " for transmission\n";
     ASSERT(packet->hasBitError() == false);
 
     // pass up payload
     numRcvdOK++;
-    emit(packetSentToUpperSignal, packet);
     numSent++;
     auto protocol = packet->getTag<PacketProtocolTag>()->getProtocol();
     packet->clearTags();
     packet->addTag<DispatchProtocolReq>()->setProtocol(protocol);
     packet->addTag<PacketProtocolTag>()->setProtocol(protocol);
     packet->addTag<InterfaceInd>()->setInterfaceId(interfaceEntry->getInterfaceId());
-    send(packet, "upperLayerOut");
-}
-
-void Loopback::flushQueue()
-{
-    // do nothing, lo interface doesn't have any queue
-}
-
-void Loopback::clearQueue()
-{
-    // do nothing, lo interface doesn't have any queue
-}
-
-bool Loopback::isUpperMsg(cMessage *msg)
-{
-    return true;
+    emit(packetSentToUpperSignal, packet);
+    send(packet, upperLayerOutGateId);
 }
 
 void Loopback::refreshDisplay() const
 {
+    MacProtocolBase::refreshDisplay();
+
     /* TBD find solution for displaying IPv4 address without dependence on IPv4 or IPv6
-            Ipv4Address addr = interfaceEntry->ipv4Data()->getIPAddress();
+            Ipv4Address addr = interfaceEntry->getProtocolData<Ipv4InterfaceData>()->getIPAddress();
             sprintf(buf, "%s / %s\nrcv:%ld snt:%ld", addr.isUnspecified()?"-":addr.str().c_str(), datarateText, numRcvdOK, numSent);
      */
     char buf[80];

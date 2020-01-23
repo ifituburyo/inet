@@ -17,7 +17,9 @@ import inet.common.INETDefs;
 import inet.common.Units;
 
 cplusplus {{
+#include "inet/common/packet/chunk/BitCountChunk.h"
 #include "inet/common/packet/chunk/BitsChunk.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/common/packet/chunk/Chunk.h"
 #include "inet/common/packet/chunk/cPacketChunk.h"
@@ -49,21 +51,37 @@ class Chunk extends cObject
     bool correct @packetData(false) @getter("isCorrect");
     bool properlyRepresented @packetData(false) @getter("isProperlyRepresented");
     b chunkLength @packetData(false);
-    string bits[] @getter("getBitsAsString");
-    string bytes[] @getter("getBytesAsString");
+    string rawBin[] @label("raw bin ") @getter("getBinDumpLine") @sizeGetter("getBinDumpNumLines");
+    string rawHex[] @label("raw hex ") @getter("getHexDumpLine") @sizeGetter("getHexDumpNumLines");
     RegionTagSet::cObjectRegionTag tags[] @packetData(false);
+}
+
+class BitCountChunk extends Chunk
+{
+    @existingClass;
+    @descriptor(readonly);
+    bool data;
 }
 
 class BitsChunk extends Chunk
 {
     @existingClass;
     @descriptor(readonly);
+    bool bit[];
+}
+
+class ByteCountChunk extends Chunk
+{
+    @existingClass;
+    @descriptor(readonly);
+    uint8_t data;
 }
 
 class BytesChunk extends Chunk
 {
     @existingClass;
     @descriptor(readonly);
+    uint8_t byte[];
 }
 
 class SequenceChunk extends Chunk
@@ -90,6 +108,12 @@ class cPacketChunk extends Chunk
 }
 
 class FieldsChunk extends Chunk
+{
+    @existingClass;
+    @descriptor(readonly);
+}
+
+class ChunkTemporarySharedPtr extends cObject
 {
     @existingClass;
     @descriptor(readonly);

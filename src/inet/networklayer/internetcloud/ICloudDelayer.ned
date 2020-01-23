@@ -27,7 +27,7 @@ package inet.networklayer.internetcloud;
 // This module registers self to ~Ipv4 module as an INetfilter::IHook hook
 // and uses the datagramForwardHook for delay/drop packets
 //
-// @see InternetCloud
+// @see ~InternetCloud
 //
 moduleinterface ICloudDelayer
 {
@@ -35,3 +35,4 @@ moduleinterface ICloudDelayer
         string networkProtocolModule;
         @display("i=block/delay");
 }
+

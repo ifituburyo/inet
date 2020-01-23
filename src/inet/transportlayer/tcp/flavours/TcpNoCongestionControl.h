@@ -19,11 +19,9 @@
 #define __INET_TCPNOCONGESTIONCONTROL_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/transportlayer/tcp/flavours/TcpBaseAlg.h"
 
 namespace inet {
-
 namespace tcp {
 
 /**
@@ -38,7 +36,7 @@ typedef TcpBaseAlgStateVariables TcpNoCongestionControlStateVariables;
 class INET_API TcpNoCongestionControl : public TcpBaseAlg
 {
   protected:
-    TcpNoCongestionControlStateVariables *& state;    // alias to TCLAlgorithm's 'state'
+    TcpNoCongestionControlStateVariables *& state;    // alias to TcpAlgorithm's 'state'
 
     /** Create and return a TcpNoCongestionControlStateVariables object. */
     virtual TcpStateVariables *createStateVariables() override
@@ -58,10 +56,13 @@ class INET_API TcpNoCongestionControl : public TcpBaseAlg
 
     /** Redefine what should happen when data got acked, to add congestion window management */
     virtual void receivedDataAck(uint32 firstSeqAcked) override;
+
+    virtual void established(bool active) override;
+
+    virtual bool sendData(bool sendCommandInvoked) override;
 };
 
 } // namespace tcp
-
 } // namespace inet
 
 #endif // ifndef __INET_TCPNOCONGESTIONCONTROL_H

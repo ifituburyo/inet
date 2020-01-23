@@ -15,11 +15,11 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/linklayer/ieee80211/mgmt/Ieee80211AgentSta.h"
-#include "inet/linklayer/ieee80211/mgmt/Ieee80211Primitives_m.h"
+#include "inet/common/INETUtils.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
-#include "inet/common/INETUtils.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211AgentSta.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211Primitives_m.h"
 
 namespace inet {
 
@@ -54,7 +54,7 @@ void Ieee80211AgentSta::initialize(int stage)
         host->subscribe(l2BeaconLostSignal, this);
 
         // JcM add: get the default ssid, if there is one.
-        default_ssid = par("default_ssid").stdstringValue();
+        defaultSsid = par("defaultSsid").stdstringValue();
 
         // start up: send scan request
         simtime_t startingTime = par("startingTime");
@@ -64,10 +64,10 @@ void Ieee80211AgentSta::initialize(int stage)
 
         myIface = nullptr;
     }
-    else if (stage == INITSTAGE_LINK_LAYER_2) {
+    else if (stage == INITSTAGE_LINK_LAYER) {
         IInterfaceTable *ift = findModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
         if (ift) {
-            myIface = ift->getInterfaceByName(utils::stripnonalnum(findModuleUnderContainingNode(this)->getFullName()).c_str());
+            myIface = getContainingNicModule(this);
         }
     }
 }
@@ -117,7 +117,7 @@ void Ieee80211AgentSta::handleResponse(cMessage *msg)
 void Ieee80211AgentSta::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
 {
     Enter_Method_Silent();
-    printSignalBanner(signalID, obj);
+    printSignalBanner(signalID, obj, details);
 
     if (signalID == l2BeaconLostSignal) {
         //XXX should check details if it's about this NIC
@@ -209,16 +209,16 @@ void Ieee80211AgentSta::processScanConfirm(Ieee80211Prim_ScanConfirm *resp)
     // choose best AP
 
     int bssIndex = -1;
-    if (this->default_ssid == "") {
+    if (this->defaultSsid == "") {
         // no default ssid, so pick the best one
         bssIndex = chooseBSS(resp);
     }
     else {
-        // search if the default_ssid is in the list, otherwise
+        // search if the defaultSsid is in the list, otherwise
         // keep searching.
         for (size_t i = 0; i < resp->getBssListArraySize(); i++) {
             std::string resp_ssid = resp->getBssList(i).getSSID();
-            if (resp_ssid == this->default_ssid) {
+            if (resp_ssid == this->defaultSsid) {
                 EV << "found default SSID " << resp_ssid << endl;
                 bssIndex = i;
                 break;

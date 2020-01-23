@@ -16,7 +16,7 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
-#include "RecipientBlockAckProcedure.h"
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckProcedure.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -33,8 +33,10 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
         auto agreement = blockAckAgreementHandler->getAgreement(basicBlockAckReq->getTidInfo(), basicBlockAckReq->getTransmitterAddress());
         if (ackPolicy->isBlockAckNeeded(basicBlockAckReq, agreement)) {
             auto blockAck = buildBlockAck(basicBlockAckReq, agreement);
-            blockAck->setDuration(ackPolicy->computeBasicBlockAckDurationField(blockAckPacketReq, basicBlockAckReq));
+            auto duration = ackPolicy->computeBasicBlockAckDurationField(blockAckPacketReq, basicBlockAckReq);
+            blockAck->setDurationField(duration);
             auto blockAckPacket = new Packet("BasicBlockAck", blockAck);
+            EV_DEBUG << "Duration for " << blockAckPacket->getName() << " is set to " << duration << " s.\n";
             callback->transmitControlResponseFrame(blockAckPacket, blockAck, blockAckPacketReq, basicBlockAckReq);
         }
     }
@@ -58,11 +60,11 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr
     if (auto basicBlockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq)) {
         ASSERT(agreement != nullptr);
         auto blockAck = makeShared<Ieee80211BasicBlockAck>();
-        int startingSequenceNumber = basicBlockAckReq->getStartingSequenceNumber();
-        for (SequenceNumber seqNum = startingSequenceNumber; seqNum < startingSequenceNumber + 64; seqNum++) {
-            BitVector &bitmap = blockAck->getBlockAckBitmapForUpdate(seqNum - startingSequenceNumber);
+        auto startingSequenceNumber = basicBlockAckReq->getStartingSequenceNumber();
+        for (int i = 0; i < 64; i++) {
+            BitVector &bitmap = blockAck->getBlockAckBitmapForUpdate(i);
             for (FragmentNumber fragNum = 0; fragNum < 16; fragNum++) {
-                bool ackState = agreement->getBlockAckRecord()->getAckState(seqNum, fragNum);
+                bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, fragNum);
                 bitmap.setBit(fragNum, ackState);
             }
         }

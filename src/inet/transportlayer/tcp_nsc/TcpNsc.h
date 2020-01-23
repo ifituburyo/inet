@@ -26,10 +26,10 @@
 
 #include <sim_interface.h>    // NSC. We need this here to derive from classes
 
-#include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/common/packet/Message.h"
 #include "inet/networklayer/common/L3Address.h"
-#include "inet/transportlayer/common/CRC_m.h"
+#include "inet/transportlayer/common/CrcMode_m.h"
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
 #include "inet/transportlayer/tcp_common/TcpCrcInsertionHook.h"
 #include "inet/transportlayer/tcp_nsc/TcpNscConnection.h"
@@ -49,7 +49,7 @@ class TcpNscReceiveQueue;
 /**
  * Encapsulates a Network Simulation Cradle (NSC) instance.
  */
-class INET_API TcpNsc : public cSimpleModule, ISendCallback, IInterruptCallback, public ILifecycle
+class INET_API TcpNsc : public cSimpleModule, ISendCallback, IInterruptCallback, public LifecycleUnsupported
 {
   protected:
     enum { MAX_SEND_BYTES = 500000 };
@@ -148,9 +148,6 @@ class INET_API TcpNsc : public cSimpleModule, ISendCallback, IInterruptCallback,
      */
     virtual TcpNscReceiveQueue *createReceiveQueue();
 
-    // ILifeCycle:
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
-
   protected:
     typedef std::map<int, TcpNscConnection> TcpAppConnMap;    // connId-to-TcpNscConnection
     typedef std::map<u_int32_t, L3Address> Nsc2RemoteMap;
@@ -176,7 +173,7 @@ class INET_API TcpNsc : public cSimpleModule, ISendCallback, IInterruptCallback,
     TcpNscConnection *curConnM;    // store current connection in connect/listen command
 
     TcpCrcInsertion crcInsertion;
-    CrcMode crcMode = static_cast<CrcMode>(-1);
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
 
     static const L3Address localInnerIpS;    // local NSC IP addr
     static const L3Address localInnerGwS;    // local NSC gateway IP addr

@@ -26,7 +26,6 @@
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 
@@ -170,7 +169,7 @@ class INET_API Ipv4InterfaceData : public InterfaceProtocolData
     Ipv4InterfaceData();
     virtual ~Ipv4InterfaceData();
     virtual std::string str() const override;
-    virtual std::string detailedInfo() const override;
+    virtual std::string detailedInfo() const OMNETPP5_CODE(override);
 
     /** @name Getters */
     //@{

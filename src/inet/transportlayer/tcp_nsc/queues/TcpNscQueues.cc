@@ -56,7 +56,7 @@ int TcpNscSendQueue::getBytesForTcpLayer(void *bufferP, int bufferLengthP) const
 {
     ASSERT(bufferP);
 
-    unsigned int length = B(dataBuffer.getLength()).get();
+    int length = B(dataBuffer.getLength()).get();
     if (bufferLengthP < length)
         length = bufferLengthP;
     if (length == 0)
@@ -144,8 +144,7 @@ Packet *TcpNscReceiveQueue::extractBytesUpTo()
     b queueLength = dataBuffer.getLength();
 
     if (queueLength > b(0)) {
-        dataMsg = new Packet("DATA");
-        dataMsg->setKind(TCP_I_DATA);
+        dataMsg = new Packet("DATA", TCP_I_DATA);
         const auto& data = dataBuffer.pop<Chunk>(queueLength);
         dataMsg->insertAtBack(data);
     }

@@ -18,8 +18,8 @@
 #ifndef __INET_SNIRRECEIVERBASE_H
 #define __INET_SNIRRECEIVERBASE_H
 
-#include "inet/physicallayer/contract/packetlevel/ISnir.h"
 #include "inet/physicallayer/base/packetlevel/ReceiverBase.h"
+#include "inet/physicallayer/contract/packetlevel/ISnir.h"
 
 namespace inet {
 
@@ -28,14 +28,19 @@ namespace physicallayer {
 class INET_API SnirReceiverBase : public ReceiverBase
 {
   protected:
-    double snirThreshold;
+    enum class SnirThresholdMode {
+        STM_UNDEFINED = -1,
+        STM_MIN,
+        STM_MEAN
+    };
+
+    double snirThreshold = NaN;
+    SnirThresholdMode snirThresholdMode = SnirThresholdMode::STM_UNDEFINED;
 
   protected:
     virtual void initialize(int stage) override;
 
   public:
-    SnirReceiverBase();
-
     virtual std::ostream& printToStream(std::ostream& stream, int level) const override;
 
     virtual double getSNIRThreshold() const { return snirThreshold; }

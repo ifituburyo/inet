@@ -17,19 +17,17 @@
 
 package inet.linklayer.ieee802154;
 
-import inet.common.queue.IOutputQueue;
+import inet.queueing.contract.IPacketQueue;
 import inet.linklayer.acking.AckingMac;
 import inet.linklayer.contract.IWirelessInterface;
+import inet.networklayer.common.InterfaceEntry;
 import inet.physicallayer.contract.packetlevel.IRadio;
 
-
-module Ieee802154UwbIrInterface like IWirelessInterface
+module Ieee802154UwbIrInterface extends InterfaceEntry like IWirelessInterface
 {
     parameters:
         @class(InterfaceEntry);
         string interfaceTableModule;
-        string queueType = default("DropTailQueue");    // DropTailQueue, a Diffserv queue, etc.
-        string radioType = default("Ieee802154UwbIrRadio");
         *.interfaceTableModule = default(absPath(interfaceTableModule));
         @display("i=block/ifcard");
     gates:
@@ -37,23 +35,19 @@ module Ieee802154UwbIrInterface like IWirelessInterface
         output upperLayerOut;
         input radioIn @labels(ISignal);
     submodules:
-        queue: <queueType> like IOutputQueue {
-            parameters:
-                @display("p=100,50;q=l2queue");
-        }
         mac: AckingMac {
             parameters:
-                @display("p=100,150");
+                @display("p=250,200");
         }
-        radio: <radioType> like IRadio {
+        radio: <default("Ieee802154UwbIrRadio")> like IRadio {
             parameters:
-                @display("p=100,250");
+                @display("p=250,350");
         }
     connections:
-        upperLayerIn --> { @display("m=n"); } --> queue.in;
-        queue.out --> mac.upperLayerIn;
+        upperLayerIn --> { @display("m=n"); } --> mac.upperLayerIn;
         mac.lowerLayerOut --> radio.upperLayerIn;
         mac.upperLayerOut --> { @display("m=n"); } --> upperLayerOut;
         radioIn --> { @display("m=s"); } --> radio.radioIn;
         radio.upperLayerOut --> mac.lowerLayerIn;
 }
+

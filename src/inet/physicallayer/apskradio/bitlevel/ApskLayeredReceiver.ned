@@ -17,12 +17,13 @@
 
 package inet.physicallayer.apskradio.bitlevel;
 
-import inet.physicallayer.contract.packetlevel.IReceiver;
+import inet.physicallayer.base.packetlevel.SnirReceiverBase;
 import inet.physicallayer.contract.bitlevel.IAnalogDigitalConverter;
 import inet.physicallayer.contract.bitlevel.IDecoder;
 import inet.physicallayer.contract.bitlevel.IDemodulator;
 import inet.physicallayer.contract.bitlevel.ILayeredErrorModel;
 import inet.physicallayer.contract.bitlevel.IPulseFilter;
+import inet.physicallayer.contract.packetlevel.IReceiver;
 
 //
 // This receiver model is part of a simple hypothetical layered radio. It
@@ -46,39 +47,34 @@ import inet.physicallayer.contract.bitlevel.IPulseFilter;
 // purpose of this model is to provide a basic infrastructure for further
 // development and experimentation.
 //
-// See also ~ApskDemodulator, ~ApskDecoder, and ~ApskLayeredTransmitter.
+// @see ~ApskDemodulator, ~ApskDecoder, ~ApskLayeredTransmitter.
 //
-module ApskLayeredReceiver like IReceiver
+module ApskLayeredReceiver extends SnirReceiverBase like IReceiver
 {
     parameters:
         string levelOfDetail @enum("packet", "bit", "symbol", "sample") = default("symbol");
-        string errorModelType = default("ApskLayeredErrorModel");
-        string decoderType = default("ApskDecoder");
-        string demodulatorType = default("ApskDemodulator");
-        string pulseFilterType = default("");
-        string analogDigitalConverterType = default("");
         double energyDetection @unit(dBm); // TODO: @unit(W) + dBm/dBW <--> W
         double sensitivity @unit(dBm); // TODO: @unit(W) + dBm/dBW <--> W
-        double carrierFrequency @unit(Hz);
+        double centerFrequency @unit(Hz);
         double bandwidth @unit(Hz);
-        double snirThreshold @unit(dB);
         @display("i=block/wrx");
         @class(ApskLayeredReceiver);
 
     submodules:
-        decoder: <decoderType> like IDecoder if decoderType != "" {
-            @display("p=100,50");
+        decoder: <default("ApskDecoder")> like IDecoder if typename != "" {
+            @display("p=100,100");
         }
-        demodulator: <demodulatorType> like IDemodulator {
-            @display("p=100,150");
+        demodulator: <default("ApskDemodulator")> like IDemodulator {
+            @display("p=100,200");
         }
-        pulseFilter: <pulseFilterType> like IPulseFilter if pulseFilterType != "" {
-            @display("p=100,250");
+        pulseFilter: <default("")> like IPulseFilter if typename != "" {
+            @display("p=100,300");
         }
-        analogDigitalConverter: <analogDigitalConverterType> like IAnalogDigitalConverter if analogDigitalConverterType != "" {
-            @display("p=100,350");
+        analogDigitalConverter: <default("")> like IAnalogDigitalConverter if typename != "" {
+            @display("p=100,400");
         }
-        errorModel: <errorModelType> like ILayeredErrorModel if errorModelType != "" {
-            @display("p=100,450");
+        errorModel: <default("ApskLayeredErrorModel")> like ILayeredErrorModel if typename != "" {
+            @display("p=100,500");
         }
 }
+

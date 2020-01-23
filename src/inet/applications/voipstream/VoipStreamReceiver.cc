@@ -17,7 +17,6 @@
 //
 
 #include "inet/applications/voipstream/VoipStreamReceiver.h"
-
 #include "inet/common/INETEndians.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeStatus.h"
@@ -25,6 +24,12 @@
 #include "inet/transportlayer/common/L4PortTag_m.h"
 
 namespace inet {
+
+#if defined(__clang__)
+#  pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__GNUC__)
+#  pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 Define_Module(VoipStreamReceiver);
 
@@ -44,7 +49,7 @@ void VoipStreamReceiver::initialize(int stage)
     cSimpleModule::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL) {
-        // Hack for create results folder
+        // KLUDGE: TODO: hack to create results folder (doesn't work when record-scalars = false)
         recordScalar("hackForCreateResultsFolder", 0);
 
         // Say Hello to the world
@@ -59,25 +64,31 @@ void VoipStreamReceiver::initialize(int stage)
         av_register_all();
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
 
         socket.setOutputGate(gate("socketOut"));
         socket.bind(localPort);
+        socket.setCallback(this);
     }
 }
 
 void VoipStreamReceiver::handleMessage(cMessage *msg)
 {
-    if (msg->getKind() == UDP_I_ERROR) {
-        delete msg;
-        return;
+    if (msg->arrivedOn("socketIn")) {
+        socket.processMessage(msg);
     }
+    else
+        throw cRuntimeError("Unknown incoming gate: '%s'", msg->getArrivalGate()->getFullName());
+}
 
-    Packet *pk = check_and_cast<Packet *>(msg);
+void VoipStreamReceiver::socketDataArrived(UdpSocket *socket, Packet *pk)
+{
+    // process incoming packet
+
     const auto& vp = pk->peekAtFront<VoipStreamPacket>();
     bool ok = true;
     if (curConn.offline)
@@ -94,10 +105,16 @@ void VoipStreamReceiver::handleMessage(cMessage *msg)
     else {
         PacketDropDetails details;
         details.setReason(CONGESTION);
-        emit(packetDroppedSignal, msg, &details);
+        emit(packetDroppedSignal, pk, &details);
     }
 
-    delete msg;
+    delete pk;
+}
+
+void VoipStreamReceiver::socketErrorArrived(UdpSocket *socket, Indication *indication)
+{
+    EV_WARN << "Unknown message '" << indication->getName() << "', kind = " << indication->getKind() << ", discarding it." << endl;
+    delete indication;
 }
 
 void VoipStreamReceiver::Connection::openAudio(const char *fileName)
@@ -222,19 +239,7 @@ void VoipStreamReceiver::closeConnection()
 
 void VoipStreamReceiver::decodePacket(Packet *pk)
 {
-    const auto& vp = pk->peekAtFront<VoipStreamPacket>();
-    switch (vp->getType()) {
-        case VOICE:
-            emit(packetHasVoiceSignal, 1);
-            break;
-
-        case SILENCE:
-            emit(packetHasVoiceSignal, 0);
-            break;
-
-        default:
-            throw cRuntimeError("The received VoipStreamPacket has unknown type %d", vp->getType());
-    }
+    const auto& vp = pk->popAtFront<VoipStreamPacket>();
     uint16_t newSeqNo = vp->getSeqNo();
     if (newSeqNo > curConn.seqNo + 1)
         emit(lostPacketsSignal, newSeqNo - (curConn.seqNo + 1));
@@ -251,24 +256,29 @@ void VoipStreamReceiver::decodePacket(Packet *pk)
     emit(delaySignal, curConn.lastPacketFinish - pk->getCreationTime());
     curConn.seqNo = newSeqNo;
 
-    int len = vp->getBytes().getDataArraySize();
-    uint8_t buff[len];
-    vp->getBytes().copyDataToBuffer(buff, len);
-    curConn.writeAudioFrame(buff, len);
-    FINGERPRINT_ADD_EXTRA_DATA2((const char *)buff, len);
+    if (vp->getType() == VOICE) {
+        emit(packetHasVoiceSignal, 1);
+        uint16_t len = vp->getDataLength();
+        auto bb = pk->peekDataAt<BytesChunk>(b(0), B(len));
+        auto buff = bb->getBytes();
+        curConn.writeAudioFrame(&buff.front(), buff.size());
+        FINGERPRINT_ADD_EXTRA_DATA2((const char *)(&buff.front()), buff.size());
+    }
+    else if (vp->getType() == SILENCE) {
+        emit(packetHasVoiceSignal, 0);
+        int silenceSamples = vp->getSamplesPerPacket();
+        curConn.writeLostSamples(silenceSamples);
+        curConn.lastPacketFinish += silenceSamples * (1.0 / curConn.sampleRate);
+        FINGERPRINT_ADD_EXTRA_DATA(silenceSamples);
+    }
+    else
+        throw cRuntimeError("The received VoipStreamPacket has unknown type %d", vp->getType());
 }
 
 void VoipStreamReceiver::finish()
 {
     EV_TRACE << "Sink finish()" << endl;
     closeConnection();
-}
-
-bool VoipStreamReceiver::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
-{
-    Enter_Method_Silent();
-    throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    //return true;
 }
 
 } // namespace inet

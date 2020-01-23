@@ -18,10 +18,10 @@
 //
 
 #include "inet/applications/udpapp/UdpVideoStreamClient.h"
-
+#include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
-#include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 
 namespace inet {
 
@@ -46,17 +46,26 @@ void UdpVideoStreamClient::handleMessageWhenUp(cMessage *msg)
     if (msg->isSelfMessage()) {
         requestStream();
     }
-    else if (msg->getKind() == UDP_I_DATA) {
-        // process incoming packet
-        receiveStream(check_and_cast<Packet *>(msg));
-    }
-    else if (msg->getKind() == UDP_I_ERROR) {
-        EV_WARN << "Ignoring UDP error report\n";
-        delete msg;
-    }
-    else {
-        throw cRuntimeError("Unrecognized message (%s)%s", msg->getClassName(), msg->getName());
-    }
+    else
+        socket.processMessage(msg);
+}
+
+void UdpVideoStreamClient::socketDataArrived(UdpSocket *socket, Packet *packet)
+{
+    // process incoming packet
+    receiveStream(packet);
+}
+
+void UdpVideoStreamClient::socketErrorArrived(UdpSocket *socket, Indication *indication)
+{
+    EV_WARN << "Ignoring UDP error report " << indication->getName() << endl;
+    delete indication;
+}
+
+void UdpVideoStreamClient::socketClosed(UdpSocket *socket)
+{
+    if (operationalState == State::STOPPING_OPERATION)
+        startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
 }
 
 void UdpVideoStreamClient::requestStream()
@@ -75,6 +84,7 @@ void UdpVideoStreamClient::requestStream()
 
     socket.setOutputGate(gate("socketOut"));
     socket.bind(localPort);
+    socket.setCallback(this);
 
     Packet *pk = new Packet("VideoStrmReq");
     const auto& payload = makeShared<ByteCountChunk>(B(1));    //FIXME set packet length
@@ -89,24 +99,25 @@ void UdpVideoStreamClient::receiveStream(Packet *pk)
     delete pk;
 }
 
-bool UdpVideoStreamClient::handleNodeStart(IDoneCallback *doneCallback)
+void UdpVideoStreamClient::handleStartOperation(LifecycleOperation *operation)
 {
     simtime_t startTimePar = par("startTime");
     simtime_t startTime = std::max(startTimePar, simTime());
     scheduleAt(startTime, selfMsg);
-    return true;
 }
 
-bool UdpVideoStreamClient::handleNodeShutdown(IDoneCallback *doneCallback)
+void UdpVideoStreamClient::handleStopOperation(LifecycleOperation *operation)
 {
     cancelEvent(selfMsg);
-    //TODO if(socket.isOpened()) socket.close();
-    return true;
+    socket.close();
+    delayActiveOperationFinish(par("stopOperationTimeout"));
 }
 
-void UdpVideoStreamClient::handleNodeCrash()
+void UdpVideoStreamClient::handleCrashOperation(LifecycleOperation *operation)
 {
     cancelEvent(selfMsg);
+    if (operation->getRootModule() != getContainingNode(this))     // closes socket when the application crashed only
+        socket.destroy();    //TODO  in real operating systems, program crash detected by OS and OS closes sockets of crashed programs.
 }
 
 } // namespace inet

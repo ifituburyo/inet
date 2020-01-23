@@ -37,14 +37,14 @@ import inet.routing.contract.IPim;
 //   **.wlan.typename parameter. see:  inet.linklayer.ieee80211 or other
 //   modules implementing ~IWirelessInterface
 // - Also external interfaces can be configured for HW in the loop simulation
-//   using the numExtInterfaces parameter and setting the type using
-//   **.ext.typename in the INI file. see: ~ExtInterface and ~IExternalInterface
-// - PPP queueing type can be set using **.ppp.queueType see: ~PppInterface
+//   using the numEthInterfaces parameter and setting the type using
+//   **.ext.typename in the INI file. see: ~ExtInterface derived modules and ~IExternalInterface
+// - PPP queueing type can be set using **.ppp.queue.typename see: ~PppInterface
 // - If wireless card is present, node mobility can be set using **.mobility.typename
 //   see: inet.mobility and ~IMobility
 //
 // By default, dynamic routing is not supported. Specific routing protocols can
-// be added by setting the hasOSPF/hasRIP/hasBGP parameters.
+// be added by setting the hasOspf/hasRip/hasBgp parameters.
 //
 module Router extends ApplicationLayerNodeBase
 {
@@ -52,51 +52,52 @@ module Router extends ApplicationLayerNodeBase
         @display("i=abstract/router");
         @figure[submodules];
         forwarding = true;
-        bool hasOSPF = default(false);
-        bool hasRIP = default(false);
-        bool hasBGP = default(false);
-        bool hasPIM = default(false);
-        bool hasDHCP = default(false);
-        hasUdp = default(hasRIP || hasDHCP);
-        hasTcp = default(hasBGP);
+        bool hasOspf = default(false);
+        bool hasRip = default(false);
+        bool hasBgp = default(false);
+        bool hasPim = default(false);
+        bool hasDhcp = default(false);
+        hasUdp = default(hasRip || hasDhcp);
+        hasTcp = default(hasBgp);
         *.routingTableModule = default("^.ipv4.routingTable");
 
     submodules:
-        ospf: <"Ospf"> like IOspf if hasOSPF {
+        ospf: <default("Ospfv2")> like IOspf if hasOspf {
             parameters:
-                @display("p=800,300,row");
+                @display("p=975,226");
         }
-        bgp: <"Bgp"> like IBgp if hasBGP {
+        bgp: <"Bgp"> like IBgp if hasBgp {
             parameters:
-                ospfRoutingModule = default(hasOSPF ? "^.ospf" : "");
+                ospfRoutingModule = default(hasOspf ? "^.ospf" : "");
                 @display("p=600,100");
         }
-        rip: <"Rip"> like IApp if hasRIP {
+        rip: <"Rip"> like IApp if hasRip {
             parameters:
-                @display("p=700,100");
+                @display("p=975,76");
         }
-        pim: <"Pim"> like IPim if hasPIM {
+        pim: <"Pim"> like IPim if hasPim {
             parameters:
-                @display("p=700,300");
+                @display("p=825,226");
         }
-        dhcp: <"DhcpServer"> like IApp if hasDHCP {
+        dhcp: <"DhcpServer"> like IApp if hasDhcp {
             parameters:
-                @display("p=800,100");
+                @display("p=1125,76");
         }
 
     connections allowunconnected:
-        ospf.ipOut --> tn.in++ if hasOSPF;
-        ospf.ipIn <-- tn.out++ if hasOSPF;
+        ospf.ipOut --> tn.in++ if hasOspf;
+        ospf.ipIn <-- tn.out++ if hasOspf;
 
-        bgp.socketOut --> at.in++ if hasBGP;
-        bgp.socketIn <-- at.out++ if hasBGP;
+        bgp.socketOut --> at.in++ if hasBgp;
+        bgp.socketIn <-- at.out++ if hasBgp;
 
-        rip.socketOut --> at.in++ if hasRIP;
-        rip.socketIn <-- at.out++ if hasRIP;
+        rip.socketOut --> at.in++ if hasRip;
+        rip.socketIn <-- at.out++ if hasRip;
 
-        pim.networkLayerOut --> tn.in++ if hasPIM;
-        pim.networkLayerIn <-- tn.out++ if hasPIM;
+        pim.networkLayerOut --> tn.in++ if hasPim;
+        pim.networkLayerIn <-- tn.out++ if hasPim;
 
-        dhcp.socketOut --> at.in++ if hasDHCP;
-        dhcp.socketIn <-- at.out++ if hasDHCP;
+        dhcp.socketOut --> at.in++ if hasDhcp;
+        dhcp.socketIn <-- at.out++ if hasDhcp;
 }
+

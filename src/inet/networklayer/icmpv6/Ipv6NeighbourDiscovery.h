@@ -19,16 +19,16 @@
 #ifndef __INET_IPV6NEIGHBOURDISCOVERY_H
 #define __INET_IPV6NEIGHBOURDISCOVERY_H
 
-#include <vector>
-#include <set>
 #include <map>
+#include <set>
+#include <vector>
 
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/contract/ipv6/Ipv6Address.h"
 #include "inet/networklayer/icmpv6/Ipv6NdMessage_m.h"
 #include "inet/networklayer/icmpv6/Ipv6NeighbourCache.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/transportlayer/common/CRC_m.h"
+#include "inet/transportlayer/common/CrcMode_m.h"
 
 namespace inet {
 
@@ -46,7 +46,7 @@ class xMIPv6;
 /**
  * Implements RFC 2461 Neighbor Discovery for Ipv6.
  */
-class INET_API Ipv6NeighbourDiscovery : public cSimpleModule, public ILifecycle
+class INET_API Ipv6NeighbourDiscovery : public cSimpleModule, public LifecycleUnsupported
 {
   public:
     typedef std::vector<Packet *> MsgPtrVector;
@@ -99,7 +99,7 @@ class INET_API Ipv6NeighbourDiscovery : public cSimpleModule, public ILifecycle
     IInterfaceTable *ift = nullptr;
     Ipv6RoutingTable *rt6 = nullptr;
     Icmpv6 *icmpv6 = nullptr;
-    CrcMode crcMode = static_cast<CrcMode>(-1);
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
 
 #ifdef WITH_xMIPv6
     xMIPv6 *mipv6 = nullptr;    // in case the node has MIP support
@@ -173,7 +173,6 @@ class INET_API Ipv6NeighbourDiscovery : public cSimpleModule, public ILifecycle
     virtual void initialize(int stage) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void processNDMessage(Packet *packet, const Icmpv6Header *msg);
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
     virtual void finish() override;
 
     virtual void processIpv6Datagram(Packet *packet);
@@ -352,11 +351,6 @@ class INET_API Ipv6NeighbourDiscovery : public cSimpleModule, public ILifecycle
 
     /************Neighbour Advertisment Stuff)*****************************/
 
-#ifdef WITH_xMIPv6
-    Ipv6NeighbourAdvertisement *createAndSendNaPacket(Ipv6NeighbourSolicitation *ns,
-            const Ipv6Address& nsSrcAddr, const Ipv6Address& nsDestAddr, InterfaceEntry *ie);
-#endif /* WITH_xMIPv6 */
-
     virtual void sendSolicitedNa(Packet *packet, const Ipv6NeighbourSolicitation *ns, InterfaceEntry *ie);
 
 #ifdef WITH_xMIPv6
@@ -392,17 +386,6 @@ class INET_API Ipv6NeighbourDiscovery : public cSimpleModule, public ILifecycle
      * (RFC 3775 7.5.).
      */
     virtual bool canServeWirelessNodes(InterfaceEntry *ie);
-#endif /* WITH_xMIPv6 */
-
-    /**
-     *  RFC2463 Section 3.1: Destination Unreachable Message
-     *  Send an unreachable message to the Ipv6 module.
-     *  TODO: Relocate to Icmpv6 module
-     */
-    /*Icmpv6DestUnreachableMsg *createAndSendUnreachableMessage(
-        const Ipv6Address& destAddress, InterfaceEntry *ie);*/
-
-#ifdef WITH_xMIPv6
 
   public:
     void invalidateNeigbourCache();

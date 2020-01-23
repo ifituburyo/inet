@@ -18,9 +18,10 @@
 #ifndef __INET_HTTPSERVER_H
 #define __INET_HTTPSERVER_H
 
+#include "inet/common/INETDefs.h"
 #include "inet/common/packet/ChunkQueue.h"
+#include "inet/common/socket/SocketMap.h"
 #include "inet/transportlayer/contract/tcp/TcpSocket.h"
-#include "inet/transportlayer/contract/tcp/TcpSocketMap.h"
 #include "inet/applications/httptools/server/HttpServerBase.h"
 
 namespace inet {
@@ -37,17 +38,16 @@ namespace httptools {
  *
  * @author  Kristjan V. Jonsson
  */
-class INET_API HttpServer : public HttpServerBase, public TcpSocket::CallbackInterface
+class INET_API HttpServer : public HttpServerBase, public TcpSocket::ReceiveQueueBasedCallback
 {
   protected:
     struct SockData
     {
         TcpSocket *socket = nullptr;    // A reference to the socket object.
-        ChunkQueue queue;       // incoming queue for slices
     };
 
     TcpSocket listensocket;
-    TcpSocketMap sockCollection;
+    SocketMap sockCollection;
     unsigned long numBroken = 0;
     unsigned long socketsOpened = 0;
 
@@ -57,12 +57,14 @@ class INET_API HttpServer : public HttpServerBase, public TcpSocket::CallbackInt
     virtual void finish() override;
     virtual void handleMessage(cMessage *msg) override;
 
-    virtual void socketEstablished(int connId, void *yourPtr) override;
-    virtual void socketDataArrived(int connId, void *yourPtr, Packet *msg, bool urgent) override;
-    virtual void socketPeerClosed(int connId, void *yourPtr) override;
-    virtual void socketClosed(int connId, void *yourPtr) override;
-    virtual void socketFailure(int connId, void *yourPtr, int code) override;
-    virtual void socketDeleted(int connId, void *yourPtr) override;
+    virtual void socketDataArrived(TcpSocket *socket) override;
+    virtual void socketAvailable(TcpSocket *socket, TcpAvailableInfo *availableInfo) override { socket->accept(availableInfo->getNewSocketId()); }
+    virtual void socketEstablished(TcpSocket *socket) override;
+    virtual void socketPeerClosed(TcpSocket *socket) override;
+    virtual void socketClosed(TcpSocket *socket) override;
+    virtual void socketFailure(TcpSocket *socket, int code) override;
+    virtual void socketStatusArrived(TcpSocket *socket, TcpStatusInfo *status) override { }
+    virtual void socketDeleted(TcpSocket *socket) override;
 };
 
 } // namespace httptools

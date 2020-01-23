@@ -36,15 +36,17 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
         mib->mode = Ieee80211Mib::INFRASTRUCTURE;
         mib->bssStationData.stationType = Ieee80211Mib::STATION;
         mib->bssStationData.isAssociated = true;
-        mib->bssData.bssid.setAddress(par("accessPointAddress"));
     }
-    else if (stage == INITSTAGE_LINK_LAYER_2) {
+    else if (stage == INITSTAGE_LINK_LAYER) {
         L3AddressResolver addressResolver;
+        auto accessPointAddress = addressResolver.resolve(par("accessPointAddress"), L3AddressResolver::ADDR_MAC).toMac();
+        mib->bssData.bssid = accessPointAddress;
         auto host = addressResolver.findHostWithAddress(mib->bssData.bssid);
         auto interfaceTable = addressResolver.findInterfaceTableOf(host);
         auto interfaceEntry = interfaceTable->findInterfaceByAddress(mib->bssData.bssid);
         auto apMib = dynamic_cast<Ieee80211Mib *>(interfaceEntry->getSubmodule("mib"));
         apMib->bssAccessPointData.stations[mib->address] = Ieee80211Mib::ASSOCIATED;
+        mib->bssData.ssid = apMib->bssData.ssid;
     }
 }
 

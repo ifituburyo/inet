@@ -15,8 +15,9 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/StringFormat.h"
 #include "inet/power/storage/SimpleEpEnergyStorage.h"
 
 namespace inet {
@@ -60,6 +61,30 @@ void SimpleEpEnergyStorage::handleMessage(cMessage *message)
         throw cRuntimeError("Unknown message");
 }
 
+void SimpleEpEnergyStorage::refreshDisplay() const
+{
+    updateDisplayString();
+}
+
+void SimpleEpEnergyStorage::updateDisplayString() const
+{
+    auto text = StringFormat::formatString(par("displayStringTextFormat"), [&] (char directive) {
+        static std::string result;
+        switch (directive) {
+            case 'c':
+                result = getResidualEnergyCapacity().str();
+                break;
+            case 'p':
+                result = std::to_string((int)std::round(100 * unit(getResidualEnergyCapacity() / getNominalEnergyCapacity()).get())) + "%";
+                break;
+            default:
+                throw cRuntimeError("Unknown directive: %c", directive);
+        }
+        return result.c_str();
+    });
+    getDisplayString().setTagArg("t", 0, text);
+}
+
 void SimpleEpEnergyStorage::updateTotalPowerConsumption()
 {
     updateResidualCapacity();
@@ -79,7 +104,7 @@ void SimpleEpEnergyStorage::executeNodeOperation(J newResidualCapacity)
     if (newResidualCapacity <= J(0) && nodeStatus->getState() == NodeStatus::UP) {
         EV_WARN << "Energy storage failed" << endl;
         LifecycleOperation::StringMap params;
-        NodeCrashOperation *operation = new NodeCrashOperation();
+        ModuleCrashOperation *operation = new ModuleCrashOperation();
         operation->initialize(networkNode, params);
         lifecycleController.initiateOperation(operation);
     }

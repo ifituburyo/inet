@@ -7,7 +7,6 @@ Test shutdown and startup operations on WirelessHost with nonzero radiostate swi
 
 [General]
 network = Test
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 cmdenv-express-mode = false
 record-eventlog = true
@@ -24,7 +23,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 
 *.host.ipv4.configurator.networkConfiguratorModule = ""
 
-*.host.mobilityType = "StationaryMobility"
+*.host.mobility.typename = "StationaryMobility"
 **.mobility.constraintAreaMinX = 0m
 **.mobility.constraintAreaMinY = 0m
 **.mobility.constraintAreaMinZ = 0m
@@ -40,6 +39,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 %#--------------------------------------------------------------------------------------------------------------
 %file: test.ned
 
+import inet.test.moduletest.lib.*;
 import inet.node.inet.AdhocHost;
 import inet.node.inet.WirelessHost;
 import inet.status.NodeStatus;

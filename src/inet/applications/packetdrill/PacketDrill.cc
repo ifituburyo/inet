@@ -16,24 +16,24 @@
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 
-#include "PacketDrill.h"
 
+#include <assert.h>
+#include <cinttypes>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
-#include <cinttypes>
 
-#include "PacketDrillUtils.h"
+#include "inet/applications/packetdrill/PacketDrill.h"
+#include "inet/applications/packetdrill/PacketDrillUtils.h"
+#include "inet/common/checksum/TcpIpChecksum.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
-#include "inet/transportlayer/udp/UdpHeader_m.h"
-#include "inet/transportlayer/tcp_common/TcpHeader_m.h"
-#include "inet/networklayer/ipv4/Ipv4Header_m.h"
-#include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
-#include "inet/common/serializer/TcpIpChecksum.h"
 #include "inet/networklayer/common/L3Tools.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/transportlayer/common/L4Tools.h"
+#include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
+#include "inet/transportlayer/tcp_common/TcpHeader_m.h"
+#include "inet/transportlayer/udp/UdpHeader_m.h"
 
 namespace inet {
 
@@ -56,7 +56,7 @@ Ptr<Ipv4Header> PacketDrill::makeIpv4Header(IpProtocolId protocol, enum directio
 {
     auto ipv4Header = makeShared<Ipv4Header>();
     ipv4Header->setVersion(4);
-    ipv4Header->setHeaderLength(20);
+    ipv4Header->setHeaderLength(IPv4_MIN_HEADER_LENGTH);
 
     if (direction == DIRECTION_INBOUND) {
         ipv4Header->setSrcAddress(remoteAddr.toIpv4());
@@ -76,18 +76,22 @@ Ptr<Ipv4Header> PacketDrill::makeIpv4Header(IpProtocolId protocol, enum directio
     ipv4Header->setDontFragment(0);
     ipv4Header->setFragmentOffset(0);
     ipv4Header->setTypeOfService(0);
-    ipv4Header->setChunkLength(B(20));
-    ipv4Header->setTotalLengthField(20);
+    ipv4Header->setChunkLength(IPv4_MIN_HEADER_LENGTH);
+    ipv4Header->setTotalLengthField(IPv4_MIN_HEADER_LENGTH);
+
+    return ipv4Header;
+}
+
+void PacketDrill::setIpv4HeaderCrc(Ptr<Ipv4Header> &ipv4Header)
+{
     ipv4Header->setCrcMode(pdapp->getCrcMode());
     ipv4Header->setCrc(0);
     if (pdapp->getCrcMode() == CRC_COMPUTED) {
         MemoryOutputStream ipv4HeaderStream;
         Chunk::serialize(ipv4HeaderStream, ipv4Header);
-        uint16_t crc = serializer::TcpIpChecksum::checksum(ipv4HeaderStream.getData());
+        uint16_t crc = TcpIpChecksum::checksum(ipv4HeaderStream.getData());
         ipv4Header->setCrc(crc);
     }
-
-    return ipv4Header;
 }
 
 
@@ -111,10 +115,12 @@ Packet* PacketDrill::buildUDPPacket(int address_family, enum direction_t directi
         packet->setName("UDPOutbound");
     } else
         throw cRuntimeError("Unknown direction");
-    udpHeader->setTotalLengthField(UDP_HEADER_BYTES + udpPayloadBytes);
+    udpHeader->setCrcMode(CRC_DISABLED);
+    udpHeader->setTotalLengthField(UDP_HEADER_LENGTH + B(udpPayloadBytes));
     packet->insertAtFront(udpHeader);
     auto ipHeader = PacketDrill::makeIpv4Header(IP_PROT_UDP, direction, app->getLocalAddress(), app->getRemoteAddress());
-    ipHeader->setTotalLengthField(ipHeader->getTotalLengthField() + packet->getByteLength());
+    ipHeader->setTotalLengthField(ipHeader->getTotalLengthField() + packet->getDataLength());
+    PacketDrill::setIpv4HeaderCrc(ipHeader);
     packet->insertAtFront(ipHeader);
     return packet;
 }
@@ -215,7 +221,7 @@ Packet* PacketDrill::buildTCPPacket(int address_family, enum direction_t directi
     tcpHeader->setSequenceNo(startSequence);
     tcpHeader->setAckNo(ackSequence);
 
-    tcpHeader->setHeaderLength(TCP_HEADER_OCTETS);
+    tcpHeader->setHeaderLength(TCP_MIN_HEADER_LENGTH);
 
     // set flags
     tcpHeader->setFinBit(strchr(flags, 'F'));
@@ -249,13 +255,14 @@ Packet* PacketDrill::buildTCPPacket(int address_family, enum direction_t directi
             tcpHeader->insertHeaderOption(option);
         } // for
     } // if options present
-    tcpHeader->setHeaderLength(TCP_HEADER_OCTETS + tcpHeader->getHeaderOptionArrayLength());
-    tcpHeader->setChunkLength(B(TCP_HEADER_OCTETS + tcpHeader->getHeaderOptionArrayLength()));
+    tcpHeader->setHeaderLength(TCP_MIN_HEADER_LENGTH + B(tcpHeader->getHeaderOptionArrayLength()));
+    tcpHeader->setChunkLength(TCP_MIN_HEADER_LENGTH + B(tcpHeader->getHeaderOptionArrayLength()));
     packet->insertAtFront(tcpHeader);
 
     auto ipHeader = PacketDrill::makeIpv4Header(IP_PROT_TCP, direction, app->getLocalAddress(),
             app->getRemoteAddress());
-    ipHeader->setTotalLengthField(ipHeader->getTotalLengthField() + packet->getByteLength());
+    ipHeader->setTotalLengthField(ipHeader->getTotalLengthField() + packet->getDataLength());
+    PacketDrill::setIpv4HeaderCrc(ipHeader);
     packet->insertAtFront(ipHeader);
     delete tcpOptions;
     return packet;
@@ -270,7 +277,7 @@ Packet* PacketDrill::buildSCTPPacket(int address_family, enum direction_t direct
     if (direction == DIRECTION_INBOUND) {
         sctpmsg->setSrcPort(app->getRemotePort());
         sctpmsg->setDestPort(app->getLocalPort());
-        auto addressReq = packet->addTagIfAbsent<L3AddressReq>();
+        auto addressReq = packet->addTag<L3AddressReq>();
         addressReq->setSrcAddress(app->getRemoteAddress());
         addressReq->setDestAddress(app->getLocalAddress());
         sctpmsg->setVTag(app->getPeerVTag());
@@ -398,7 +405,7 @@ Packet* PacketDrill::buildSCTPPacket(int address_family, enum direction_t direct
     } else if (direction == DIRECTION_OUTBOUND) {
         sctpmsg->setSrcPort(app->getLocalPort());
         sctpmsg->setDestPort(app->getRemotePort());
-        auto addressReq = packet->addTagIfAbsent<L3AddressReq>();
+        auto addressReq = packet->addTag<L3AddressReq>();
         addressReq->setSrcAddress(app->getLocalAddress());
         addressReq->setDestAddress(app->getRemoteAddress());
         sctpmsg->setVTag(app->getLocalVTag());
@@ -470,7 +477,8 @@ Packet* PacketDrill::buildSCTPPacket(int address_family, enum direction_t direct
     insertTransportProtocolHeader(packet, Protocol::sctp, sctpmsg);
     auto ipHeader = PacketDrill::makeIpv4Header(IP_PROT_SCTP, direction, app->getLocalAddress(),
             app->getRemoteAddress());
-    ipHeader->setTotalLengthField(ipHeader->getTotalLengthField() + packet->getByteLength());
+    ipHeader->setTotalLengthField(ipHeader->getTotalLengthField() + packet->getDataLength());
+    PacketDrill::setIpv4HeaderCrc(ipHeader);
     insertNetworkProtocolHeader(packet, Protocol::ipv4, ipHeader);
     EV_INFO << "SCTP packet " << packet << endl;
     delete chunks;
@@ -597,11 +605,11 @@ PacketDrillSctpChunk* PacketDrill::buildInitChunk(int64 flgs, int64 tag, int64 a
             parameter = check_and_cast<PacketDrillSctpParameter*>(*iter);
             switch (parameter->getType()) {
                 case SUPPORTED_EXTENSIONS: {
-                    ByteArray *ba = parameter->getByteList();
-                    parLen = ba->getDataArraySize();
+                    auto ba = parameter->getByteList();
+                    parLen = ba->size();
                     initchunk->setSepChunksArraySize(parLen);
                     for (int i = 0; i < parLen; i++) {
-                        initchunk->setSepChunks(i, ba->getData(i));
+                        initchunk->setSepChunks(i, ba->at(i));
                     }
                     if (parLen > 0) {
                         length += ADD_PADDING(SCTP_SUPPORTED_EXTENSIONS_PARAMETER_LENGTH + parLen);
@@ -682,11 +690,11 @@ PacketDrillSctpChunk* PacketDrill::buildInitAckChunk(int64 flgs, int64 tag, int6
             parameter = check_and_cast<PacketDrillSctpParameter*>(*iter);
             switch (parameter->getType()) {
                 case SUPPORTED_EXTENSIONS: {
-                    ByteArray *ba = parameter->getByteList();
-                    parLen = ba->getDataArraySize();
+                    auto ba = parameter->getByteList();
+                    parLen = ba->size();
                     initackchunk->setSepChunksArraySize(parLen);
                     for (int i = 0; i < parLen; i++) {
-                        initackchunk->setSepChunks(i, (0x00ff & ba->getData(i)));
+                        initackchunk->setSepChunks(i, (0x00ff & ba->at(i)));
                     }
                     if (parLen > 0) {
                         length += ADD_PADDING(SCTP_SUPPORTED_EXTENSIONS_PARAMETER_LENGTH + parLen);

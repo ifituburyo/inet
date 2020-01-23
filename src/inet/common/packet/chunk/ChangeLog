@@ -1,5 +1,76 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-12-13  Levente Mészáros
+
+	Added data field to ByteCountChunk and BitCountChunk shift operator.
+
+2019-12-05  Gyorgy Szaszko
+
+	Added displaying attached tags of Chunks in Qtenv.
+
+2019-11-19  Levente Mészáros
+
+	Added inspector support for packet data part, front part, back part, and dissection result.
+
+2019-09-09  Levente Mészáros
+
+	Changed the interpretation of Chunk::peek() length parameter for negative values.
+
+	The old version interpreted -1 as up to any length. The new version interprets
+	negative values as up to the absolute value of length.
+
+2019-09-09  Levente Mészáros
+
+	Added PF_ALLOW_EMPTY flag to Chunk API to support returning Empty chunks.
+
+	This feature makes certain algorithms easier to write, because the user
+	doesn't have to check for nullptr all over the place.
+
+2019-08-05  Zoltan Bojthe
+
+	Added support for non-byte offset and length in BytesChunk::peek().
+
+2019-07-17  Zoltan Bojthe
+
+	Added BitCountChunk, ByteCountChunk descriptors.
+	Added data field for BitsChunk, BytesChunk descriptor.
+
+2019-07-09  Zoltan Bojthe
+
+	Added FieldsChunk::addChunkLength() function.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-08-29  Christoph Sommer
+
+	Fixed linking against INET on MinGW.
+
+2018-07-25  Levente Mészáros
+
+	Fixed peeking with backward iterator on a SequenceChunk part.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-25  Levente Mészáros
+
+	Changed region tag getter functions to return const tags, because chunks can be shared.
+
+2018-05-15  Levente Mészáros
+
+	Added missing checkImmutable calls into Chunk::mark* methods.
+
+2018-05-03  Andras Varga
+
+	Chunk.msg: bits[] and bytes[] were confusing, renamed them.
+
+	When Qtenv displayed something like bits[8] and bytes[2], one would think
+	that [8] and [2] indicate the number of bits and bytes, but no: they
+	indicate the number of *lines* in a binary and hex *dump* of the data.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-21  Levente Mészáros
 
 	Common: Refactored Packet API for clarity and consistency.

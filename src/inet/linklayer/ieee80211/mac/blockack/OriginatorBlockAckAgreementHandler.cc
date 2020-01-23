@@ -15,8 +15,8 @@
 // along with this program; if not, see http://www.gnu.org/licenses/.
 //
 
-#include "OriginatorBlockAckAgreement.h"
-#include "OriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -62,7 +62,7 @@ void OriginatorBlockAckAgreementHandler::blockAckAgreementExpired(IProcedureCall
     scheduleInactivityTimer(agreementHandlerCallback);
 }
 
-const Ptr<Ieee80211AddbaRequest> OriginatorBlockAckAgreementHandler::buildAddbaRequest(MacAddress receiverAddr, Tid tid, int startingSequenceNumber, IOriginatorBlockAckAgreementPolicy* blockAckAgreementPolicy)
+const Ptr<Ieee80211AddbaRequest> OriginatorBlockAckAgreementHandler::buildAddbaRequest(MacAddress receiverAddr, Tid tid, SequenceNumber startingSequenceNumber, IOriginatorBlockAckAgreementPolicy* blockAckAgreementPolicy)
 {
     auto addbaRequest = makeShared<Ieee80211AddbaRequest>();
     addbaRequest->setReceiverAddress(receiverAddr);
@@ -85,6 +85,7 @@ void OriginatorBlockAckAgreementHandler::processReceivedBlockAck(const Ptr<const
     if (auto basicBlockAck = dynamicPtrCast<const Ieee80211BasicBlockAck>(blockAck)) {
         auto agreement = getAgreement(basicBlockAck->getTransmitterAddress(), basicBlockAck->getTidInfo());
         if (agreement) {
+            agreement->setStartingSequenceNumber(basicBlockAck->getStartingSequenceNumber());
             agreement->calculateExpirationTime();
             scheduleInactivityTimer(callback);
         }

@@ -38,9 +38,10 @@ enum TcpCommandCode
     TCP_C_ABORT = 6;         // abort connection
     TCP_C_STATUS = 7;        // request status info (TCP_I_STATUS) from TCP
     TCP_C_QUEUE_BYTES_LIMIT = 8; // set send queue limit (in bytes)
-    TCP_C_READ = 9;       // send request to TCP to deliver data
+    TCP_C_READ = 9;          // send request to TCP to deliver data
+    TCP_C_DESTROY = 10;      // send request to TCP to destroy the socket descriptor
+    TCP_C_SETOPTION = 11;    // setting TCP socket options
 }
-
 
 //
 // TCP indications, sent by TCP to the application. TCP will set these
@@ -64,14 +65,12 @@ enum TcpStatusInd
     TCP_I_DATA_NOTIFICATION = 12; // notify the upper layer that data has arrived
 }
 
-
 //
 // Currently not in use.
 //
 enum TcpErrorCode
 {
 }
-
 
 //
 // Control info for TCP connections. This class is to be set as control info
@@ -91,7 +90,6 @@ class TcpCommand extends cObject
 {
     int userId = -1;   // id than can be freely used by the app
 }
-
 
 //
 // Currently not in use.
@@ -136,7 +134,6 @@ class TcpOpenCommand extends TcpCommand
     string tcpAlgorithmClass; // TCP congestion control algorithm; leave empty for default
 }
 
-
 //
 // Control info to be used to accept an available connection.
 //
@@ -144,13 +141,27 @@ class TcpAcceptCommand extends TcpCommand
 {
 }
 
+//
+// Base class for TCP socket option control info classes.
+//
+class TcpSetOptionCommand extends TcpCommand
+{
+}
 
-//
-// Control info to be used with the SEND command.
-//
-// @see ~TcpCommandCode, ~ITcp
-//
+class TcpSetTimeToLiveCommand extends TcpSetOptionCommand
+{
+    int ttl;
+}
 
+class TcpSetDscpCommand extends TcpSetOptionCommand
+{
+    short dscp;   // dscp for Ipv4/Ipv6
+}
+
+class TcpSetTosCommand extends TcpSetOptionCommand
+{
+    short tos;   // type of service for Ipv4 / traffic class for Ipv6
+}
 
 //
 // Sent with message kind TCP_I_AVAILABLE, to let the app know
@@ -167,7 +178,6 @@ class TcpAvailableInfo extends TcpCommand
     int newSocketId;
 }
 
-
 //
 // Sent with message kind TCP_I_ESTABLISHED, to let the app know
 // about the local and remote IP address and port.
@@ -181,7 +191,6 @@ class TcpConnectInfo extends TcpCommand
     int localPort;
     int remotePort;
 }
-
 
 //
 // Sent with message kind TCP_I_STATUS, in response to command TCP_C_STATUS.

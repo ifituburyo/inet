@@ -15,11 +15,10 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/physicallayer/neighborcache/QuadTreeNeighborCache.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/physicallayer/neighborcache/QuadTreeNeighborCache.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 Define_Module(QuadTreeNeighborCache);
@@ -44,7 +43,7 @@ void QuadTreeNeighborCache::initialize(int stage)
         refillPeriod = par("refillPeriod");
         maxNumOfPointsPerQuadrant = par("maxNumOfPointsPerQuadrant");
     }
-    else if (stage == INITSTAGE_LINK_LAYER_2) {
+    else if (stage == INITSTAGE_PHYSICAL_LAYER_NEIGHBOR_CACHE) {
         constraintAreaMin = radioMedium->getMediumLimitCache()->getMinConstraintArea();
         constraintAreaMax = radioMedium->getMediumLimitCache()->getMaxConstraintArea();
         quadTree = new QuadTree(constraintAreaMin, constraintAreaMax, maxNumOfPointsPerQuadrant, nullptr);
@@ -155,6 +154,5 @@ void QuadTreeNeighborCache::QuadTreeNeighborCacheVisitor::visit(const cObject *r
 }
 
 } // namespace physicallayer
-
 } // namespace inet
 

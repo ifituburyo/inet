@@ -42,12 +42,11 @@
 #ifndef __INET_MOBANCOORDINATOR_H
 #define __INET_MOBANCOORDINATOR_H
 
+#include <iostream>
 #include <sstream>
 #include <vector>
-#include <iostream>
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/mobility/base/LineSegmentsMobilityBase.h"
 #include "inet/mobility/group/Posture.h"
 #include "inet/mobility/group/PostureTransition.h"
@@ -173,7 +172,7 @@ class INET_API MoBanCoordinator : public LineSegmentsMobilityBase
     virtual void setTargetPosition() override;
 
     /** @brief Returns the module that represents the object moved by this mobility module. */
-    virtual cModule *findVisualRepresentation() override { return this; }
+    virtual cModule *findSubjectModule() override { return this; }
 
     /** @brief To be called at the end of simulation run. */
     virtual void finish() override;

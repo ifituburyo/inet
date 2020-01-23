@@ -15,8 +15,8 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/common/geometry/object/LineSegment.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/geometry/object/LineSegment.h"
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/visualizer/base/PathCanvasVisualizerBase.h"
 
@@ -70,13 +70,19 @@ PathCanvasVisualizerBase::PathCanvasVisualization::~PathCanvasVisualization()
     delete figure;
 }
 
+PathCanvasVisualizerBase::~PathCanvasVisualizerBase()
+{
+    if (displayRoutes)
+        removeAllPathVisualizations();
+}
+
 void PathCanvasVisualizerBase::initialize(int stage)
 {
     PathVisualizerBase::initialize(stage);
     if (!hasGUI()) return;
     if (stage == INITSTAGE_LOCAL) {
         zIndex = par("zIndex");
-        auto canvas = visualizerTargetModule->getCanvas();
+        auto canvas = visualizationTargetModule->getCanvas();
         lineManager = LineManager::getCanvasLineManager(canvas);
         canvasProjection = CanvasProjection::getCanvasProjection(canvas);
         pathGroup = new cGroupFigure("paths");
@@ -137,7 +143,7 @@ void PathCanvasVisualizerBase::refreshDisplay() const
         }
         pathCanvasVisualization->figure->setPoints(points);
     }
-    visualizerTargetModule->getCanvas()->setAnimationSpeed(pathVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
+    visualizationTargetModule->getCanvas()->setAnimationSpeed(pathVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
 }
 
 const PathVisualizerBase::PathVisualization *PathCanvasVisualizerBase::createPathVisualization(const std::vector<int>& path, cPacket *packet) const

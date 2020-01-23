@@ -31,9 +31,9 @@ import inet.node.base.ApplicationLayerNodeBase;
 //   **.wlan[*].typename parameter. see:  inet.linklayer.ieee80211 or other
 //   modules implementing ~IWirelessInterface
 // - Also external interfaces can be configured for HW in the loop simulation
-//   using the numExtInterfaces parameter and setting the type using
-//   **.ext[*].typename in the INI file. see: ~ExtInterface and ~IExternalInterface
-// - If wireless card is present, node mobility can be set using **.mobilityType
+//   using the numEthInterfaces parameter and setting the interface type using
+//   **.eth[*].typename in the INI file. see: ~ExtInterface derived modules and ~IExternalInterface
+// - If wireless card is present, node mobility can be set using *.*.mobility.typename
 //   see: inet.mobility and ~IMobility
 //
 module StandardHost extends ApplicationLayerNodeBase
@@ -42,6 +42,7 @@ module StandardHost extends ApplicationLayerNodeBase
         @display("i=device/pc2");
         @figure[submodules];
         forwarding = default(false);  // disable routing by default
-        ipv4.proxyARP = default(false);
+        ipv4.arp.proxyArpInterfaces = default(""); // proxy arp is disabled on hosts by default
         *.routingTableModule = default("^.ipv4.routingTable");
 }
+

@@ -15,9 +15,9 @@
 // along with this program; if not, see http://www.gnu.org/licenses/.
 // 
 
-#include "ModeSetListener.h"
-#include "inet/common/Simsignals.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/Simsignals.h"
+#include "inet/linklayer/ieee80211/mac/common/ModeSetListener.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -30,7 +30,7 @@ void ModeSetListener::initialize(int stage)
 
 void ModeSetListener::receiveSignal(cComponent* source, simsignal_t signalID, cObject* obj, cObject* details)
 {
-    Enter_Method("receiveModeSetChangeNotification");
+    Enter_Method_Silent("receiveSignal");
     if (signalID == modesetChangedSignal)
         modeSet = check_and_cast<physicallayer::Ieee80211ModeSet*>(obj);
 }

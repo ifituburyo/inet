@@ -17,8 +17,8 @@
 #define __INET_MACRELAYUNIT_H
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/common/LayeredProtocolBase.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ethernet/EtherFrame_m.h"
 #include "inet/linklayer/ethernet/switch/IMacAddressTable.h"
@@ -26,22 +26,20 @@
 
 namespace inet {
 
-class INET_API MacRelayUnit : public cSimpleModule, public ILifecycle
+class INET_API MacRelayUnit : public LayeredProtocolBase
 {
   protected:
-    IMacAddressTable *addressTable = nullptr;
-    int numPorts = 0;
-    IInterfaceTable *ift = nullptr;
+    IInterfaceTable *ifTable = nullptr;
+    IMacAddressTable *macTable = nullptr;
 
     // Parameters for statistics collection
     long numProcessedFrames = 0;
     long numDiscardedFrames = 0;
 
-    bool isOperational = false;    // for lifecycle
-
   protected:
     virtual void initialize(int stage) override;
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void updateDisplayString() const;
     /**
      * Updates address table with source address, determines output port
      * and sends out (or broadcasts) frame on ports. Includes calls to
@@ -49,33 +47,37 @@ class INET_API MacRelayUnit : public cSimpleModule, public ILifecycle
      *
      * The message pointer should not be referenced any more after this call.
      */
-    virtual void handleAndDispatchFrame(Packet *packet, const Ptr<const EthernetMacHeader>& frame);
+    virtual void handleAndDispatchFrame(Packet *packet);
+
+    void handleLowerPacket(Packet *packet) override;
 
     /**
      * Utility function: sends the frame on all ports except inputport.
      * The message pointer should not be referenced any more after this call.
      */
-    virtual void broadcastFrame(Packet *frame, int inputport);
-
-    /**
-     * Calls handleIncomingFrame() for frames arrived from outside,
-     * and processFrame() for self messages.
-     */
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void broadcast(Packet *frame, int inputport);
 
     /**
      * Writes statistics.
      */
     virtual void finish() override;
 
-    // for lifecycle:
+    //@{ for lifecycle:
+    virtual void handleStartOperation(LifecycleOperation *operation) override { start(); }
+    virtual void handleStopOperation(LifecycleOperation *operation) override { stop(); }
+    virtual void handleCrashOperation(LifecycleOperation *operation) override { stop(); }
+    virtual bool isUpperMessage(cMessage *message) override { return message->arrivedOn("upperLayerIn"); }
+    virtual bool isLowerMessage(cMessage *message) override { return message->arrivedOn("ifIn"); }
 
-  public:
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual bool isInitializeStage(int stage) override { return stage == INITSTAGE_LINK_LAYER; }
+    virtual bool isModuleStartStage(int stage) override { return stage == ModuleStartOperation::STAGE_LINK_LAYER; }
+    virtual bool isModuleStopStage(int stage) override { return stage == ModuleStopOperation::STAGE_LINK_LAYER; }
 
-  protected:
     virtual void start();
     virtual void stop();
+    //@}
+
+    virtual void learn(MacAddress srcAddr, int arrivalInterfaceId);
 };
 
 } // namespace inet

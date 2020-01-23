@@ -15,11 +15,10 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/transportlayer/tcp/flavours/DumbTcp.h"
 #include "inet/transportlayer/tcp/Tcp.h"
+#include "inet/transportlayer/tcp/flavours/DumbTcp.h"
 
 namespace inet {
-
 namespace tcp {
 
 Register_Class(DumbTcp);
@@ -37,7 +36,7 @@ DumbTcp::~DumbTcp()
 {
     // cancel and delete timers
     if (rexmitTimer)
-        delete conn->getTcpMain()->cancelEvent(rexmitTimer);
+        delete conn->cancelEvent(rexmitTimer);
 }
 
 void DumbTcp::initialize()
@@ -61,7 +60,7 @@ void DumbTcp::established(bool active)
 
 void DumbTcp::connectionClosed()
 {
-    conn->getTcpMain()->cancelEvent(rexmitTimer);
+    conn->cancelEvent(rexmitTimer);
 }
 
 void DumbTcp::processTimer(cMessage *timer, TcpEventCode& event)
@@ -118,7 +117,7 @@ void DumbTcp::ackSent()
 void DumbTcp::dataSent(uint32 fromseq)
 {
     if (rexmitTimer->isScheduled())
-        conn->getTcpMain()->cancelEvent(rexmitTimer);
+        conn->cancelEvent(rexmitTimer);
 
     conn->scheduleTimeout(rexmitTimer, REXMIT_TIMEOUT);
 }

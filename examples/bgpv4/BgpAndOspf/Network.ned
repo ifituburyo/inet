@@ -1,4 +1,3 @@
-
 package inet.examples.bgpv4.BgpAndOspf;
 
 import inet.common.misc.ThruputMeteringChannel;
@@ -7,140 +6,143 @@ import inet.node.bgp.BgpRouter;
 import inet.node.ethernet.EtherSwitch;
 import inet.node.inet.StandardHost;
 import inet.node.ospfv2.OspfRouter;
+import inet.visualizer.integrated.IntegratedCanvasVisualizer;
 
-
-network BGPTest
+network BgpNetwork
 {
     types:
         channel LINK_100 extends ThruputMeteringChannel
         {
             parameters:
-                delay = 0s;
+                delay = 50us;
                 datarate = 100Mbps;
+                displayAsTooltip = true;
                 thruputDisplayFormat = "#N";
         }
-
     submodules:
+        visualizer: IntegratedCanvasVisualizer {
+            parameters:
+                @display("p=100,100;is=s");
+        }
+        configurator: Ipv4NetworkConfigurator {
+            parameters:
+                @display("p=100,200;is=s");
+                config = xmldoc("IPv4Config.xml");
+                addStaticRoutes = false;
+                addDefaultRoutes = false;
+                addSubnetRoutes = false;
+        }
         A: BgpRouter {
             parameters:
-                @display("p=266,141");
+                @display("p=700,230");
             gates:
                 pppg[3];
         }
         B: BgpRouter {
             parameters:
-                @display("p=338,141");
+                @display("p=850,230");
             gates:
                 pppg[3];
         }
         RA1: OspfRouter {
             parameters:
-                @display("p=198,113;i=device/router");
+                @display("p=550,130;i=device/router");
             gates:
                 pppg[2];
                 ethg[1];
         }
         RA2: OspfRouter {
             parameters:
-                @display("p=198,187;i=device/router");
+                @display("p=550,330;i=device/router");
             gates:
                 pppg[2];
                 ethg[1];
         }
         RB1: OspfRouter {
             parameters:
-                @display("p=406,105;i=device/router");
+                @display("p=1000,130;i=device/router");
             gates:
                 pppg[2];
                 ethg[1];
         }
         RB2: OspfRouter {
             parameters:
-                @display("p=406,187;i=device/router");
+                @display("p=1000,330;i=device/router");
             gates:
                 pppg[2];
                 ethg[1];
         }
         PA1: EtherSwitch {
             parameters:
-                @display("p=124,70;i=device/switch");
+                @display("p=400,130;i=device/switch");
             gates:
                 ethg[3];
         }
         PA2: EtherSwitch {
             parameters:
-                @display("p=114,190;i=device/switch");
+                @display("p=400,330;i=device/switch");
             gates:
                 ethg[3];
         }
         PB1: EtherSwitch {
             parameters:
-                @display("p=484,78;i=device/switch");
+                @display("p=1150,130;i=device/switch");
             gates:
                 ethg[3];
         }
         PB2: EtherSwitch {
             parameters:
-                @display("p=492,190;i=device/switch");
+                @display("p=1150,330;i=device/switch");
             gates:
                 ethg[3];
         }
         HA11: StandardHost {
             parameters:
-                @display("p=42,34;i=device/pc");
+                @display("p=250,80;i=device/pc");
             gates:
                 ethg[1];
         }
         HA12: StandardHost {
             parameters:
-                @display("p=34,90;i=device/pc");
+                @display("p=250,180;i=device/pc");
             gates:
                 ethg[1];
         }
         HA21: StandardHost {
             parameters:
-                @display("p=34,156;i=device/pc");
+                @display("p=250,280;i=device/pc");
             gates:
                 ethg[1];
         }
         HA22: StandardHost {
             parameters:
-                @display("p=34,218;i=device/pc");
+                @display("p=250,380;i=device/pc");
             gates:
                 ethg[1];
         }
         HB11: StandardHost {
             parameters:
-                @display("p=558,34;i=device/pc");
+                @display("p=1300,80;i=device/pc");
             gates:
                 ethg[1];
         }
         HB12: StandardHost {
             parameters:
-                @display("p=558,90;i=device/pc");
+                @display("p=1300,180;i=device/pc");
             gates:
                 ethg[1];
         }
         HB21: StandardHost {
             parameters:
-                @display("p=558,156;i=device/pc");
+                @display("p=1300,280;i=device/pc");
             gates:
                 ethg[1];
         }
         HB22: StandardHost {
             parameters:
-                @display("p=558,220;i=device/pc");
+                @display("p=1300,380;i=device/pc");
             gates:
                 ethg[1];
-        }
-        configurator: Ipv4NetworkConfigurator {
-            @display("p=305,34");
-            config = xmldoc("IPv4Config.xml");
-            //assignAddresses = false;
-            //assignDisjunctSubnetAddresses = false;
-            addStaticRoutes = false;
-            addDefaultRoutes = false;
-            addSubnetRoutes = false;
         }
     connections:
         //LAN A1 et A2

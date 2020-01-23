@@ -65,6 +65,12 @@ class INET_API MacAddress
     /** The spanning tree protocol bridge's multicast address, 01:80:C2:00:00:00 */
     static const MacAddress STP_MULTICAST_ADDRESS;
 
+    /** The Cisco discovery protocol bridge's multicast address, 01:00:0C:CC:CC:CC */
+    static const MacAddress CDP_MULTICAST_ADDRESS;
+
+    /** The Local link discovery protocol bridge's multicast address, 01:80:C2:00:00:0E */
+    static const MacAddress LLDP_MULTICAST_ADDRESS;
+
     /**
      * Default constructor initializes address bytes to zero.
      */
@@ -144,6 +150,11 @@ class INET_API MacAddress
      * Returns true if this is a multicast logical address (first byte's lsb is 1).
      */
     bool isMulticast() const  { return getAddressByte(0) & 0x01; };
+
+    /**
+     * Returns true if this is a local address (first byte's second less significant bit is 1).
+     */
+    bool isLocal() const  { return getAddressByte(0) & 0x02; };
 
     /**
      * Returns true if all address bytes are zero.

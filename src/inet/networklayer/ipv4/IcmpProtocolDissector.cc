@@ -17,17 +17,16 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/networklayer/ipv4/IcmpProtocolDissector.h"
-
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/networklayer/ipv4/IcmpHeader_m.h"
+#include "inet/networklayer/ipv4/IcmpProtocolDissector.h"
 
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::icmpv4, IcmpProtocolDissector);
 
-void IcmpProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void IcmpProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     const auto& header = packet->popAtFront<IcmpHeader>();
     callback.startProtocolDataUnit(&Protocol::icmpv4);

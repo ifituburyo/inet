@@ -15,24 +15,23 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/networklayer/ipv4/Ipv4ProtocolDissector.h"
-
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/networklayer/ipv4/Ipv4.h"
+#include "inet/networklayer/ipv4/Ipv4ProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::ipv4, Ipv4ProtocolDissector);
 
-void Ipv4ProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void Ipv4ProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     auto trailerPopOffset = packet->getBackOffset();
     auto ipv4EndOffset = packet->getFrontOffset();
     const auto& header = packet->popAtFront<Ipv4Header>();
     ipv4EndOffset += B(header->getTotalLengthField());
     callback.startProtocolDataUnit(&Protocol::ipv4);
-    bool incorrect = (ipv4EndOffset > trailerPopOffset);
+    bool incorrect = (ipv4EndOffset > trailerPopOffset || header->getTotalLengthField() <= header->getHeaderLength());
     if (incorrect) {
         callback.markIncorrect();
         ipv4EndOffset = trailerPopOffset;

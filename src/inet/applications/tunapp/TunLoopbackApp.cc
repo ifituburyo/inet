@@ -15,38 +15,30 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
+#include "inet/applications/tunapp/TunLoopbackApp.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolGroup.h"
 #include "inet/networklayer/common/L3Tools.h"
-#include "inet/networklayer/contract/NetworkHeaderBase_m.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
-#include "inet/applications/tunapp/TunLoopbackApp.h"
-#include "inet/transportlayer/contract/TransportHeaderBase_m.h"
+#include "inet/networklayer/contract/NetworkHeaderBase_m.h"
 #include "inet/transportlayer/common/L4Tools.h"
+#include "inet/transportlayer/contract/TransportHeaderBase_m.h"
 
 namespace inet {
 
 Define_Module(TunLoopbackApp);
 
-TunLoopbackApp::TunLoopbackApp() :
-    packetsSent(0),
-    packetsReceived(0)
-{
-}
-
-TunLoopbackApp::~TunLoopbackApp()
-{
-}
-
 void TunLoopbackApp::initialize(int stage)
 {
     cSimpleModule::initialize(stage);
-    if (stage == INITSTAGE_LINK_LAYER_2) {
+    if (stage == INITSTAGE_LOCAL) {
         tunInterface = par("tunInterface");
         packetsSent = 0;
         packetsReceived = 0;
+    }
+    else if (stage == INITSTAGE_APPLICATION_LAYER) {
         IInterfaceTable *interfaceTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
-        InterfaceEntry *interfaceEntry = interfaceTable->getInterfaceByName(tunInterface);
+        InterfaceEntry *interfaceEntry = interfaceTable->findInterfaceByName(tunInterface);
         if (interfaceEntry == nullptr)
             throw cRuntimeError("TUN interface not found: %s", tunInterface);
         tunSocket.setOutputGate(gate("socketOut"));

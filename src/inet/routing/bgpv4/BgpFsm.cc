@@ -312,7 +312,6 @@ void OpenSent::UpdateMsgEvent()
 //RFC 4271 - 8.2.2.  Finite State Machine - OpenConfirmState
 void OpenConfirm::ConnectRetryTimer_Expires()
 {
-    std::cout << "OpenConfirm::ConnectRetryTimer_Expires" << std::endl;
     EV_TRACE << "Processing OpenConfirm::ConnectRetryTimer_Expires" << std::endl;
     //In response to any other event (Events 9, 12-13, 20, 27-28), the local system:
     BgpSession& session = TopState::box().getModule();
@@ -330,7 +329,6 @@ void OpenConfirm::ConnectRetryTimer_Expires()
 
 void OpenConfirm::HoldTimer_Expires()
 {
-    std::cout << "OpenConfirm::HoldTimer_Expires" << std::endl;
     EV_TRACE << "Processing OpenConfirm::HoldTimer_Expires" << std::endl;
     BgpSession& session = TopState::box().getModule();
     //If the HoldTimer_Expires event (Event 10) occurs before a KEEPALIVE message is received, the local system:
@@ -347,7 +345,6 @@ void OpenConfirm::HoldTimer_Expires()
 
 void OpenConfirm::KeepaliveTimer_Expires()
 {
-    std::cout << "OpenConfirm::KeepaliveTimer_Expires" << std::endl;
     EV_TRACE << "Processing OpenConfirm::KeepaliveTimer_Expires" << std::endl;
     BgpSession& session = TopState::box().getModule();
     //If the local system receives a KeepaliveTimer_Expires event (Event 11), the local system:
@@ -360,7 +357,7 @@ void OpenConfirm::KeepaliveTimer_Expires()
 
 void OpenConfirm::TcpConnectionFails()
 {
-    std::cout << "OpenConfirm::TcpConnectionFails" << std::endl;
+    EV_TRACE << "OpenConfirm::TcpConnectionFails" << std::endl;
     setState<Idle>();
 }
 
@@ -378,7 +375,6 @@ void OpenConfirm::OpenMsgEvent()
 
 void OpenConfirm::KeepAliveMsgEvent()
 {
-    std::cout << "OpenConfirm::KeepAliveMsgEvent" << std::endl;
     EV_TRACE << "Processing OpenConfirm::KeepAliveMsgEvent" << std::endl;
     BgpSession& session = TopState::box().getModule();
     session._keepAliveMsgRcv++;
@@ -391,7 +387,6 @@ void OpenConfirm::KeepAliveMsgEvent()
 
 void OpenConfirm::UpdateMsgEvent()
 {
-    std::cout << "OpenConfirm::UpdateMsgEvent" << std::endl;
     EV_TRACE << "Processing OpenConfirm::UpdateMsgEvent" << std::endl;
     BgpSession& session = TopState::box().getModule();
     session._updateMsgRcv++;
@@ -401,47 +396,34 @@ void OpenConfirm::UpdateMsgEvent()
 //RFC 4271 - 8.2.2.  Finite State Machine - Established State
 void Established::entry()
 {
-    std::cout << "Established::entry - send an update message" << std::endl;
+    EV_DEBUG << "BGP session is established. \n";
+
     BgpSession& session = TopState::box().getModule();
     session._info.sessionEstablished = true;
 
     //if it's an EGP Session, send update messages with all routing information to BGP peer
     //if it's an IGP Session, send update message with only the BGP routes learned by EGP
-    const Ipv4Route *rtEntry;
-    RoutingTableEntry *BGPEntry;
-    IIpv4RoutingTable *IPRoutingTable = session.getIPRoutingTable();
 
-    for (int i = 1; i < IPRoutingTable->getNumRoutes(); i++) {
-        rtEntry = IPRoutingTable->getRoute(i);
-        if (rtEntry->getNetmask() == Ipv4Address::ALLONES_ADDRESS ||
-            rtEntry->getSourceType() == IRoute::IFACENETMASK ||
-            rtEntry->getSourceType() == IRoute::MANUAL ||
-            rtEntry->getSourceType() == IRoute::BGP)
-        {
-            continue;
-        }
-
-        if (session.getType() == EGP) {
-            if (rtEntry->getSourceType() == IRoute::OSPF && session.checkExternalRoute(rtEntry)) {
+    if (session.getType() == EGP) {
+        auto IPRoutingTable = session.getIPRoutingTable();
+        for (int i = 0; i < IPRoutingTable->getNumRoutes(); i++) {
+            const Ipv4Route *rtEntry = IPRoutingTable->getRoute(i);
+            if(session.isRouteExcluded(*rtEntry))
                 continue;
-            }
-            BGPEntry = new RoutingTableEntry(rtEntry);
-            std::string entryh = rtEntry->getDestination().str();
-            std::string entryn = rtEntry->getNetmask().str();
+            BgpRoutingTableEntry *BGPEntry = new BgpRoutingTableEntry(rtEntry);
             BGPEntry->addAS(session._info.ASValue);
             session.updateSendProcess(BGPEntry);
             delete BGPEntry;
         }
     }
 
-    std::vector<RoutingTableEntry *> BGPRoutingTable = session.getBGPRoutingTable();
-    for (auto & elem : BGPRoutingTable) {
-        session.updateSendProcess((elem));
-    }
+    for (auto & elem : session.getBGPRoutingTable())
+        session.updateSendProcess(elem);
 
-    //when all EGP Session is in established state, start IGP Session(s)
+    //when all EGP Sessions are in established state, start IGP Session(s)
     SessionId nextSession = session.findAndStartNextSession(EGP);
     if (nextSession == static_cast<SessionId>(-1)) {
+        EV_DEBUG << ">>> all EGP session are established. Starting IGP sessions(s). \n";
         session.findAndStartNextSession(IGP);
     }
 }

@@ -17,12 +17,16 @@
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/networklayer/arp/ipv4/GlobalArp.h"
-#include "inet/networklayer/generic/GenericNetworkProtocolInterfaceData.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
+#ifdef WITH_IPv6
 #include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#endif
+#ifdef WITH_NEXTHOP
+#include "inet/networklayer/nexthop/NextHopInterfaceData.h"
+#endif
 
 namespace inet {
 
@@ -63,7 +67,7 @@ GlobalArp::~GlobalArp()
 
 void GlobalArp::initialize(int stage)
 {
-    cSimpleModule::initialize(stage);
+    OperationalBase::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL) {
         const char *addressTypeString = par("addressType");
@@ -81,28 +85,33 @@ void GlobalArp::initialize(int stage)
             throw cRuntimeError("Unknown address type");
         WATCH_PTRMAP(globalArpCache);
     }
-    else if (stage == INITSTAGE_NETWORK_LAYER_3) {    // IP addresses should be available
+    else if (stage == INITSTAGE_NETWORK_LAYER) {
         interfaceTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
-        isUp = isNodeUp();
         // register our addresses in the global cache
         for (int i = 0; i < interfaceTable->getNumInterfaces(); i++) {
             InterfaceEntry *interfaceEntry = interfaceTable->getInterface(i);
             if (!interfaceEntry->isLoopback()) {
-                if (auto ipv4Data = interfaceEntry->ipv4Data()) {
+#ifdef WITH_IPv4
+                if (auto ipv4Data = interfaceEntry->findProtocolData<Ipv4InterfaceData>()) {
                     Ipv4Address ipv4Address = ipv4Data->getIPAddress();
                     if (!ipv4Address.isUnspecified())
                         ensureCacheEntry(ipv4Address, interfaceEntry);
                 }
-                if (auto ipv6Data = interfaceEntry->ipv6Data()) {
+#endif
+#ifdef WITH_IPv6
+                if (auto ipv6Data = interfaceEntry->findProtocolData<Ipv6InterfaceData>()) {
                     Ipv6Address ipv6Address = ipv6Data->getLinkLocalAddress();
                     if (!ipv6Address.isUnspecified())
                         ensureCacheEntry(ipv6Address, interfaceEntry);
                 }
-                if (auto genericData = interfaceEntry->getGenericNetworkProtocolData()) {
+#endif
+#ifdef WITH_NEXTHOP
+                if (auto genericData = interfaceEntry->findProtocolData<NextHopInterfaceData>()) {
                     L3Address address = genericData->getAddress();
                     if (!address.isUnspecified())
                         ensureCacheEntry(address, interfaceEntry);
                 }
+#endif
             }
         }
         cModule *node = findContainingNode(this);
@@ -113,11 +122,9 @@ void GlobalArp::initialize(int stage)
     }
 }
 
-void GlobalArp::handleMessage(cMessage *msg)
+void GlobalArp::handleMessageWhenUp(cMessage *msg)
 {
-    if (!isUp)
-        handleMessageWhenDown(msg);
-    else if (msg->isSelfMessage())
+    if (msg->isSelfMessage())
         handleSelfMessage(msg);
     else
         handlePacket(check_and_cast<Packet *>(msg));
@@ -134,48 +141,16 @@ void GlobalArp::handlePacket(Packet *packet)
     delete packet;
 }
 
-void GlobalArp::handleMessageWhenDown(cMessage *msg)
+void GlobalArp::handleStartOperation(LifecycleOperation *operation)
 {
-    if (msg->isSelfMessage())
-        throw cRuntimeError("Model error: self msg '%s' received when protocol is down", msg->getName());
-    EV_ERROR << "Protocol is turned off, dropping '" << msg->getName() << "' message\n";
-    delete msg;
 }
 
-bool GlobalArp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void GlobalArp::handleStopOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_NETWORK_LAYER)
-            start();
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_NETWORK_LAYER)
-            stop();
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH)
-            stop();
-    }
-    else
-        throw cRuntimeError("Unsupported operation '%s'", operation->getClassName());
-    return true;
 }
 
-void GlobalArp::start()
+void GlobalArp::handleCrashOperation(LifecycleOperation *operation)
 {
-    isUp = true;
-}
-
-void GlobalArp::stop()
-{
-    isUp = false;
-}
-
-bool GlobalArp::isNodeUp()
-{
-    NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-    return !nodeStatus || nodeStatus->getState() == NodeStatus::UP;
 }
 
 MacAddress GlobalArp::resolveL3Address(const L3Address& address, const InterfaceEntry *interfaceEntry)
@@ -193,6 +168,7 @@ MacAddress GlobalArp::resolveL3Address(const L3Address& address, const Interface
 MacAddress GlobalArp::mapUnicastAddress(L3Address address)
 {
     switch (address.getType()) {
+#ifdef WITH_IPv4
         case L3Address::IPv4: {
             Ipv4Address ipv4Address = address.toIpv4();
             ArpCache::const_iterator it = globalArpCache.find(ipv4Address);
@@ -201,6 +177,8 @@ MacAddress GlobalArp::mapUnicastAddress(L3Address address)
             throw cRuntimeError("GlobalArp does not support dynamic address resolution");
             return MacAddress::UNSPECIFIED_ADDRESS;
         }
+#endif
+#ifdef WITH_IPv6
         case L3Address::IPv6: {
             Ipv6Address ipv6Address = address.toIpv6();
             ArpCache::const_iterator it = globalArpCache.find(ipv6Address);
@@ -209,6 +187,7 @@ MacAddress GlobalArp::mapUnicastAddress(L3Address address)
             throw cRuntimeError("GlobalArp does not support dynamic address resolution");
             return MacAddress::UNSPECIFIED_ADDRESS;
         }
+#endif
         case L3Address::MAC:
             return address.toMac();
         case L3Address::MODULEID: {
@@ -243,6 +222,7 @@ L3Address GlobalArp::getL3AddressFor(const MacAddress& macAddress) const
 {
     Enter_Method_Silent();
     switch (addressType) {
+#ifdef WITH_IPv4
         case L3Address::IPv4: {
             if (macAddress.isUnspecified())
                 return Ipv4Address::UNSPECIFIED_ADDRESS;
@@ -251,6 +231,8 @@ L3Address GlobalArp::getL3AddressFor(const MacAddress& macAddress) const
                     return it->first;
             return Ipv4Address::UNSPECIFIED_ADDRESS;
         }
+#endif
+#ifdef WITH_IPv6
         case L3Address::IPv6: {
             if (macAddress.isUnspecified())
                 return Ipv6Address::UNSPECIFIED_ADDRESS;
@@ -259,6 +241,7 @@ L3Address GlobalArp::getL3AddressFor(const MacAddress& macAddress) const
                     return it->first;
             return Ipv4Address::UNSPECIFIED_ADDRESS;
         }
+#endif
         case L3Address::MAC:
             return L3Address(macAddress);
         case L3Address::MODULEID: {
@@ -293,13 +276,15 @@ void GlobalArp::receiveSignal(cComponent *source, simsignal_t signalID, cObject 
             return;
         auto it = globalArpCache.begin();
         ArpCacheEntry *entry = nullptr;
+#ifdef WITH_IPv4
         if (signalID == interfaceIpv4ConfigChangedSignal) {
             for ( ; it != globalArpCache.end(); ++it) {
                 if (it->second->interfaceEntry == interfaceEntry && it->first.getType() == L3Address::IPv4)
                     break;
             }
             if (it == globalArpCache.end()) {
-                if (!interfaceEntry->ipv4Data() || interfaceEntry->ipv4Data()->getIPAddress().isUnspecified())
+                auto ipv4Data = interfaceEntry->findProtocolData<Ipv4InterfaceData>();
+                if (!ipv4Data || ipv4Data->getIPAddress().isUnspecified())
                     return; // if the address is not defined it isn't included in the global cache
                 entry = new ArpCacheEntry();
                 entry->owner = this;
@@ -310,22 +295,27 @@ void GlobalArp::receiveSignal(cComponent *source, simsignal_t signalID, cObject 
                 entry = it->second;
                 ASSERT(entry->owner == this);
                 globalArpCache.erase(it);
-                if (!interfaceEntry->ipv4Data() || interfaceEntry->ipv4Data()->getIPAddress().isUnspecified()) {
+                auto ipv4Data = interfaceEntry->findProtocolData<Ipv4InterfaceData>();
+                if (!ipv4Data || ipv4Data->getIPAddress().isUnspecified()) {
                     delete entry;
                     return;    // if the address is not defined it isn't included in the global cache
                 }
             }
-            Ipv4Address ipv4Address = interfaceEntry->ipv4Data()->getIPAddress();
+            Ipv4Address ipv4Address = interfaceEntry->getProtocolData<Ipv4InterfaceData>()->getIPAddress();
             auto where = globalArpCache.insert(globalArpCache.begin(), std::make_pair(ipv4Address, entry));
             ASSERT(where->second == entry);
         }
-        else if (signalID == interfaceIpv6ConfigChangedSignal) {
+        else
+#endif
+#ifdef WITH_IPv6
+        if (signalID == interfaceIpv6ConfigChangedSignal) {
             for ( ; it != globalArpCache.end(); ++it) {
                 if (it->second->interfaceEntry == interfaceEntry && it->first.getType() == L3Address::IPv6)
                     break;
             }
             if (it == globalArpCache.end()) {
-                if (!interfaceEntry->ipv6Data() || interfaceEntry->ipv6Data()->getLinkLocalAddress().isUnspecified())
+                auto ipv6Data = interfaceEntry->findProtocolData<Ipv6InterfaceData>();
+                if (ipv6Data == nullptr || ipv6Data->getLinkLocalAddress().isUnspecified())
                     return; // if the address is not defined it isn't included in the global cache
                 entry = new ArpCacheEntry();
                 entry->owner = this;
@@ -336,15 +326,19 @@ void GlobalArp::receiveSignal(cComponent *source, simsignal_t signalID, cObject 
                 entry = it->second;
                 ASSERT(entry->owner == this);
                 globalArpCache.erase(it);
-                if (!interfaceEntry->ipv6Data() || interfaceEntry->ipv6Data()->getLinkLocalAddress().isUnspecified()) {
+                auto ipv6Data = interfaceEntry->findProtocolData<Ipv6InterfaceData>();
+                if (ipv6Data == nullptr || ipv6Data->getLinkLocalAddress().isUnspecified()) {
                     delete entry;
                     return;    // if the address is not defined it isn't included in the global cache
                 }
             }
-            Ipv6Address ipv6Address = interfaceEntry->ipv6Data()->getLinkLocalAddress();
+            Ipv6Address ipv6Address = interfaceEntry->getProtocolData<Ipv6InterfaceData>()->getLinkLocalAddress();
             auto where = globalArpCache.insert(globalArpCache.begin(), std::make_pair(ipv6Address, entry));
             ASSERT(where->second == entry);
         }
+        else
+#endif
+        {}
     }
     else
         throw cRuntimeError("Unknown signal");

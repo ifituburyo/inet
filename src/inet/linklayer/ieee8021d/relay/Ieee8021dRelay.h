@@ -19,13 +19,13 @@
 #define __INET_IEEE8021DRELAY_H
 
 #include "inet/common/INETDefs.h"
+#include "inet/common/LayeredProtocolBase.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/common/InterfaceTable.h"
-#include "inet/linklayer/ethernet/switch/IMacAddressTable.h"
+#include "inet/linklayer/configurator/Ieee8021dInterfaceData.h"
 #include "inet/linklayer/ethernet/EtherFrame_m.h"
-#include "inet/common/lifecycle/NodeOperations.h"
-#include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/linklayer/ieee8021d/common/Ieee8021dBpdu_m.h"
+#include "inet/linklayer/ethernet/switch/IMacAddressTable.h"
 
 namespace inet {
 
@@ -33,19 +33,47 @@ namespace inet {
 // This module forward frames (~EtherFrame) based on their destination MAC addresses to appropriate ports.
 // See the NED definition for details.
 //
-class INET_API Ieee8021dRelay : public cSimpleModule, public ILifecycle
+class INET_API Ieee8021dRelay : public LayeredProtocolBase
 {
   public:
     Ieee8021dRelay();
+
+    /**
+     * Register single MAC address that this switch supports.
+     */
+
+    void registerAddress(MacAddress mac);
+
+    /**
+     * Register range of MAC addresses that this switch supports.
+     */
+    void registerAddresses(MacAddress startMac, MacAddress endMac);
 
   protected:
     MacAddress bridgeAddress;
     IInterfaceTable *ifTable = nullptr;
     IMacAddressTable *macTable = nullptr;
     InterfaceEntry *ie = nullptr;
-    EthernetFcsMode fcsMode = static_cast<EthernetFcsMode>(-1);
-    bool isOperational = false;
     bool isStpAware = false;
+
+    typedef std::pair<MacAddress, MacAddress> MacAddressPair;
+
+
+    struct Comp
+    {
+        bool operator() (const MacAddressPair& first, const MacAddressPair& second) const
+        {
+            return (first.first < second.first && first.second < second.first);
+        }
+    };
+
+    bool in_range(const std::set<MacAddressPair, Comp>& ranges, MacAddress value)
+    {
+        return ranges.find(MacAddressPair(value, value)) != ranges.end();
+    }
+
+
+    std::set<MacAddressPair, Comp> registeredMacAddresses;
 
     // statistics: see finish() for details.
     int numReceivedNetworkFrames = 0;
@@ -58,7 +86,6 @@ class INET_API Ieee8021dRelay : public cSimpleModule, public ILifecycle
   protected:
     virtual void initialize(int stage) override;
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
-    virtual void handleMessage(cMessage *msg) override;
 
     /**
      * Updates address table (if the port is in learning state)
@@ -69,26 +96,29 @@ class INET_API Ieee8021dRelay : public cSimpleModule, public ILifecycle
      *
      */
     void handleAndDispatchFrame(Packet *packet);
+
+    void handleUpperPacket(Packet *packet) override;
+    void handleLowerPacket(Packet *packet) override;
+
     void dispatch(Packet *packet, InterfaceEntry *ie);
     void learn(MacAddress srcAddr, int arrivalInterfaceId);
-    void broadcast(Packet *packet);
+    void broadcast(Packet *packet, int arrivalInterfaceId);
 
-    /**
-     * Receives BPDU from the STP/RSTP module and dispatch it to network.
-     * Sets EherFrame destination, source, etc. according to the BPDU's Ieee802Ctrl info.
-     */
-    void dispatchBPDU(Packet *packet);
+    void sendUp(Packet *packet);
 
-    /**
-     * Deliver BPDU to the STP/RSTP module.
-     * Sets the BPDU's Ieee802Ctrl info according to the arriving EtherFrame.
-     */
-    void deliverBPDU(Packet *packet);
-
-    // For lifecycle
+    //@{ For lifecycle
     virtual void start();
     virtual void stop();
-    bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override { start(); }
+    virtual void handleStopOperation(LifecycleOperation *operation) override { stop(); }
+    virtual void handleCrashOperation(LifecycleOperation *operation) override { stop(); }
+    virtual bool isUpperMessage(cMessage *message) override { return message->arrivedOn("upperLayerIn"); }
+    virtual bool isLowerMessage(cMessage *message) override { return message->arrivedOn("ifIn"); }
+
+    virtual bool isInitializeStage(int stage) override { return stage == INITSTAGE_LINK_LAYER; }
+    virtual bool isModuleStartStage(int stage) override { return stage == ModuleStartOperation::STAGE_LINK_LAYER; }
+    virtual bool isModuleStopStage(int stage) override { return stage == ModuleStopOperation::STAGE_LINK_LAYER; }
+    //@}
 
     /*
      * Gets port data from the InterfaceTable

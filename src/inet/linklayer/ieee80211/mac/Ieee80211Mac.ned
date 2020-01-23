@@ -19,8 +19,10 @@ package inet.linklayer.ieee80211.mac;
 
 import inet.linklayer.base.MacProtocolBase;
 import inet.linklayer.ieee80211.IIeee80211Mac;
+import inet.linklayer.ieee80211.mac.contract.IDcf;
+import inet.linklayer.ieee80211.mac.contract.IDs;
+import inet.linklayer.ieee80211.mac.contract.IHcf;
 import inet.linklayer.ieee80211.mac.contract.IRx;
-import inet.linklayer.ieee80211.mac.contract.IStatistics;
 import inet.linklayer.ieee80211.mac.contract.ITx;
 import inet.linklayer.ieee80211.mac.coordinationfunction.Dcf;
 import inet.linklayer.ieee80211.mac.coordinationfunction.Hcf;
@@ -28,8 +30,7 @@ import inet.linklayer.ieee80211.mac.coordinationfunction.Hcf;
 //
 // Implementation of the 802.11b MAC protocol. This module is intended
 // to be used in combination with the ~Ieee80211Radio module as the physical
-// layer. (The ~SnrEval80211 and ~Decider80211 modules should also work if
-// per-packet bitrate setting gets implemented.)
+// layer.
 //
 // Encapsulation/decapsulation must be done in the upper layers. (It is
 // typically in the 802.11 management module, see in ~Ieee80211Interface).
@@ -40,15 +41,10 @@ import inet.linklayer.ieee80211.mac.coordinationfunction.Hcf;
 // frames; all other fields must already be filled when this module gets
 // the frame for transmission.
 //
-// The module has an internal queue, but usually it is to be used with an
-// external passive queue module (its name should be given in the queueModule
-// parameter; specifying "" causes the internal queue to be used). The passive
-// queue module is a simple module whose C++ class implements the IPassiveQueue
-// interface.
-//
 // <b>Limitations</b>
 //
-// The following features not supported: 1) power management, 2) polling (PCF).
+// Power management and polling (PCF) are not supported.
+//
 // Physical layer algorithms such as frequency hopping and
 // direct sequence spread spectrum are not modelled directly.
 //
@@ -62,11 +58,9 @@ module Ieee80211Mac extends MacProtocolBase like IIeee80211Mac
 {
     parameters:
         string mibModule;
-        string address = default("auto"); // MAC address as hex string (12 hex digits), or
-                                          // "auto". "auto" values will be replaced by
-                                          // a generated MAC address in init stage 0.
-        string modeSet @enum("a", "b", "g(erp)", "g(mixed)", "n", "p") = default("g(mixed)");
-        string fcsMode @enum("declared","computed") = default("declared");
+        string modeSet @enum("a", "b", "g(erp)", "g(mixed)", "n(mixed-2.4Ghz)", "p", "ac") = default("g(mixed)");
+        string fcsMode @enum("declared", "computed") = default("declared");
+        string initialRadioMode @enum("off", "sleep", "receiver", "transmitter", "transceiver") = default("receiver");
 
         int mtu @unit(B) = default(2304B);
         bool qosStation = default(false);
@@ -77,113 +71,43 @@ module Ieee80211Mac extends MacProtocolBase like IIeee80211Mac
 
         @display("i=block/layer");
         @class(Ieee80211Mac);
-        @signal[packetSentToPeer](type=Packet);
-        @signal[packetReceivedFromPeer](type=Packet);
-        @statistic[passedUpPk](title="packets passed to higher layer"; source=packetSentToUpper; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
-        @statistic[sentDownPk](title="packets sent to lower layer"; source=packetSentToLower; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
-        @statistic[rcvdPkFromHl](title="packets received from higher layer"; source=packetReceivedFromUpper; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
-        @statistic[rcvdPkFromLl](title="packets received from lower layer"; source=packetReceivedFromLower; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
-
-        @signal[linkBroken];
-        @statistic[linkBroken](title="link break"; source=linkBroken; record=count; interpolationmode=none);
-        @statistic[packetDropIncorrectlyReceived](title="packet drop: incorrectly received"; source=packetDropReasonIsIncorrectlyReceived(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
-        @statistic[packetDropNotAddressedToUs](title="packet drop: not addressed to us"; source=packetDropReasonIsNotAddressedToUs(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
-        @statistic[packetDropQueueOverflow](title="packet drop: queue overflow"; source=packetDropReasonIsQueueOverflow(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
-        @statistic[packetDropRetryLimitReached](title="packet drop: retry limit reached"; source=packetDropReasonIsRetryLimitReached(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @signal[linkBroken](type=inet::Packet); // TODO: this signal is only present for the statistic to pass the signal check, to be removed
         @signal[modesetChanged](type=inet::physicallayer::Ieee80211ModeSet);
+        @statistic[packetSentToUpper](title="packets sent to upper layer"; record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetSentToLower](title="packets sent to lower layer"; record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetReceivedFromUpper](title="packets received from upper layer"; record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetReceivedFromLower](title="packets received from lower layer"; record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[linkBroken](title="link breaks"; record=count, vector?; interpolationmode=none);
+        @statistic[packetDrop](title="packet drops"; source=packetDropped; record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetDropIncorrectlyReceived](title="packet drops: incorrectly received"; source=packetDropReasonIsIncorrectlyReceived(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetDropNotAddressedToUs](title="packet drops: not addressed to us"; source=packetDropReasonIsNotAddressedToUs(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetDropQueueOverflow](title="packet drops: queue overflow"; source=packetDropReasonIsQueueOverflow(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetDropRetryLimitReached](title="packet drops: retry limit reached"; source=packetDropReasonIsRetryLimitReached(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetDropDuplicateDetected](title="packet drops: duplicate detected"; source=packetDropReasonIsDuplicateDetected(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetDropOther](title="packet drops: other"; source=packetDropReasonIsOther(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
     gates:
         input mgmtIn;
         output mgmtOut;
     submodules:
-        dcf: Dcf {
+        dcf: <default("Dcf")> like IDcf {
             parameters:
                 @display("p=100,100");
         }
-        hcf: Hcf {
+        hcf: <default("Hcf")> like IHcf if qosStation {
             parameters:
                 @display("p=250,100");
         }
-        ds: Ds {
+        ds: <default("Ds")> like IDs {
             parameters:
                 @display("p=400,100");
         }
         rx: <default("Rx")> like IRx {
             parameters:
-                @display("p=100,250");
+                @display("p=100,200");
         }
         tx: <default("Tx")> like ITx {
             parameters:
-                @display("p=250,250");
-        }
-        statistics: <default("BasicStatistics")> like IStatistics {
-            parameters:
-                @display("p=400,250");
+                @display("p=250,200");
         }
 }
 
-//
-// Delegate some upperMac parameters to Ieee80211Mac, to be more compatible with the old MAC.
-// NOTE: NOT ALL PARAMETERS OF THE OLD MAC CAN BE MAPPED.
-//
-module Ieee80211CompatibleMac extends Ieee80211Mac
-{
-    parameters:
-        string rateControlType = default("");
-        string opMode @enum("a","b","g(erp)","g(mixed)","n","p") = default("g(mixed)");
-        double bitrate @unit(bps) = default(-1bps); // for backward compatibility
-        double basicBitrate @unit(bps) = default(-1bps); // for backward compatibility
-        double dataBitrate @unit(bps) = default(bitrate);
-        double mgmtBitrate @unit(bps) = default(basicBitrate);
-        double multicastBitrate @unit(bps) = default(basicBitrate);
-        double controlBitrate @unit(bps) = default(-1bps);
-        double initialRateControlRate @unit(bps) = default(-1bps);
-        int rtsThresholdBytes @unit(B) = default(2346B);
-        int retryLimit = default(-1);
-        bool EDCA = default(false);
-        int maxQueueSize = default(14);
-
-        int AIFSN0 = default(7); // AIFSN for background
-        int AIFSN1 = default(3); // AIFSN for best effort
-        int AIFSN2 = default(2); // AIFSN for video
-        int AIFSN3 = default(2); // AIFSN for voice
-        double TXOP0 @unit(s) = default(0s);
-        double TXOP1 @unit(s) = default(0s);
-        double TXOP2 @unit(s) = default(3.008ms);
-        double TXOP3 @unit(s) = default(1.504ms);
-        int AIFSN = default(2); // if there is only one AC (EDCA = false)
-        bool prioritizeMulticast = default(false); // if true, prioritize multicast frames (9.3.2.1 Fundamental access)
-        double slotTime @unit(s) = default(-1s); // slot time, -1 means default (mode dependent)
-        int cwMinData = default(-1); // contention window for normal data frames, -1 means default
-        int cwMaxData = default(-1); // contention window for normal data frames, -1 means default
-
-        //upperMac.typename = EDCA ? "EdcaUpperMac" : "DcfUpperMac";
-
-        modeSet = opMode; // BasicRateSelection
-        *.maxQueueSize = maxQueueSize;
-        *.rateControlType = rateControlType;
-        *.rateSelection.multicastFrameBitrate = multicastBitrate; // BasicRateSelection
-        *.rateSelection.dataFrameBitrate = dataBitrate; // BasicRateSelection
-        *.rateSelection.mgmtFrameBitrate = mgmtBitrate;
-        *.rateSelection.controlFrameBitrate = controlBitrate;
-        *.rateSelection.responseAckFrameBitrate = controlBitrate;
-        *.rateControl.initialRate = initialRateControlRate;
-        dcf.rtsPolicy.rtsThreshold = rtsThresholdBytes;
-        upperMac.rtsThreshold = rtsThresholdBytes; // DcfUpperMac, EdcaUpperMac
-        upperMac.shortRetryLimit = retryLimit; // DcfUpperMac, EdcaUpperMac
-        upperMac.maxQueueSize = maxQueueSize; // DcfUpperMac, EdcaUpperMac
-
-        upperMac.aifsn0 = AIFSN0; // EdcaUpperMac
-        upperMac.aifsn1 = AIFSN1; // EdcaUpperMac
-        upperMac.aifsn2 = AIFSN2; // EdcaUpperMac
-        upperMac.aifsn3 = AIFSN3; // EdcaUpperMac
-        upperMac.txopLimit0 = TXOP0; // EdcaUpperMac
-        upperMac.txopLimit1 = TXOP1; // EdcaUpperMac
-        upperMac.txopLimit2 = TXOP2; // EdcaUpperMac
-        upperMac.txopLimit3 = TXOP3; // EdcaUpperMac
-        //TODO upperMac.difsn =  AIFSN;
-        upperMac.prioritizeMulticast = prioritizeMulticast; // DcfUpperMac, EdcaUpperMac
-        upperMac.slotTime = slotTime; // DcfUpperMac, EdcaUpperMac
-        dcf.channelAccess.cwMin = cwMinData; // DcfUpperMac
-        dcf.channelAccess.cwMax = cwMaxData; // DcfUpperMac
-        upperMac.cwMinMulticast = cwMulticast; // DcfUpperMac, EdcaUpperMac
-}

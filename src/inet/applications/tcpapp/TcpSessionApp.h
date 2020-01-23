@@ -20,8 +20,8 @@
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
 #include "inet/applications/tcpapp/TcpAppBase.h"
+#include "inet/common/lifecycle/LifecycleOperation.h"
 #include "inet/common/lifecycle/NodeStatus.h"
 
 namespace inet {
@@ -51,11 +51,11 @@ class INET_API TcpSessionApp : public TcpAppBase
     // state
     int commandIndex = -1;
     cMessage *timeoutMsg = nullptr;
-    NodeStatus *nodeStatus = nullptr;
 
   protected:
-    virtual bool isNodeUp();
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback);
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
@@ -67,10 +67,10 @@ class INET_API TcpSessionApp : public TcpAppBase
     virtual void sendData();
 
     virtual void handleTimer(cMessage *msg) override;
-    virtual void socketEstablished(int connId, void *yourPtr) override;
-    virtual void socketDataArrived(int connId, void *yourPtr, Packet *msg, bool urgent) override;
-    virtual void socketClosed(int connId, void *yourPtr) override;
-    virtual void socketFailure(int connId, void *yourPtr, int code) override;
+    virtual void socketEstablished(TcpSocket *socket) override;
+    virtual void socketDataArrived(TcpSocket *socket, Packet *msg, bool urgent) override;
+    virtual void socketClosed(TcpSocket *socket) override;
+    virtual void socketFailure(TcpSocket *socket, int code) override;
 
   public:
     TcpSessionApp() {}

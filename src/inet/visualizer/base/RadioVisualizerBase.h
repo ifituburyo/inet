@@ -55,6 +55,23 @@ class INET_API RadioVisualizerBase : public VisualizerBase, public cListener
     double height;
     Placement placementHint;
     double placementPriority;
+    // antennaLobe
+    bool antennaLobeNormalize = false;
+    bool antennaLobeRelativeLabels = false;
+    bool displayAntennaLobes = false;
+    bool antennaLobePlaneGlobal = false;
+    const char *antennaLobePlane = nullptr;
+    const char *antennaLobeMode = nullptr;
+    double antennaLobeLogarithmicBase = NaN;
+    double antennaLobeLogarithmicScale = NaN;
+    double antennaLobeRadius = NaN;
+    deg antennaLobeStep = deg(NaN);
+    double antennaLobeOpacity = NaN;
+    bool antennaLobeLineSmooth = false;
+    cFigure::Color antennaLobeLineColor;
+    cFigure::LineStyle antennaLobeLineStyle;
+    double antennaLobeLineWidth = NaN;
+    cFigure::Color antennaLobeFillColor;
     //@}
 
     std::map<int, const RadioVisualization *> radioVisualizations;
@@ -76,7 +93,7 @@ class INET_API RadioVisualizerBase : public VisualizerBase, public cListener
   public:
     virtual ~RadioVisualizerBase();
 
-    virtual void receiveSignal(cComponent *source, simsignal_t signal, long value, cObject *details) override;
+    virtual void receiveSignal(cComponent *source, simsignal_t signal, intval_t value, cObject *details) override;
 };
 
 } // namespace visualizer

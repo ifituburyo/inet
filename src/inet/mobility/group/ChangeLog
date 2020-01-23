@@ -1,5 +1,33 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-09-30  Levente Mészáros
+
+	Fixed reading MoBAN parameters in release mode.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-10-02  Levente Mészáros
+
+	Added INITSTAGE_GROUP_MOBILITY.
+
+2018-09-27  Levente Mészáros
+
+	Split INITSTAGE_PHYSICAL_ENVIRONMENT_2 into INITSTAGE_PHYSICAL_OBJECT_CACHE and INITSTAGE_MOBILITY.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-05-29  Levente Mészáros
+
+	Added makePathForFile call before opening any output file to make sure the directory exists.
+
+2018-04-25  Levente Mészáros
+
+	Moved code from updateVisualRepresentation into the standard refreshDisplay module function.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-20  Levente Mészáros
 
 	Renamed speed to velocity where appropriate. Speed is a scalar, velocity is a vector quantity.

@@ -24,21 +24,20 @@
  * last modification: 06/02/11
  **************************************************************************/
 
-#include <limits>
 #include <algorithm>
-
-#include "inet/networklayer/wiseroute/WiseRoute.h"
+#include <limits>
 
 #include "inet/common/FindModule.h"
 #include "inet/common/INETMath.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/packet/Packet.h"
-#include "inet/networklayer/common/L3AddressTag_m.h"
-#include "inet/networklayer/contract/IL3AddressType.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/contract/IL3AddressType.h"
+#include "inet/networklayer/wiseroute/WiseRoute.h"
 
 namespace inet {
 
@@ -52,8 +51,7 @@ void WiseRoute::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         arp = getModuleFromPar<IArp>(par("arpModule"), this);
         headerLength = par("headerLength");
-        rssiThreshold = par("rssiThreshold");
-        rssiThreshold = math::dBm2mW(rssiThreshold);
+        rssiThreshold = math::dBmW2mW(par("rssiThreshold"));
         routeFloodsInterval = par("routeFloodsInterval");
 
         floodSeqNumber = 0;
@@ -81,12 +79,16 @@ void WiseRoute::initialize(int stage)
 
         routeFloodTimer = new cMessage("route-flood-timer", SEND_ROUTE_FLOOD_TIMER);
     }
-    else if (stage == INITSTAGE_NETWORK_LAYER_3) {
+    else if (stage == INITSTAGE_NETWORK_LAYER) {
         L3AddressResolver addressResolver;
         sinkAddress = addressResolver.resolve(par("sinkAddress"));
 
         IInterfaceTable *interfaceTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
-        myNetwAddr = interfaceTable->getInterface(1)->getNetworkAddress();
+        auto ie = interfaceTable->findFirstNonLoopbackInterface();
+        if (ie != nullptr)
+            myNetwAddr = ie->getNetworkAddress();
+        else
+            throw cRuntimeError("No non-loopback interface found!");
 
         // only schedule a flood of the node is a sink!!
         if (routeFloodsInterval > 0 && myNetwAddr == sinkAddress)

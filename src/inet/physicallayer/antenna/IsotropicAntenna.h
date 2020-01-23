@@ -31,8 +31,9 @@ class INET_API IsotropicAntenna : public AntennaBase
     class AntennaGain : public IAntennaGain
     {
       public:
+        virtual double getMinGain() const override { return 1; }
         virtual double getMaxGain() const override { return 1; }
-        virtual double computeGain(const EulerAngles direction) const override { return 1; }
+        virtual double computeGain(const Quaternion direction) const override { return 1; }
     };
 
     Ptr<AntennaGain> gain;

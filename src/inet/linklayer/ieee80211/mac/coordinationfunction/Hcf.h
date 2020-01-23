@@ -39,8 +39,6 @@
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
-#include "inet/linklayer/ieee80211/mac/lifetime/EdcaTransmitLifetimeHandler.h"
-#include "inet/linklayer/ieee80211/mac/originator/NonQosRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosRecoveryProcedure.h"
@@ -59,10 +57,14 @@ class Ieee80211Mac;
  */
 class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler::ICallback, public IChannelAccess::ICallback, public ITx::ICallback, public IProcedureCallback, public IBlockAckAgreementHandlerCallback, public ModeSetListener
 {
+    public:
+        static simsignal_t edcaCollisionDetectedSignal;
+        static simsignal_t blockAckAgreementAddedSignal;
+        static simsignal_t blockAckAgreementDeletedSignal;
+
     protected:
         Ieee80211Mac *mac = nullptr;
         IRateControl *dataAndMgmtRateControl = nullptr;
-        int numEdcafs = -1;
 
         cMessage *startRxTimer = nullptr;
         cMessage *inactivityTimer = nullptr;
@@ -91,9 +93,6 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
         ICtsPolicy *ctsPolicy = nullptr;
         IOriginatorBlockAckProcedure *originatorBlockAckProcedure = nullptr;
         IRecipientBlockAckProcedure *recipientBlockAckProcedure = nullptr;
-        EdcaTransmitLifetimeHandler *lifetimeHandler = nullptr;
-        std::vector<QosRecoveryProcedure*> edcaDataRecoveryProcedures;
-        NonQosRecoveryProcedure *edcaMgmtAndNonQoSRecoveryProcedure = nullptr;
 
         // Block Ack Agreement Handlers
         IOriginatorBlockAckAgreementHandler *originatorBlockAckAgreementHandler = nullptr;
@@ -101,24 +100,14 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
         IRecipientBlockAckAgreementHandler *recipientBlockAckAgreementHandler = nullptr;
         IRecipientBlockAckAgreementPolicy *recipientBlockAckAgreementPolicy = nullptr;
 
-        // Ack handler
-        std::vector<QosAckHandler *> edcaAckHandlers;
-
         // Tx Opportunity
-        std::vector<TxopProcedure*> edcaTxops;
         TxopProcedure *hccaTxop = nullptr;
 
         // Queues
-        std::vector<PendingQueue *> edcaPendingQueues;
-        PendingQueue *hccaPendingQueue = nullptr;
-        std::vector<InProgressFrames *> edcaInProgressFrames;
         InProgressFrames *hccaInProgressFrame = nullptr;
 
         // Frame sequence handler
         IFrameSequenceHandler *frameSequenceHandler = nullptr;
-
-        // Station retry counters
-        std::vector<StationRetryCounters*> stationRetryCounters;
 
         // Protection mechanisms
         SingleProtectionMechanism *singleProtectionMechanism = nullptr;
@@ -126,6 +115,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     protected:
         virtual int numInitStages() const override { return NUM_INIT_STAGES; }
         virtual void initialize(int stage) override;
+        virtual void forEachChild(cVisitor *v) override;
         virtual void handleMessage(cMessage *msg) override;
         virtual void updateDisplayString();
 

@@ -17,17 +17,15 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/routing/pim/PimProtocolDissector.h"
-
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/routing/pim/PimPacket_m.h"
-
+#include "inet/routing/pim/PimProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::pim, PimProtocolDissector);
 
-void PimProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void PimProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     auto header = packet->popAtFront<PimPacket>();
     callback.startProtocolDataUnit(&Protocol::pim);

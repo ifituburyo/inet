@@ -15,17 +15,17 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
+#include "inet/common/ProtocolTag_m.h"
 #include "inet/physicallayer/base/packetlevel/NarrowbandNoiseBase.h"
 #include "inet/physicallayer/base/packetlevel/ReceiverBase.h"
 #include "inet/physicallayer/common/packetlevel/Interference.h"
 #include "inet/physicallayer/common/packetlevel/ReceptionDecision.h"
 #include "inet/physicallayer/common/packetlevel/ReceptionResult.h"
-#include "inet/physicallayer/common/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/contract/packetlevel/IRadioMedium.h"
+#include "inet/physicallayer/contract/packetlevel/SignalTag_m.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 bool ReceiverBase::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
@@ -80,7 +80,10 @@ const IReceptionDecision *ReceiverBase::computeReceptionDecision(const IListenin
 
 const IReceptionResult *ReceiverBase::computeReceptionResult(const IListening *listening, const IReception *reception, const IInterference *interference, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const
 {
-    auto packet = reception->getTransmission()->getPacket()->dup();
+    bool isReceptionSuccessful = true;
+    for (auto decision : *decisions)
+        isReceptionSuccessful &= decision->isReceptionSuccessful();
+    auto packet = computeReceivedPacket(snir, isReceptionSuccessful);
     auto signalPower = computeSignalPower(listening, snir, interference);
     if (!std::isnan(signalPower.get())) {
         auto signalPowerInd = packet->addTagIfAbsent<SignalPowerInd>();
@@ -89,10 +92,10 @@ const IReceptionResult *ReceiverBase::computeReceptionResult(const IListening *l
     auto snirInd = packet->addTagIfAbsent<SnirInd>();
     snirInd->setMinimumSnir(snir->getMin());
     snirInd->setMaximumSnir(snir->getMax());
-    bool isReceptionSuccessful = true;
-    for (auto decision : *decisions)
-        isReceptionSuccessful &= decision->isReceptionSuccessful();
-    packet->setBitError(!isReceptionSuccessful);
+    snirInd->setAverageSnir(snir->getMean());
+    auto signalTimeInd = packet->addTagIfAbsent<SignalTimeInd>();
+    signalTimeInd->setStartTime(reception->getStartTime());
+    signalTimeInd->setEndTime(reception->getEndTime());
     return new ReceptionResult(reception, decisions, packet);
 }
 
@@ -109,7 +112,17 @@ W ReceiverBase::computeSignalPower(const IListening *listening, const ISnir *sni
     }
 }
 
-} // namespace physicallayer
+Packet *ReceiverBase::computeReceivedPacket(const ISnir *snir, bool isReceptionSuccessful) const
+{
+    auto transmittedPacket = snir->getReception()->getTransmission()->getPacket();
+    auto receivedPacket = transmittedPacket->dup();
+    receivedPacket->clearTags();
+    receivedPacket->addTag<PacketProtocolTag>()->setProtocol(transmittedPacket->getTag<PacketProtocolTag>()->getProtocol());
+    if (!isReceptionSuccessful)
+        receivedPacket->setBitError(true);
+    return receivedPacket;
+}
 
+} // namespace physicallayer
 } // namespace inet
 

@@ -20,11 +20,10 @@
 #include "inet/common/packet/chunk/BitCountChunk.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
-#include "inet/physicallayer/shortcut/ShortcutRadio.h"
 #include "inet/physicallayer/shortcut/ShortcutPhyHeader_m.h"
+#include "inet/physicallayer/shortcut/ShortcutRadio.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 std::map<MacAddress, ShortcutRadio *> ShortcutRadio::shortcutRadios;
@@ -42,9 +41,10 @@ void ShortcutRadio::initialize(int stage)
         packetLoss = &par("packetLoss");
         gate("radioIn")->setDeliverOnReceptionStart(true);
     }
-    else if (stage == INITSTAGE_LINK_LAYER_2) {
+    // TODO: INITSTAGE
+    else if (stage == INITSTAGE_LINK_LAYER) {
         auto interfaceTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
-        auto interfaceEntry = interfaceTable->getInterfaceByInterfaceModule(this);
+        auto interfaceEntry = CHK(interfaceTable->findInterfaceByInterfaceModule(this));
         auto address = interfaceEntry->getMacAddress();
         shortcutRadios[address] = this;
     }
@@ -61,6 +61,8 @@ void ShortcutRadio::handleMessageWhenUp(cMessage *message)
 void ShortcutRadio::handleUpperPacket(Packet *packet)
 {
     auto destination = packet->getTag<MacAddressReq>()->getDestAddress();
+    transmissionState = IRadio::TRANSMISSION_STATE_TRANSMITTING;
+    emit(transmissionStateChangedSignal, transmissionState);
     if (destination.isBroadcast()) {
         for (auto it : shortcutRadios)
             if (it.second != this)
@@ -74,6 +76,8 @@ void ShortcutRadio::handleUpperPacket(Packet *packet)
         else
             throw cRuntimeError("ShortcutRadio not found");
     }
+    transmissionState = IRadio::TRANSMISSION_STATE_IDLE;        //TODO zero time transmission simulated
+    emit(transmissionStateChangedSignal, transmissionState);
 }
 
 ShortcutRadio *ShortcutRadio::findPeer(MacAddress address)
@@ -121,6 +125,5 @@ void ShortcutRadio::receiveFromPeer(Packet *packet)
 }
 
 } // namespace physicallayer
-
 } // namespace inet
 

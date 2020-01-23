@@ -41,17 +41,13 @@ import inet.physicallayer.contract.bitlevel.IPulseShaper;
 // The level of detail parameter determines which submodules of
 // the transmitter will be used:
 //
-// Level (domain)|                        Submodules
-// ======================================================================
-//    PACKET     |-
-//               --------------------------------------------------------
-//    BIT        | signal encoder, data encoder
-//               --------------------------------------------------------
-//    SYMBOL     | signal modulator, data modulator + bit level modules
-//               --------------------------------------------------------
-//    SAMPLE     | pulse shaper + bit, symbol level modules + (digital/
-//               | analog converter)
-//               --------------------------------------------------------
+// <table border="1">
+//   <tr>  <th>Level (domain)</th>  <th>Submodules</th>                                                             </tr>
+//   <tr>  <td>PACKET</td>          <td>-</td>                                                                      </tr>
+//   <tr>  <td>BIT</td>             <td>signal encoder, data encoder</td>                                           </tr>
+//   <tr>  <td>SYMBOL</td>          <td>signal modulator, data modulator + bit level modules</td>                   </tr>
+//   <tr>  <td>SAMPLE</td>          <td>pulse shaper + bit, symbol level modules + (digital/analog converter)</td>  </tr>
+// </table>
 //
 // Important: We have no default module implementation for sample level
 // features.
@@ -78,36 +74,31 @@ module Ieee80211LayeredOfdmTransmitter like ITransmitter
     parameters:
         bool isCompliant = default(true);
         string levelOfDetail @enum("packet","bit","symbol","sample") = default("symbol");
-        string signalEncoderType = default("");
-        string dataEncoderType = default("");
-        string signalModulatorType = default("");
-        string dataModulatorType = default("");
-        string pulseShaperType = default("");
-        string digitalAnalogConverterType = default("");
-        double channelSpacing @unit(Hz) = default(0Hz/0);
+        double channelSpacing @unit(Hz) = default(nan Hz);
         double power @unit(W);
-        double carrierFrequency @unit(Hz);
+        double centerFrequency @unit(Hz);
         double bandwidth @unit(Hz);
         @class(Ieee80211LayeredOfdmTransmitter);
 
         @display("i=block/tx");
     submodules:
-        signalEncoder: <signalEncoderType> like IEncoder if signalEncoderType != "" {
-            @display("p=100,50");
+        signalEncoder: <default("")> like IEncoder if typename != "" {
+            @display("p=100,100");
         }
-        dataEncoder: <dataEncoderType> like IEncoder if dataEncoderType != "" {
-            @display("p=226,50");
+        dataEncoder: <default("")> like IEncoder if typename != "" {
+            @display("p=300,100");
         }
-        dataModulator: <dataModulatorType> like IModulator if dataModulatorType != "" {
-            @display("p=100,150");
+        dataModulator: <default("")> like IModulator if typename != "" {
+            @display("p=100,200");
         }
-        signalModulator: <signalModulatorType> like IModulator if signalModulatorType != "" {
-            @display("p=226,150");
+        signalModulator: <default("")> like IModulator if typename != "" {
+            @display("p=300,200");
         }
-        pulseShaper: <pulseShaperType> like IPulseShaper if pulseShaperType != "" {
-            @display("p=100,250");
+        pulseShaper: <default("")> like IPulseShaper if typename != "" {
+            @display("p=100,300");
         }
-        digitalAnalogConverter: <digitalAnalogConverterType> like IDigitalAnalogConverter if digitalAnalogConverterType != "" {
-            @display("p=100,350");
+        digitalAnalogConverter: <default("")> like IDigitalAnalogConverter if typename != "" {
+            @display("p=100,400");
         }
 }
+

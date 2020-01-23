@@ -34,6 +34,12 @@ StatisticOsgVisualizer::StatisticOsgVisualization::StatisticOsgVisualization(Net
 {
 }
 
+StatisticOsgVisualizer::~StatisticOsgVisualizer()
+{
+    if (displayStatistics)
+        removeAllStatisticVisualizations();
+}
+
 void StatisticOsgVisualizer::initialize(int stage)
 {
     StatisticVisualizerBase::initialize(stage);
@@ -58,6 +64,8 @@ StatisticVisualizerBase::StatisticVisualization *StatisticOsgVisualizer::createS
     geode->addDrawable(label);
     auto networkNode = getContainingNode(check_and_cast<cModule *>(source));
     auto networkNodeVisualization = networkNodeVisualizer->getNetworkNodeVisualization(networkNode);
+    if (networkNodeVisualization == nullptr)
+        throw cRuntimeError("Cannot create statistic visualization for '%s', because network node visualization is not found for '%s'", source->getFullPath().c_str(), networkNode->getFullPath().c_str());
     return new StatisticOsgVisualization(networkNodeVisualization, geode, source->getId(), signal, getUnit(source));
 }
 

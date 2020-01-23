@@ -16,8 +16,10 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/common/INETUtils.h"
+#include "inet/networklayer/common/InterfaceEntry.h"
+#include "inet/networklayer/diffserv/DiffservUtil.h"
+#include "inet/networklayer/diffserv/Dscp_m.h"
 
 #ifdef WITH_IPv4
 #include "inet/networklayer/ipv4/Ipv4Header_m.h"
@@ -27,11 +29,7 @@
 #include "inet/networklayer/ipv6/Ipv6Header.h"
 #endif // ifdef WITH_IPv6
 
-#include "inet/networklayer/diffserv/DiffservUtil.h"
-#include "inet/networklayer/diffserv/Dscp_m.h"
-
 namespace inet {
-
 namespace DiffservUtil {
 
 using namespace utils;
@@ -39,14 +37,6 @@ using namespace utils;
 // cached enums
 cEnum *dscpEnum = nullptr;
 cEnum *protocolEnum = nullptr;
-
-const char *getRequiredAttribute(cXMLElement *element, const char *attrName)
-{
-    const char *attrValue = element->getAttribute(attrName);
-    if (!attrValue)
-        throw cRuntimeError("missing attribute '%s' from <%s> element", attrName, element->getTagName());
-    return attrValue;
-}
 
 double parseInformationRate(const char *attrValue, const char *attrName, IInterfaceTable *ift, cSimpleModule& owner, int defaultValue)
 {
@@ -192,24 +182,8 @@ std::string colorToString(int color)
 
 double getInterfaceDatarate(IInterfaceTable *ift, cSimpleModule *interfaceModule)
 {
-    InterfaceEntry *ie = ift ? ift->getInterfaceByInterfaceModule(interfaceModule) : nullptr;
+    InterfaceEntry *ie = ift ? ift->findInterfaceByInterfaceModule(interfaceModule) : nullptr;
     return ie ? ie->getDatarate() : -1;
-}
-
-cPacket *findIPDatagramInPacket(cPacket *packet)
-{
-    for ( ; packet; packet = packet->getEncapsulatedPacket()) {
-#ifdef WITH_IPv4
-        if (dynamic_cast<Ipv4Header *>(packet))
-            return packet;
-#endif // ifdef WITH_IPv4
-#ifdef WITH_IPv6
-        if (dynamic_cast<Ipv6Header *>(packet))
-            return packet;
-#endif // ifdef WITH_IPv6
-    }
-
-    return nullptr;
 }
 
 class ColorAttribute : public cObject

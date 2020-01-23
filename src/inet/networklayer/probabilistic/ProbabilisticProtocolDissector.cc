@@ -17,17 +17,16 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/networklayer/probabilistic/ProbabilisticProtocolDissector.h"
-
-#include "inet/networklayer/probabilistic/ProbabilisticBroadcastHeader_m.h"
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
+#include "inet/networklayer/probabilistic/ProbabilisticBroadcastHeader_m.h"
+#include "inet/networklayer/probabilistic/ProbabilisticProtocolDissector.h"
 
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::probabilistic, ProbabilisticProtocolDissector);
 
-void ProbabilisticProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void ProbabilisticProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     auto header = packet->popAtFront<ProbabilisticBroadcastHeader>();
     auto trailerPopOffset = packet->getBackOffset();

@@ -17,7 +17,7 @@
 
 import inet.common.INETDefs;
 import inet.common.packet.chunk.Chunk;
-import inet.transportlayer.common.CRC;
+import inet.transportlayer.common.CrcMode;
 
 namespace inet::physicallayer;
 
@@ -28,7 +28,7 @@ class Ieee80211PhyPreamble extends FieldsChunk
 class Ieee80211PhyHeader extends FieldsChunk
 {
     // TODO: remove this, because not all subtypes have lengthField
-    uint16_t lengthField;
+    B lengthField;
 }
 
 //
@@ -45,7 +45,7 @@ class Ieee80211FhssPhyHeader extends Ieee80211PhyHeader
     uint16_t plw;
     uint8_t psf;
     uint16_t crc;
-    CrcMode crcMode;
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
 }
 
 //
@@ -57,9 +57,9 @@ class Ieee80211IrPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211IrPhyHeader extends Ieee80211PhyHeader
 {
-    // TODO: uint16_t lengthField;
+    // TODO: B lengthField;
     uint16_t crc;
-    CrcMode crcMode;
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
 }
 
 //
@@ -72,11 +72,12 @@ class Ieee80211DsssPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211DsssPhyHeader extends Ieee80211PhyHeader
 {
+    chunkLength = b(32);
     uint8_t signal;
     uint8_t service;
-    // TODO: uint16_t lengthField;
+    // TODO: B lengthField;
     uint16_t crc;
-    CrcMode crcMode;
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
 }
 
 //
@@ -119,7 +120,10 @@ class Ieee80211OfdmPhyHeader extends Ieee80211PhyHeader
     // Tail (6) and SERVICE (16) fields.
     chunkLength = B(5);
     uint8_t rate;
-    // TODO: uint16_t lengthField;
+    bool reserved = false;
+    // TODO: B lengthField;
+    bool parity = false;
+    uint8_t tail = 0;
     uint16_t service;
 }
 

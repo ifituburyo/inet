@@ -18,15 +18,15 @@
 #ifndef __INET_PACKETDROPVISUALIZERBASE_H
 #define __INET_PACKETDROPVISUALIZERBASE_H
 
-#include "inet/common/packet/PacketFilter.h"
 #include "inet/common/Simsignals.h"
+#include "inet/common/StringFormat.h"
+#include "inet/common/packet/PacketFilter.h"
 #include "inet/visualizer/base/VisualizerBase.h"
 #include "inet/visualizer/util/AnimationPosition.h"
 #include "inet/visualizer/util/ColorSet.h"
 #include "inet/visualizer/util/InterfaceFilter.h"
 #include "inet/visualizer/util/LineManager.h"
 #include "inet/visualizer/util/NetworkNodeFilter.h"
-#include "inet/visualizer/util/StringFormat.h"
 
 namespace inet {
 
@@ -65,12 +65,11 @@ class INET_API PacketDropVisualizerBase : public VisualizerBase, public cListene
     class DirectiveResolver : public StringFormat::IDirectiveResolver {
       protected:
         const PacketDrop *packetDrop = nullptr;
-        std::string result;
 
       public:
         DirectiveResolver(const PacketDrop* packetDrop);
 
-        virtual const char *resolveDirective(char directive) override;
+        virtual const char *resolveDirective(char directive) const override;
     };
 
     class INET_API DetailsFilter

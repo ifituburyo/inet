@@ -6,6 +6,7 @@ Testing RIP routing
 %#--------------------------------------------------------------------------------------------------------------
 %file: test.ned
 
+import inet.test.moduletest.lib.*;
 import inet.linklayer.ethernet.EtherHub;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.inet.StandardHost;
@@ -101,7 +102,6 @@ network Test1
 description = "Simple test"
 network = Test1
 ned-path = .;../../../../src;../../lib
-tkenv-plugin-path = ../../../etc/plugins
 sim-time-limit = 250s
 
 #omnetpp 5.0 - 5.1 compatibility:
@@ -134,6 +134,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 <RIPConfig>
   <!-- Interfaces -->
   <interface among="R*" metric="1"/>
+  <interface source="R*" dest="H*" mode="PASSIVE" metric="1"/>
 </RIPConfig>
 %#--------------------------------------------------------------------------------------------------------------
 %contains: results/General-0.sca

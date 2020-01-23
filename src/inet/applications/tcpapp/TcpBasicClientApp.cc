@@ -17,10 +17,11 @@
 
 #include "inet/applications/tcpapp/TcpBasicClientApp.h"
 
-#include "inet/common/ModuleAccess.h"
-#include "inet/common/lifecycle/NodeOperations.h"
-#include "inet/common/packet/Packet.h"
 #include "inet/applications/tcpapp/GenericAppMsg_m.h"
+#include "inet/common/ModuleAccess.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/TimeTag_m.h"
 
 namespace inet {
 
@@ -47,51 +48,32 @@ void TcpBasicClientApp::initialize(int stage)
         stopTime = par("stopTime");
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
-    }
-    else if (stage == INITSTAGE_APPLICATION_LAYER) {
         timeoutMsg = new cMessage("timer");
-        nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-
-        if (isNodeUp()) {
-            timeoutMsg->setKind(MSGKIND_CONNECT);
-            scheduleAt(startTime, timeoutMsg);
-        }
     }
 }
 
-bool TcpBasicClientApp::isNodeUp()
+void TcpBasicClientApp::handleStartOperation(LifecycleOperation *operation)
 {
-    return !nodeStatus || nodeStatus->getState() == NodeStatus::UP;
+    simtime_t now = simTime();
+    simtime_t start = std::max(startTime, now);
+    if (timeoutMsg && ((stopTime < SIMTIME_ZERO) || (start < stopTime) || (start == stopTime && startTime == stopTime))) {
+        timeoutMsg->setKind(MSGKIND_CONNECT);
+        scheduleAt(start, timeoutMsg);
+    }
 }
 
-bool TcpBasicClientApp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void TcpBasicClientApp::handleStopOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER) {
-            simtime_t now = simTime();
-            simtime_t start = std::max(startTime, now);
-            if (timeoutMsg && ((stopTime < SIMTIME_ZERO) || (start < stopTime) || (start == stopTime && startTime == stopTime))) {
-                timeoutMsg->setKind(MSGKIND_CONNECT);
-                scheduleAt(start, timeoutMsg);
-            }
-        }
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
-            cancelEvent(timeoutMsg);
-            if (socket.getState() == TcpSocket::CONNECTED || socket.getState() == TcpSocket::CONNECTING || socket.getState() == TcpSocket::PEER_CLOSED)
-                close();
-            // TODO: wait until socket is closed
-        }
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH)
-            cancelEvent(timeoutMsg);
-    }
-    else
-        throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
+    cancelEvent(timeoutMsg);
+    if (socket.getState() == TcpSocket::CONNECTED || socket.getState() == TcpSocket::CONNECTING || socket.getState() == TcpSocket::PEER_CLOSED)
+        close();
+}
+
+void TcpBasicClientApp::handleCrashOperation(LifecycleOperation *operation)
+{
+    cancelEvent(timeoutMsg);
+    if (operation->getRootModule() != getContainingNode(this))
+        socket.destroy();
 }
 
 void TcpBasicClientApp::sendRequest()
@@ -106,8 +88,9 @@ void TcpBasicClientApp::sendRequest()
     const auto& payload = makeShared<GenericAppMsg>();
     Packet *packet = new Packet("data");
     payload->setChunkLength(B(requestLength));
-    payload->setExpectedReplyLength(replyLength);
+    payload->setExpectedReplyLength(B(replyLength));
     payload->setServerClose(false);
+    payload->addTag<CreationTimeTag>()->setCreationTime(simTime());
     packet->insertAtBack(payload);
 
     EV_INFO << "sending request with " << requestLength << " bytes, expected reply length " << replyLength << " bytes,"
@@ -141,9 +124,9 @@ void TcpBasicClientApp::handleTimer(cMessage *msg)
     }
 }
 
-void TcpBasicClientApp::socketEstablished(int connId, void *ptr)
+void TcpBasicClientApp::socketEstablished(TcpSocket *socket)
 {
-    TcpAppBase::socketEstablished(connId, ptr);
+    TcpAppBase::socketEstablished(socket);
 
     // determine number of requests in this session
     numRequestsToSend = par("numRequestsPerSession");
@@ -171,9 +154,9 @@ void TcpBasicClientApp::rescheduleOrDeleteTimer(simtime_t d, short int msgKind)
     }
 }
 
-void TcpBasicClientApp::socketDataArrived(int connId, void *ptr, Packet *msg, bool urgent)
+void TcpBasicClientApp::socketDataArrived(TcpSocket *socket, Packet *msg, bool urgent)
 {
-    TcpAppBase::socketDataArrived(connId, ptr, msg, urgent);
+    TcpAppBase::socketDataArrived(socket, msg, urgent);
 
     if (numRequestsToSend > 0) {
         EV_INFO << "reply arrived\n";
@@ -183,15 +166,21 @@ void TcpBasicClientApp::socketDataArrived(int connId, void *ptr, Packet *msg, bo
             rescheduleOrDeleteTimer(d, MSGKIND_SEND);
         }
     }
-    else if (socket.getState() != TcpSocket::LOCALLY_CLOSED) {
+    else if (socket->getState() != TcpSocket::LOCALLY_CLOSED) {
         EV_INFO << "reply to last request arrived, closing session\n";
         close();
     }
 }
 
-void TcpBasicClientApp::socketClosed(int connId, void *ptr)
+void TcpBasicClientApp::close()
 {
-    TcpAppBase::socketClosed(connId, ptr);
+    TcpAppBase::close();
+    cancelEvent(timeoutMsg);
+}
+
+void TcpBasicClientApp::socketClosed(TcpSocket *socket)
+{
+    TcpAppBase::socketClosed(socket);
 
     // start another session after a delay
     if (timeoutMsg) {
@@ -200,9 +189,9 @@ void TcpBasicClientApp::socketClosed(int connId, void *ptr)
     }
 }
 
-void TcpBasicClientApp::socketFailure(int connId, void *ptr, int code)
+void TcpBasicClientApp::socketFailure(TcpSocket *socket, int code)
 {
-    TcpAppBase::socketFailure(connId, ptr, code);
+    TcpAppBase::socketFailure(socket, code);
 
     // reconnect after a delay
     if (timeoutMsg) {

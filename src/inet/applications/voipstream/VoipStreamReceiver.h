@@ -35,23 +35,20 @@ extern "C" {
 #include <iostream>
 #include <sys/stat.h>
 
+#include "inet/applications/voipstream/AudioOutFile.h"
+#include "inet/applications/voipstream/VoipStreamPacket_m.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 #include "inet/transportlayer/contract/udp/UdpSocket.h"
-#include "inet/applications/voipstream/VoipStreamPacket_m.h"
-#include "inet/applications/voipstream/AudioOutFile.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
 
 namespace inet {
 
-class INET_API VoipStreamReceiver : public cSimpleModule, public ILifecycle
+class INET_API VoipStreamReceiver : public cSimpleModule, public LifecycleUnsupported, public UdpSocket::ICallback
 {
   public:
     VoipStreamReceiver() {}
     ~VoipStreamReceiver();
-
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
 
   protected:
     virtual void initialize(int stage) override;
@@ -63,6 +60,11 @@ class INET_API VoipStreamReceiver : public cSimpleModule, public ILifecycle
     virtual void checkSourceAndParameters(Packet *vp);
     virtual void closeConnection();
     virtual void decodePacket(Packet *vp);
+
+    //UdpSocket::ICallback methods
+    virtual void socketDataArrived(UdpSocket *socket, Packet *packet) override;
+    virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) override;
+    virtual void socketClosed(UdpSocket *socket) override {}
 
     class Connection
     {

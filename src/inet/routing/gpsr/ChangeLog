@@ -1,5 +1,46 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-09-02  Zoltan Bojthe
+
+	Optimized Tag usage.
+
+2019-03-19  Levente Mészáros
+
+	Added code to set UdpHeader CRC mode field to disabled.
+	The default value is intentionally undefined and must be changed.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-10-05  Zoltan Bojthe
+
+	Changed base class of Gpsr to RoutingProtocolBase.
+
+2018-10-04  Zoltan Bojthe
+
+	Fixed lifecycle stages.
+
+2018-09-19  Zoltan Bojthe
+
+	Adapted to the new protocol specific data storage API of InterfaceEntry.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-14  Levente Mészáros
+
+	Merged all const_cast<GpsrOption *> KLUDGEs into one place.
+
+2018-06-01  Zoltan Bojthe
+
+	Added B/b units to length constants and length fields of chunks.
+
+2018-04-25  Gyorgy Szaszko
+
+	Added boolean parameter for displaying packet routing state changes with bubbles.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-02-05  Levente Mészáros
 
 	Replaced neighbor search loop in perimeter routing with a more predictable solution.

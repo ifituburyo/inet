@@ -18,13 +18,15 @@
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 
-#include "inet/applications/udpapp/UdpBasicBurst.h"
 
 #include "inet/applications/base/ApplicationPacket_m.h"
-#include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
-#include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/applications/udpapp/UdpBasicBurst.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/TimeTag_m.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/networklayer/common/FragmentationTag_m.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 
 namespace inet {
 
@@ -72,6 +74,7 @@ void UdpBasicBurst::initialize(int stage)
         nextSleep = startTime;
         nextBurst = startTime;
         nextPkt = startTime;
+        dontFragment = par("dontFragment");
 
         destAddrRNG = par("destAddrRNG");
         const char *addrModeStr = par("chooseDestAddrMode");
@@ -110,6 +113,7 @@ Packet *UdpBasicBurst::createPacket()
     const auto& payload = makeShared<ApplicationPacket>();
     payload->setChunkLength(B(msgByteLength));
     payload->setSequenceNumber(numSent);
+    payload->addTag<CreationTimeTag>()->setCreationTime(simTime());
     pk->insertAtBack(payload);
     pk->addPar("sourceId") = getId();
     pk->addPar("msgId") = numSent;
@@ -120,7 +124,20 @@ Packet *UdpBasicBurst::createPacket()
 void UdpBasicBurst::processStart()
 {
     socket.setOutputGate(gate("socketOut"));
+    socket.setCallback(this);
     socket.bind(localPort);
+
+    int timeToLive = par("timeToLive");
+    if (timeToLive != -1)
+        socket.setTimeToLive(timeToLive);
+
+    int dscp = par("dscp");
+    if (dscp != -1)
+        socket.setDscp(dscp);
+
+    int tos = par("tos");
+    if (tos != -1)
+        socket.setTos(tos);
 
     const char *destAddrs = par("destAddresses");
     cStringTokenizer tokenizer(destAddrs);
@@ -169,6 +186,7 @@ void UdpBasicBurst::processSend()
 void UdpBasicBurst::processStop()
 {
     socket.close();
+    socket.setCallback(nullptr);
 }
 
 void UdpBasicBurst::handleMessageWhenUp(cMessage *msg)
@@ -191,21 +209,32 @@ void UdpBasicBurst::handleMessageWhenUp(cMessage *msg)
                 throw cRuntimeError("Invalid kind %d in self message", (int)msg->getKind());
         }
     }
-    else if (msg->getKind() == UDP_I_DATA) {
-        // process incoming packet
-        processPacket(check_and_cast<Packet *>(msg));
-    }
-    else if (msg->getKind() == UDP_I_ERROR) {
-        EV_WARN << "Ignoring UDP error report\n";
-        delete msg;
-    }
-    else {
-        throw cRuntimeError("Unrecognized message (%s)%s", msg->getClassName(), msg->getName());
-    }
+    else
+        socket.processMessage(msg);
+}
+
+void UdpBasicBurst::socketDataArrived(UdpSocket *socket, Packet *packet)
+{
+    // process incoming packet
+    processPacket(packet);
+}
+
+void UdpBasicBurst::socketErrorArrived(UdpSocket *socket, Indication *indication)
+{
+    EV_WARN << "Ignoring UDP error report " << indication->getName() << endl;
+    delete indication;
+}
+
+void UdpBasicBurst::socketClosed(UdpSocket *socket)
+{
+    if (operationalState == State::STOPPING_OPERATION)
+        startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
 }
 
 void UdpBasicBurst::refreshDisplay() const
 {
+    ApplicationBase::refreshDisplay();
+
     char buf[100];
     sprintf(buf, "rcvd: %d pks\nsent: %d pks", numReceived, numSent);
     getDisplayString().setTagArg("t", 0, buf);
@@ -292,6 +321,8 @@ void UdpBasicBurst::generateBurst()
         destAddr = chooseDestAddr();
 
     Packet *payload = createPacket();
+    if(dontFragment)
+        payload->addTag<FragmentationReq>()->setDontFragment(true);
     payload->setTimestamp();
     emit(packetSentSignal, payload);
     socket.sendTo(payload, destAddr, destPort);
@@ -316,7 +347,7 @@ void UdpBasicBurst::finish()
     ApplicationBase::finish();
 }
 
-bool UdpBasicBurst::handleNodeStart(IDoneCallback *doneCallback)
+void UdpBasicBurst::handleStartOperation(LifecycleOperation *operation)
 {
     simtime_t start = std::max(startTime, simTime());
 
@@ -324,24 +355,24 @@ bool UdpBasicBurst::handleNodeStart(IDoneCallback *doneCallback)
         timerNext->setKind(START);
         scheduleAt(start, timerNext);
     }
-
-    return true;
 }
 
-bool UdpBasicBurst::handleNodeShutdown(IDoneCallback *doneCallback)
+void UdpBasicBurst::handleStopOperation(LifecycleOperation *operation)
 {
     if (timerNext)
         cancelEvent(timerNext);
     activeBurst = false;
-    //TODO if(socket.isOpened()) socket.close();
-    return true;
+    socket.close();
+    delayActiveOperationFinish(par("stopOperationTimeout"));
 }
 
-void UdpBasicBurst::handleNodeCrash()
+void UdpBasicBurst::handleCrashOperation(LifecycleOperation *operation)
 {
     if (timerNext)
         cancelEvent(timerNext);
     activeBurst = false;
+    if (operation->getRootModule() != getContainingNode(this))     // closes socket when the application crashed only
+        socket.destroy();         //TODO  in real operating systems, program crash detected by OS and OS closes sockets of crashed programs.
 }
 
 } // namespace inet

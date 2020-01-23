@@ -11,6 +11,7 @@ there were no batteries involved at all.
 
 %file: test.ned
 
+import inet.test.moduletest.lib.*;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.inet.AdhocHost;
 import inet.physicallayer.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
@@ -28,7 +29,6 @@ network Test
 
 [General]
 network = Test
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 sim-time-limit = 100s
 cmdenv-express-mode = false
@@ -45,15 +45,15 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 *.hostDestination.status.initialStatus = "up"
 
 # power
-**.energyStorageType = "SimpleEpEnergyStorage"
-**.energyManagementType = "SimpleEpEnergyManagement"
-**.energyConsumerType = "StateBasedEpEnergyConsumer"
+**.energyStorage.typename = "SimpleEpEnergyStorage"
+**.energyManagement.typename = "SimpleEpEnergyManagement"
+**.energyConsumer.typename = "StateBasedEpEnergyConsumer"
 **.energyStorage.nominalCapacity = 1J
 **.energyManagement.nodeShutdownCapacity = 0J
 **.energyManagement.nodeStartCapacity = 0.2J
 *.hostSource.energyStorage.initialCapacity = 0J
 *.hostDestination.energyStorage.initialCapacity = 0.1J
-*.hostSource.energyGeneratorType = "AlternatingEpEnergyGenerator"
+*.hostSource.energyGenerator.typename = "AlternatingEpEnergyGenerator"
 *.hostSource.energyGenerator.energySinkModule = "hostSource.energyStorage"
 *.hostSource.energyGenerator.powerGeneration = 10mW
 *.hostSource.energyGenerator.sleepInterval = 0s
@@ -69,7 +69,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 **.mobility.initFromDisplayString = false
 **.mobility.initialY = 50m
 **.mobility.initialZ = 0m
-*.host*.mobilityType = "StationaryMobility"
+*.host*.mobility.typename = "StationaryMobility"
 *.hostSource.mobility.initialX = 20m
 *.hostDestination.mobility.initialX = 80m
 

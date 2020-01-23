@@ -13,7 +13,7 @@ Test serializing frames
 #include "inet/common/ProtocolGroup.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
-#include "inet/common/serializer/EthernetCRC.h"
+#include "inet/common/checksum/EthernetCRC.h"
 #include "inet/linklayer/ethernet/EtherFrame_m.h"
 #include "inet/linklayer/ethernet/Ethernet.h"
 #include "inet/linklayer/ieee8022/Ieee8022Llc.h"
@@ -29,7 +29,6 @@ Test serializing frames
 
 using namespace inet;
 
-using namespace inet::serializer;
 
 #define PCAP_MAGIC      0xa1b2c3d4
 
@@ -70,21 +69,7 @@ uint32_t swapByteOrder32(uint32_t v)
     return ((v & 0xFFL) << 24) | ((v & 0xFF00L) << 8) | ((v & 0xFF0000L) >> 8) | ((v & 0xFF000000L) >> 24);
 }
 
-#if OMNETPP_VERSION < 0x0500
-//cClassDescriptor compatibility
-#define getFieldValueAsString(a, b, c)         getFieldAsString((a), (b), (c))
-#define getFieldProperty(a, b)                 getFieldProperty(nullptr, (a), (b))
-#define getFieldName(a)                        getFieldName(nullptr, (a))
-#define getFieldIsCObject(a)                   getFieldIsCObject(nullptr, (a))
-#define getFieldCount()                        getFieldCount(nullptr)
-#define getFieldTypeString(a)                  getFieldTypeString(nullptr, (a))
-#define getFieldIsArray(a)                     getFieldIsArray(nullptr, (a))
-#define getFieldArraySize(a, b)                getArraySize((a), (b))
-#define getFieldStructValuePointer(a, b, c)    getFieldStructPointer((a), (b), (c))
-#define getFieldTypeFlags(a)                   getFieldTypeFlags(nullptr, (a))
-#define getFieldStructName(a)                  getFieldStructName(nullptr, (a))
-#endif    // OMNETPP_VERSION < 0x0500
-
+#if 0
 static void printobject(cObject* object)
 {
     EV << object->getClassName() << ":" << endl;
@@ -100,6 +85,7 @@ static void printobject(cObject* object)
             EV << descriptor->getFieldValueAsString(object,i,0) << endl;
     }
 }
+#endif
 
 static bool testOneRecord(const Protocol *protocol, Packet *pk);
 static Packet *deserialize(const Protocol *protocol, Packet *pk);

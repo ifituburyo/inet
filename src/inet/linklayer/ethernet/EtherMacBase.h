@@ -21,26 +21,25 @@
 #define __INET_ETHERMACBASE_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/common/INETMath.h"
 #include "inet/common/lifecycle/ILifecycle.h"
 #include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/common/packet/Packet.h"
-#include "inet/common/queue/IPassiveQueue.h"
-#include "inet/linklayer/base/MacBase.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+#include "inet/linklayer/base/MacProtocolBase.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ethernet/EtherFrame_m.h"
+#include "inet/networklayer/common/InterfaceEntry.h"
 
 namespace inet {
 
 // Forward declarations:
 class EthernetSignal;
-class InterfaceEntry;
 
 /**
  * Base class for Ethernet MAC implementations.
  */
-class INET_API EtherMacBase : public MacBase
+class INET_API EtherMacBase : public MacProtocolBase
 {
   public:
         enum MacTransmitState {
@@ -74,56 +73,20 @@ class INET_API EtherMacBase : public MacBase
     };
 
     enum {
-        NUM_OF_ETHERDESCRS = 6
+        NUM_OF_ETHERDESCRS = 9
     };
 
     struct EtherDescr
     {
         double txrate;
         double halfBitTime;    // transmission time of a half bit
-        int64 frameMinBytes;    // minimal frame length
         // for half-duplex operation:
-        unsigned int maxFramesInBurst;
-        int64 maxBytesInBurst;    // including IFG and preamble, etc.
-        int64 halfDuplexFrameMinBytes;    // minimal frame length in half-duplex mode; -1 means half duplex is not supported
-        int64 frameInBurstMinBytes;    // minimal frame length in burst mode, after first frame
+        short int maxFramesInBurst;
+        B maxBytesInBurst;    // including IFG and preamble, etc.
+        B halfDuplexFrameMinBytes;    // minimal frame length in half-duplex mode; -1 means half duplex is not supported
+        B frameInBurstMinBytes;    // minimal frame length in burst mode, after first frame
         double slotTime;    // slot time
         double maxPropagationDelay;    // used for detecting longer cables than allowed
-    };
-
-    class InnerQueue
-    {
-      protected:
-        cQueue queue;
-        int queueLimit = 0;    // max queue length
-
-      protected:
-        static int packetCompare(cObject *a, cObject *b);    // PAUSE frames have higher priority
-
-      public:
-        InnerQueue(const char *name = nullptr, int limit = 0) : queue(name, packetCompare), queueLimit(limit) {}
-        void insertFrame(Packet *obj) { queue.insert(obj); }
-        cObject *pop() { return queue.pop(); }
-        bool isEmpty() const { return queue.isEmpty(); }
-        int getQueueLimit() const { return queueLimit; }
-        bool isFull() const { return queueLimit != 0 && queue.getLength() > queueLimit; }
-        int getLength() const { return queue.getLength(); }
-        void clear() { queue.clear(); }
-    };
-
-    class MacQueue
-    {
-      public:
-        InnerQueue *innerQueue = nullptr;
-        IPassiveQueue *extQueue = nullptr;
-
-      public:
-        ~MacQueue() { delete innerQueue; };
-        bool isEmpty() { return innerQueue ? innerQueue->isEmpty() : extQueue->isEmpty(); }
-        void setExternalQueue(IPassiveQueue *_extQueue)
-        { delete innerQueue; innerQueue = nullptr; extQueue = _extQueue; };
-        void setInternalQueue(const char *name = nullptr, int limit = 0)
-        { delete innerQueue; innerQueue = new InnerQueue(name, limit); extQueue = nullptr; };
     };
 
     // MAC constants for bitrates and modes
@@ -131,9 +94,9 @@ class INET_API EtherMacBase : public MacBase
     static const EtherDescr nullEtherDescr;
 
     // configuration
+    const char *displayStringTextFormat = nullptr;
     bool sendRawBytes = false;
     const EtherDescr *curEtherDescr = nullptr;    // constants for the current Ethernet mode, e.g. txrate
-    MacAddress address;    // own MAC address
     bool connected = false;    // true if connected to a network, set automatically by exploring the network configuration
     bool disabled = false;    // true if the MAC is disabled, defined by the user
     bool promiscuous = false;    // if true, passes up all received frames
@@ -141,11 +104,9 @@ class INET_API EtherMacBase : public MacBase
     bool frameBursting = false;    // frame bursting on/off (Gigabit Ethernet)
 
     // gate pointers, etc.
-    MacQueue txQueue;    // the output queue
     cChannel *transmissionChannel = nullptr;    // transmission channel
     cGate *physInGate = nullptr;    // pointer to the "phys$i" gate
     cGate *physOutGate = nullptr;    // pointer to the "phys$o" gate
-    cGate *upperLayerInGate = nullptr;    // pointer to the "upperLayerIn" gate
 
     // state
     bool channelsDiffer = false;    // true when tx and rx channels differ (only one of them exists, or 'datarate' or 'disable' parameters differ) (configuration error, or between changes of tx/rx channels)
@@ -153,7 +114,6 @@ class INET_API EtherMacBase : public MacBase
     MacReceiveState receiveState = static_cast<MacReceiveState>(-1);    // "receive state" of the MAC
     simtime_t lastTxFinishTime;    // time of finishing the last transmission
     int pauseUnitsRequested = 0;    // requested pause duration, or zero -- examined at endTx
-    Packet *curTxFrame = nullptr;    // frame being transmitted
 
     // self messages
     cMessage *endTxMsg = nullptr, *endIFGMsg = nullptr, *endPauseMsg = nullptr;
@@ -186,7 +146,7 @@ class INET_API EtherMacBase : public MacBase
     EtherMacBase();
     virtual ~EtherMacBase();
 
-    virtual MacAddress getMacAddress() { return address; }
+    virtual MacAddress getMacAddress() { return interfaceEntry ? interfaceEntry->getMacAddress() : MacAddress::UNSPECIFIED_ADDRESS; }
 
     double getTxRate() { return curEtherDescr->txrate; }
     bool isActive() { return connected && !disabled; }
@@ -194,15 +154,22 @@ class INET_API EtherMacBase : public MacBase
     MacTransmitState getTransmitState(){ return transmitState; }
     MacReceiveState getReceiveState(){ return receiveState; }
 
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
+    virtual void processAtHandleMessageFinished();
+
+    /**
+     * Inserts padding in front of FCS and calculate FCS
+     */
+    void addPaddingAndSetFcs(Packet *packet, B requiredMinByteLength = MIN_ETHERNET_FRAME_BYTES) const;
 
   protected:
     //  initialization
     virtual void initialize(int stage) override;
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initializeFlags();
-    virtual void initializeMacAddress();
-    virtual void initializeQueueModule();
+    virtual void initializeQueue();
     virtual void initializeStatistics();
 
     // finish
@@ -219,8 +186,6 @@ class INET_API EtherMacBase : public MacBase
     virtual void printParameters();
 
     // helpers
-    virtual void getNextFrameFromQueue();
-    virtual void requestNextFrameFromExtQueue();
     virtual void processConnectDisconnect();
     virtual void encapsulate(Packet *packet);
     virtual void decapsulate(Packet *packet);
@@ -229,10 +194,7 @@ class INET_API EtherMacBase : public MacBase
     bool verifyCrcAndLength(Packet *packet);
 
     // MacBase
-    virtual InterfaceEntry *createInterfaceEntry() override;
-    virtual void flushQueue() override;
-    virtual void clearQueue() override;
-    virtual bool isUpperMsg(cMessage *msg) override { return msg->getArrivalGate() == upperLayerInGate; }
+    virtual void configureInterfaceEntry() override;
 
     // display
     virtual void refreshDisplay() const override;

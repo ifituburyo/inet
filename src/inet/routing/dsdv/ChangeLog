@@ -1,5 +1,33 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-11-08  Levente Mészáros
+
+	Fixed memory leaks detected by static analysis.
+
+2019-09-02  Zoltan Bojthe
+
+	Optimized Tag usage.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-10-05  Zoltan Bojthe
+
+	Changed base class of Dsdv to RoutingProtocolBase.
+
+2018-10-04  Zoltan Bojthe
+
+	Fixed lifecycle stages.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-05-02  Zoltan Bojthe
+
+	Remove unused L3Socket.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-01-24  Levente Mészáros
 
 	Adapted registerProtocol calls to the new API based on OSI service primitives.

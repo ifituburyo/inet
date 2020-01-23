@@ -18,8 +18,8 @@
 #ifndef __INET_RX_H
 #define __INET_RX_H
 
-#include "inet/linklayer/ieee80211/mac/contract/IRx.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRx.h"
 #include "inet/physicallayer/contract/packetlevel/IRadio.h"
 
 namespace inet {
@@ -34,9 +34,11 @@ class IStatistics;
  */
 class INET_API Rx : public cSimpleModule, public IRx
 {
+    public:
+        static simsignal_t navChangedSignal;
+
     protected:
         std::vector<IContention *> contentions;
-        IStatistics *statistics = nullptr;
 
         MacAddress address;
         cMessage *endNavTimer = nullptr;

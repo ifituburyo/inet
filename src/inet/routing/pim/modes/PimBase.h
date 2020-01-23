@@ -21,21 +21,21 @@
 #define __INET_PIMBASE_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
-#include "inet/common/lifecycle/OperationalBase.h"
-#include "inet/routing/pim/tables/PimNeighborTable.h"
-#include "inet/routing/pim/tables/PimInterfaceTable.h"
+#include "inet/routing/base/RoutingProtocolBase.h"
+#include "inet/routing/pim/Pim.h"
 #include "inet/routing/pim/PimPacket_m.h"
+#include "inet/routing/pim/tables/PimInterfaceTable.h"
+#include "inet/routing/pim/tables/PimNeighborTable.h"
 
 namespace inet {
 
 /**
  * Base class of PimSm and PimDm modules.
  */
-class INET_API PimBase : public OperationalBase
+class INET_API PimBase : public RoutingProtocolBase
 {
   protected:
 
@@ -129,6 +129,8 @@ class INET_API PimBase : public OperationalBase
         bool operator<(const SourceAndGroup& other) const { return source < other.source || (source == other.source && group < other.group); }
     };
 
+    friend std::ostream& operator<<(std::ostream& out, const SourceAndGroup& sourceGroup);
+
     enum PimTimerKind {
         // global timers
         HelloTimer = 1,
@@ -160,6 +162,7 @@ class INET_API PimBase : public OperationalBase
     IInterfaceTable *ift = nullptr;
     PimInterfaceTable *pimIft = nullptr;
     PimNeighborTable *pimNbt = nullptr;
+    Pim *pimModule = nullptr;
 
     bool isUp = false;
     bool isEnabled = false;
@@ -191,12 +194,9 @@ class INET_API PimBase : public OperationalBase
     void processHelloTimer(cMessage *timer);
     void processHelloPacket(Packet *pk);
 
-    virtual bool isInitializeStage(int stage) override { return stage == INITSTAGE_ROUTING_PROTOCOLS; }
-    virtual bool isNodeStartStage(int stage) override { return stage == INITSTAGE_ROUTING_PROTOCOLS; }
-    virtual bool isNodeShutdownStage(int stage) override { return stage == INITSTAGE_ROUTING_PROTOCOLS; }
-    virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
-    virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
-    virtual void handleNodeCrash() override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 };
 
 }    // namespace inet

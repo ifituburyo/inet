@@ -15,11 +15,10 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/applications/udpapp/UdpSink.h"
-
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
 
 namespace inet {
@@ -65,21 +64,34 @@ void UdpSink::handleMessageWhenUp(cMessage *msg)
                 throw cRuntimeError("Invalid kind %d in self message", (int)selfMsg->getKind());
         }
     }
-    else if (msg->getKind() == UDP_I_DATA) {
-        // process incoming packet
-        processPacket(check_and_cast<Packet *>(msg));
-    }
-    else if (msg->getKind() == UDP_I_ERROR) {
-        EV_WARN << "Ignoring UDP error report " << msg->getName() << endl;
-        delete msg;
-    }
-    else {
-        throw cRuntimeError("Unrecognized message (%s)%s", msg->getClassName(), msg->getName());
-    }
+    else if (msg->arrivedOn("socketIn"))
+        socket.processMessage(msg);
+    else
+        throw cRuntimeError("Unknown incoming gate: '%s'", msg->getArrivalGate()->getFullName());
+}
+
+void UdpSink::socketDataArrived(UdpSocket *socket, Packet *packet)
+{
+    // process incoming packet
+    processPacket(packet);
+}
+
+void UdpSink::socketErrorArrived(UdpSocket *socket, Indication *indication)
+{
+    EV_WARN << "Ignoring UDP error report " << indication->getName() << endl;
+    delete indication;
+}
+
+void UdpSink::socketClosed(UdpSocket *socket)
+{
+    if (operationalState == State::STOPPING_OPERATION)
+        startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
 }
 
 void UdpSink::refreshDisplay() const
 {
+    ApplicationBase::refreshDisplay();
+
     char buf[50];
     sprintf(buf, "rcvd: %d pks", numReceived);
     getDisplayString().setTagArg("t", 0, buf);
@@ -108,6 +120,7 @@ void UdpSink::setSocketOptions()
             throw cRuntimeError("Wrong multicastGroup setting: not a multicast address: %s", groupAddr);
         socket.joinMulticastGroup(multicastGroup);
     }
+    socket.setCallback(this);
 }
 
 void UdpSink::processStart()
@@ -138,28 +151,32 @@ void UdpSink::processPacket(Packet *pk)
     numReceived++;
 }
 
-bool UdpSink::handleNodeStart(IDoneCallback *doneCallback)
+void UdpSink::handleStartOperation(LifecycleOperation *operation)
 {
     simtime_t start = std::max(startTime, simTime());
     if ((stopTime < SIMTIME_ZERO) || (start < stopTime) || (start == stopTime && startTime == stopTime)) {
         selfMsg->setKind(START);
         scheduleAt(start, selfMsg);
     }
-    return true;
 }
 
-bool UdpSink::handleNodeShutdown(IDoneCallback *doneCallback)
+void UdpSink::handleStopOperation(LifecycleOperation *operation)
 {
-    if (selfMsg)
-        cancelEvent(selfMsg);
-    //TODO if(socket.isOpened()) socket.close();
-    return true;
+    cancelEvent(selfMsg);
+    if (!multicastGroup.isUnspecified())
+        socket.leaveMulticastGroup(multicastGroup); // FIXME should be done by socket.close()
+    socket.close();
+    delayActiveOperationFinish(par("stopOperationTimeout"));
 }
 
-void UdpSink::handleNodeCrash()
+void UdpSink::handleCrashOperation(LifecycleOperation *operation)
 {
-    if (selfMsg)
-        cancelEvent(selfMsg);
+    cancelEvent(selfMsg);
+    if (operation->getRootModule() != getContainingNode(this)) {     // closes socket when the application crashed only
+        if (!multicastGroup.isUnspecified())
+            socket.leaveMulticastGroup(multicastGroup); // FIXME should be done by socket.close()
+        socket.destroy();    //TODO  in real operating systems, program crash detected by OS and OS closes sockets of crashed programs.
+    }
 }
 
 } // namespace inet

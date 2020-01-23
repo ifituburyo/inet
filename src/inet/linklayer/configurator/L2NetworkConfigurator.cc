@@ -17,16 +17,16 @@
 // Author: Benjamin Seregi
 //
 
-#include <set>
-#include <vector>
-#include <sstream>
 #include <queue>
+#include <set>
+#include <sstream>
+#include <vector>
 
-#include "inet/linklayer/configurator/L2NetworkConfigurator.h"
-#include "inet/networklayer/contract/IInterfaceTable.h"
-#include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/stlutils.h"
+#include "inet/linklayer/configurator/L2NetworkConfigurator.h"
+#include "inet/networklayer/common/InterfaceEntry.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
 
 namespace inet {
 
@@ -46,7 +46,7 @@ void L2NetworkConfigurator::initialize(int stage)
 {
     if (stage == INITSTAGE_LOCAL)
         configuration = par("config");
-    else if (stage == INITSTAGE_LINK_LAYER)
+    else if (stage == INITSTAGE_NETWORK_CONFIGURATION)
         ensureConfigurationComputed(topology);
 }
 
@@ -278,7 +278,7 @@ void L2NetworkConfigurator::configureInterface(InterfaceEntry *interfaceEntry)
 void L2NetworkConfigurator::configureInterface(InterfaceInfo *interfaceInfo)
 {
     InterfaceEntry *interfaceEntry = interfaceInfo->interfaceEntry;
-    Ieee8021dInterfaceData *interfaceData = interfaceEntry->ieee8021dData();
+    Ieee8021dInterfaceData *interfaceData = interfaceEntry->getProtocolData<Ieee8021dInterfaceData>();
 
     interfaceData->setLinkCost(interfaceInfo->portData.linkCost);
     interfaceData->setPriority(interfaceInfo->portData.priority);

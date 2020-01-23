@@ -40,25 +40,30 @@ TracingObstacleLossCanvasVisualizer::ObstacleLossCanvasVisualization::~ObstacleL
     delete faceNormalFigure2;
 }
 
+TracingObstacleLossCanvasVisualizer::~TracingObstacleLossCanvasVisualizer()
+{
+    if (displayIntersections)
+        removeAllObstacleLossVisualizations();
+}
+
 void TracingObstacleLossCanvasVisualizer::initialize(int stage)
 {
     TracingObstacleLossVisualizerBase::initialize(stage);
     if (!hasGUI()) return;
     if (stage == INITSTAGE_LOCAL) {
         zIndex = par("zIndex");
-        cCanvas *canvas = visualizerTargetModule->getCanvas();
+        cCanvas *canvas = visualizationTargetModule->getCanvas();
+        canvasProjection = CanvasProjection::getCanvasProjection(canvas);
         obstacleLossLayer = new cGroupFigure("obstacle_loss");
         obstacleLossLayer->setZIndex(zIndex);
         obstacleLossLayer->insertBefore(canvas->getSubmodulesLayer());
     }
-    else if (stage == INITSTAGE_PHYSICAL_ENVIRONMENT)
-        canvasProjection = CanvasProjection::getCanvasProjection(visualizerTargetModule->getCanvas());
 }
 
 void TracingObstacleLossCanvasVisualizer::refreshDisplay() const
 {
     TracingObstacleLossVisualizerBase::refreshDisplay();
-    visualizerTargetModule->getCanvas()->setAnimationSpeed(obstacleLossVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
+    visualizationTargetModule->getCanvas()->setAnimationSpeed(obstacleLossVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
 }
 
 const TracingObstacleLossVisualizerBase::ObstacleLossVisualization *TracingObstacleLossCanvasVisualizer::createObstacleLossVisualization(const ITracingObstacleLoss::ObstaclePenetratedEvent *obstaclePenetratedEvent) const
@@ -69,7 +74,7 @@ const TracingObstacleLossVisualizerBase::ObstacleLossVisualization *TracingObsta
     auto normal1 = obstaclePenetratedEvent->normal1;
     auto normal2 = obstaclePenetratedEvent->normal2;
     auto loss = obstaclePenetratedEvent->loss;
-    const Rotation rotation(object->getOrientation());
+    const RotationMatrix rotation(object->getOrientation().toEulerAngles());
     const Coord& position = object->getPosition();
     const Coord rotatedIntersection1 = rotation.rotateVector(intersection1);
     const Coord rotatedIntersection2 = rotation.rotateVector(intersection2);

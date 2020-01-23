@@ -43,22 +43,18 @@ extern "C" {
 };
 
 #include "inet/applications/voipstream/AudioOutFile.h"
+#include "inet/applications/voipstream/VoipStreamPacket_m.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/transportlayer/contract/udp/UdpSocket.h"
-#include "inet/applications/voipstream/VoipStreamPacket_m.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
 
 namespace inet {
 
-class INET_API VoipStreamSender : public cSimpleModule, public ILifecycle
+class INET_API VoipStreamSender : public cSimpleModule, public LifecycleUnsupported
 {
   public:
     VoipStreamSender();
     ~VoipStreamSender();
-
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override
-    { Enter_Method_Silent(); throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName()); return true; }
 
   protected:
     virtual void initialize(int stage) override;
@@ -135,7 +131,7 @@ class INET_API VoipStreamSender : public cSimpleModule, public ILifecycle
     int streamIndex = -1;
     uint32_t pktID = 0;    // increasing packet sequence number
     int samplesPerPacket = 0;
-    AVPacket packet;
+    AVPacket packet {};  // {}: zero-initialize so that av_free_packet() doesn't crash if initialization doesn't go through
     Buffer sampleBuffer;
 
     cMessage *timer = nullptr;

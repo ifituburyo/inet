@@ -1,6 +1,6 @@
+package inet.test.moduletest.lib;
 
-
-import inet.linklayer.contract.IEtherMac;
+import inet.linklayer.contract.IEthernetInterface;
 import inet.linklayer.ethernet.EtherQosQueue;
 
 
@@ -18,9 +18,11 @@ module EthTestHost
 {
     parameters:
         bool csmacdSupport = default(true);  // by default use CSMA/CD
-        string macType = default(csmacdSupport ? "EtherMac" : "EtherMacFullDuplex"); // ~EtherMac or ~EtherMacFullDuplex
         string queueType = default(""); // DropTailQueue, DiffServQueue, or empty to use the internal queue
         *.interfaceTableModule = "";
+        eth.csmacdSupport = csmacdSupport;
+        eth.encap.typename = "EtherEncapDummy";
+        eth.queueType = queueType;
         @networkNode();
     gates:
         inout ethg @labels(EtherFrame-conn);
@@ -28,22 +30,14 @@ module EthTestHost
         app: EthTestApp {
             @display("p=155,72");
         }
-        queue: EtherQosQueue if queueType != "" {
+        eth: <default("EthernetInterface")> like IEthernetInterface {
             parameters:
-                dataQueueType = queueType;
-                @display("p=65,171;q=l2queue");
-        }
-        mac: <macType> like IEtherMac {
-            parameters:
-                queueModule = (queueType == "" ? "" : "^.queue");
-                @display("p=155,272;q=txQueue");
+                @display("p=200,239,row,150;q=txQueue");
         }
     connections:
-        app.out --> queue.in if queueType != "";
-        queue.out --> mac.upperLayerIn if queueType != "";
-        app.out --> mac.upperLayerIn if queueType == "";
-        mac.upperLayerOut --> app.in;
-        mac.phys <--> ethg;
+        app.out --> eth.upperLayerIn;
+        app.in <-- eth.upperLayerOut;
+        eth.phys <--> { @display("m=s"); } <--> ethg;
 }
 
 network EthTestNetwork

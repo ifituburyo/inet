@@ -19,9 +19,8 @@
 #define __INET_IPV4ROUTE_H
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 #include "inet/networklayer/contract/IRoute.h"
+#include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 
 namespace inet {
 
@@ -35,26 +34,6 @@ class IIpv4RoutingTable;
  */
 class INET_API Ipv4Route : public cObject, public IRoute
 {
-  public:
-    /** Cisco like administrative distances */
-    enum RouteAdminDist {
-        dDirectlyConnected = 0,
-        dStatic = 1,
-        dEIGRPSummary = 5,
-        dBGPExternal = 20,
-        dEIGRPInternal = 90,
-        dIGRP = 100,
-        dOSPF = 110,
-        dISIS = 115,
-        dRIP = 120,
-        dEGP = 140,
-        dODR = 160,
-        dEIGRPExternal = 170,
-        dBGPInternal = 200,
-        dDHCPlearned = 254,
-        dUnknown = 255
-    };
-
   private:
     IIpv4RoutingTable *rt;    ///< the routing table in which this route is inserted, or nullptr
     Ipv4Address dest;    ///< Destination
@@ -80,7 +59,7 @@ class INET_API Ipv4Route : public cObject, public IRoute
         metric(0), source(nullptr), protocolData(nullptr) {}
     virtual ~Ipv4Route();
     virtual std::string str() const override;
-    virtual std::string detailedInfo() const override;
+    virtual std::string detailedInfo() const OMNETPP5_CODE(override);
 
     bool operator==(const Ipv4Route& route) const { return equals(route); }
     bool operator!=(const Ipv4Route& route) const { return !equals(route); }
@@ -98,7 +77,8 @@ class INET_API Ipv4Route : public cObject, public IRoute
     virtual void setGateway(Ipv4Address _gateway) { if (gateway != _gateway) { gateway = _gateway; changed(F_NEXTHOP); } }
     virtual void setInterface(InterfaceEntry *_interfacePtr) override { if (interfacePtr != _interfacePtr) { interfacePtr = _interfacePtr; changed(F_IFACE); } }
     virtual void setSourceType(SourceType _source) override { if (sourceType != _source) { sourceType = _source; changed(F_SOURCE); } }
-    virtual void setAdminDist(unsigned int _adminDist) { if (adminDist != _adminDist) { adminDist = _adminDist; changed(F_ADMINDIST); } }
+    const char* getSourceTypeAbbreviation() const;
+    virtual void setAdminDist(unsigned int _adminDist) override { if (adminDist != _adminDist) { adminDist = _adminDist; changed(F_ADMINDIST); } }
     virtual void setMetric(int _metric) override { if (metric != _metric) { metric = _metric; changed(F_METRIC); } }
 
     /** Destination address prefix to match */
@@ -192,7 +172,7 @@ class INET_API Ipv4MulticastRoute : public cObject, public IMulticastRoute
     Ipv4MulticastRoute() : rt(nullptr), inInterface(nullptr), sourceType(MANUAL), source(nullptr), metric(0) {}
     virtual ~Ipv4MulticastRoute();
     virtual std::string str() const override;
-    virtual std::string detailedInfo() const override;
+    virtual std::string detailedInfo() const OMNETPP5_CODE(override);
 
     /** To be called by the routing table when this route is added or removed from it */
     virtual void setRoutingTable(IIpv4RoutingTable *rt) { this->rt = rt; }

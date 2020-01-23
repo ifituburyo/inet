@@ -19,14 +19,18 @@
 #define __INET_IRECIPIENTQOSMACDATASERVICE_H
 
 #include "inet/common/packet/Packet.h"
-#include "inet/linklayer/ieee80211/mac/contract/IRecipientBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRecipientBlockAckAgreementHandler.h"
 
 namespace inet {
 namespace ieee80211 {
 
 class INET_API IRecipientQosMacDataService
 {
+    public:
+        static simsignal_t packetDefragmentedSignal;
+        static simsignal_t packetDeaggregatedSignal;
+
     public:
         virtual ~IRecipientQosMacDataService() { }
 

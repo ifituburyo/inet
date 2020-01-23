@@ -18,12 +18,11 @@
 //
 
 #include "inet/applications/dhcp/DhcpClient.h"
-
+#include "inet/common/Simsignals.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
-#include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/common/Simsignals.h"
-#include "inet/common/lifecycle/NodeOperations.h"
 
 namespace inet {
 
@@ -41,6 +40,8 @@ DhcpClient::~DhcpClient()
 
 void DhcpClient::initialize(int stage)
 {
+    ApplicationBase::initialize(stage);
+
     if (stage == INITSTAGE_LOCAL) {
         timerT1 = new cMessage("T1 Timer", T1);
         timerT2 = new cMessage("T2 Timer", T2);
@@ -48,11 +49,6 @@ void DhcpClient::initialize(int stage)
         leaseTimer = new cMessage("Lease Timeout", LEASE_TIMEOUT);
         startTimer = new cMessage("Starting DHCP", START_DHCP);
         startTime = par("startTime");
-    }
-    else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
-
         numSent = 0;
         numReceived = 0;
         xid = 0;
@@ -66,26 +62,20 @@ void DhcpClient::initialize(int stage)
         // DHCP UDP ports
         clientPort = 68;    // client
         serverPort = 67;    // server
-
-        // get the hostname
-        host = getContainingNode(this);
-
-        // for a wireless interface subscribe the association event to start the DHCP protocol
-        host->subscribe(l2AssociatedSignal, this);
-        host->subscribe(interfaceDeletedSignal, this);
-
         // get the routing table to update and subscribe it to the blackboard
         irt = getModuleFromPar<IIpv4RoutingTable>(par("routingTableModule"), this);
         // set client to idle state
         clientState = IDLE;
         // get the interface to configure
-
-        if (isOperational) {
-            ie = chooseInterface();
-            // grab the interface MAC address
-            macAddress = ie->getMacAddress();
-            startApp();
-        }
+    }
+    else if (stage == INITSTAGE_APPLICATION_LAYER) {
+        // get the hostname
+        host = getContainingNode(this);
+        // for a wireless interface subscribe the association event to start the DHCP protocol
+        host->subscribe(l2AssociatedSignal, this);
+        host->subscribe(interfaceDeletedSignal, this);
+        socket.setCallback(this);
+        socket.setOutputGate(gate("socketOut"));
     }
 }
 
@@ -96,7 +86,7 @@ InterfaceEntry *DhcpClient::chooseInterface()
     InterfaceEntry *ie = nullptr;
 
     if (strlen(interfaceName) > 0) {
-        ie = ift->getInterfaceByName(interfaceName);
+        ie = ift->findInterfaceByName(interfaceName);
         if (ie == nullptr)
             throw cRuntimeError("Interface \"%s\" does not exist", interfaceName);
     }
@@ -114,7 +104,7 @@ InterfaceEntry *DhcpClient::chooseInterface()
             throw cRuntimeError("No non-loopback interface found to be configured via DHCP");
     }
 
-    if (!ie->ipv4Data()->getIPAddress().isUnspecified())
+    if (!ie->getProtocolData<Ipv4InterfaceData>()->getIPAddress().isUnspecified())
         throw cRuntimeError("Refusing to start DHCP on interface \"%s\" that already has an IP address", ie->getInterfaceName());
     return ie;
 }
@@ -189,30 +179,40 @@ const char *DhcpClient::getAndCheckMessageTypeName(DhcpMessageType type)
 
 void DhcpClient::refreshDisplay() const
 {
+    ApplicationBase::refreshDisplay();
+
     getDisplayString().setTagArg("t", 0, getStateName(clientState));
 }
 
-void DhcpClient::handleMessage(cMessage *msg)
+void DhcpClient::handleMessageWhenUp(cMessage *msg)
 {
-    if (!isOperational) {
-        EV_ERROR << "Message '" << msg << "' arrived when module status is down, dropping." << endl;
-        delete msg;
-        return;
-    }
     if (msg->isSelfMessage()) {
         handleTimer(msg);
     }
     else if (msg->arrivedOn("socketIn")) {
-        auto packet = check_and_cast<Packet *>(msg);
-        if (packet->getKind() == UDP_I_DATA)
-            handleDHCPMessage(packet);
-        else
-            throw cRuntimeError(packet, "Unexpected packet received");
-
-        delete msg;
+        socket.processMessage(msg);
     }
     else
         throw cRuntimeError("Unknown incoming gate: '%s'", msg->getArrivalGate()->getFullName());
+}
+
+void DhcpClient::socketDataArrived(UdpSocket *socket, Packet *packet)
+{
+    // process incoming packet
+    handleDhcpMessage(packet);
+    delete packet;
+}
+
+void DhcpClient::socketErrorArrived(UdpSocket *socket, Indication *indication)
+{
+    EV_WARN << "Ignoring UDP error report " << indication->getName() << endl;
+    delete indication;
+}
+
+void DhcpClient::socketClosed(UdpSocket *socket_)
+{
+    if (operationalState == State::STOPPING_OPERATION && !socket.isOpen())
+        startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
 }
 
 void DhcpClient::handleTimer(cMessage *msg)
@@ -250,7 +250,7 @@ void DhcpClient::handleTimer(cMessage *msg)
         cancelEvent(timerT1);
         cancelEvent(timerT2);
         cancelEvent(timerTo);
-        cancelEvent(leaseTimer);
+        //cancelEvent(leaseTimer);
 
         sendRequest();
         scheduleTimerTO(WAIT_ACK);
@@ -316,8 +316,8 @@ void DhcpClient::recordLease(const Ptr<const DhcpMessage>& dhcpACK)
 
 void DhcpClient::bindLease()
 {
-    ie->ipv4Data()->setIPAddress(lease->ip);
-    ie->ipv4Data()->setNetmask(lease->subnetMask);
+    ie->getProtocolData<Ipv4InterfaceData>()->setIPAddress(lease->ip);
+    ie->getProtocolData<Ipv4InterfaceData>()->setNetmask(lease->subnetMask);
 
     std::string banner = "Got IP " + lease->ip.str();
     host->bubble(banner.c_str());
@@ -367,8 +367,8 @@ void DhcpClient::unbindLease()
     cancelEvent(leaseTimer);
 
     irt->deleteRoute(route);
-    ie->ipv4Data()->setIPAddress(Ipv4Address());
-    ie->ipv4Data()->setNetmask(Ipv4Address::ALLONES_ADDRESS);
+    ie->getProtocolData<Ipv4InterfaceData>()->setIPAddress(Ipv4Address());
+    ie->getProtocolData<Ipv4InterfaceData>()->setNetmask(Ipv4Address::ALLONES_ADDRESS);
 }
 
 void DhcpClient::initClient()
@@ -392,9 +392,9 @@ void DhcpClient::initRebootedClient()
     clientState = REBOOTING;
 }
 
-void DhcpClient::handleDHCPMessage(Packet *packet)
+void DhcpClient::handleDhcpMessage(Packet *packet)
 {
-    ASSERT(isOperational && ie != nullptr);
+    ASSERT(isUp() && ie != nullptr);
 
     const auto& msg = packet->peekAtFront<DhcpMessage>();
     if (msg->getOp() != BOOTREPLY) {
@@ -431,7 +431,7 @@ void DhcpClient::handleDHCPMessage(Packet *packet)
             }
             else if (messageType == DHCPACK) {
                 EV_INFO << "DHCPACK message arrived in REQUESTING state. The requested IP address is available in the server's pool of addresses." << endl;
-                handleDHCPACK(msg);
+                handleDhcpAck(msg);
                 clientState = BOUND;
             }
             else if (messageType == DHCPNAK) {
@@ -449,7 +449,7 @@ void DhcpClient::handleDHCPMessage(Packet *packet)
 
         case RENEWING:
             if (messageType == DHCPACK) {
-                handleDHCPACK(msg);
+                handleDhcpAck(msg);
                 EV_INFO << "DHCPACK message arrived in RENEWING state. The renewing process was successful." << endl;
                 clientState = BOUND;
             }
@@ -470,7 +470,7 @@ void DhcpClient::handleDHCPMessage(Packet *packet)
                 initClient();
             }
             else if (messageType == DHCPACK) {
-                handleDHCPACK(msg);
+                handleDhcpAck(msg);
                 EV_INFO << "DHCPACK message arrived in REBINDING state. The rebinding process was successful." << endl;
                 clientState = BOUND;
             }
@@ -481,7 +481,7 @@ void DhcpClient::handleDHCPMessage(Packet *packet)
 
         case REBOOTING:
             if (messageType == DHCPACK) {
-                handleDHCPACK(msg);
+                handleDhcpAck(msg);
                 EV_INFO << "DHCPACK message arrived in REBOOTING state. Initialization with known IP address was successful." << endl;
                 clientState = BOUND;
             }
@@ -503,7 +503,7 @@ void DhcpClient::handleDHCPMessage(Packet *packet)
 void DhcpClient::receiveSignal(cComponent *source, int signalID, cObject *obj, cObject *details)
 {
     Enter_Method_Silent();
-    printSignalBanner(signalID, obj);
+    printSignalBanner(signalID, obj, details);
 
     // host associated. link is up. change the state to init.
     if (signalID == l2AssociatedSignal) {
@@ -515,7 +515,7 @@ void DhcpClient::receiveSignal(cComponent *source, int signalID, cObject *obj, c
         }
     }
     else if (signalID == interfaceDeletedSignal) {
-        if (isOperational)
+        if (isUp())
             throw cRuntimeError("Reacting to interface deletions is not implemented in this module");
     }
 }
@@ -525,10 +525,9 @@ void DhcpClient::sendRequest()
     // setting the xid
     xid = intuniform(0, RAND_MAX);    // generating a new xid for each transmission
 
-    Packet *packet = new Packet("DHCPREQUEST");
     const auto& request = makeShared<DhcpMessage>();
     request->setOp(BOOTREQUEST);
-    request->setChunkLength(B(280));    // DHCP request packet size
+    uint16_t length = 236;  // packet size without the options field
     request->setHtype(1);    // ethernet
     request->setHlen(6);    // hardware Address length (6 octets)
     request->setHops(0);
@@ -540,28 +539,35 @@ void DhcpClient::sendRequest()
     request->setChaddr(macAddress);    // my mac address;
     request->setSname("");    // no server name given
     request->setFile("");    // no file given
-    request->getOptionsForUpdate().setMessageType(DHCPREQUEST);
-    request->getOptionsForUpdate().setClientIdentifier(macAddress);
+    auto& options = request->getOptionsForUpdate();
+    options.setMessageType(DHCPREQUEST);
+    length += 3;
+    options.setClientIdentifier(macAddress);
+    length += 9;
 
     // set the parameters to request
-    request->getOptionsForUpdate().setParameterRequestListArraySize(4);
-    request->getOptionsForUpdate().setParameterRequestList(0, SUBNET_MASK);
-    request->getOptionsForUpdate().setParameterRequestList(1, ROUTER);
-    request->getOptionsForUpdate().setParameterRequestList(2, DNS);
-    request->getOptionsForUpdate().setParameterRequestList(3, NTP_SRV);
+    options.setParameterRequestListArraySize(4);
+    options.setParameterRequestList(0, SUBNET_MASK);
+    options.setParameterRequestList(1, ROUTER);
+    options.setParameterRequestList(2, DNS);
+    options.setParameterRequestList(3, NTP_SRV);
+    length += (2 + options.getParameterRequestListArraySize());
 
     L3Address destAddr;
 
     // RFC 4.3.6 Table 4
     if (clientState == INIT_REBOOT) {
-        request->getOptionsForUpdate().setRequestedIp(lease->ip);
+        options.setRequestedIp(lease->ip);
+        length += 6;
         request->setCiaddr(Ipv4Address());    // zero
         destAddr = Ipv4Address::ALLONES_ADDRESS;
         EV_INFO << "Sending DHCPREQUEST asking for IP " << lease->ip << " via broadcast." << endl;
     }
     else if (clientState == REQUESTING) {
-        request->getOptionsForUpdate().setServerIdentifier(lease->serverId);
-        request->getOptionsForUpdate().setRequestedIp(lease->ip);
+        options.setServerIdentifier(lease->serverId);
+        length += 6;
+        options.setRequestedIp(lease->ip);
+        length += 6;
         request->setCiaddr(Ipv4Address());    // zero
         destAddr = Ipv4Address::ALLONES_ADDRESS;
         EV_INFO << "Sending DHCPREQUEST asking for IP " << lease->ip << " via broadcast." << endl;
@@ -578,8 +584,15 @@ void DhcpClient::sendRequest()
     }
     else
         throw cRuntimeError("Invalid state");
+
+    // magic cookie and the end field
+    length += 5;
+
+    request->setChunkLength(B(length));
+
+    Packet *packet = new Packet("DHCPREQUEST");
     packet->insertAtBack(request);
-    sendToUDP(packet, clientPort, destAddr, serverPort);
+    sendToUdp(packet, clientPort, destAddr, serverPort);
 }
 
 void DhcpClient::sendDiscover()
@@ -590,7 +603,7 @@ void DhcpClient::sendDiscover()
     Packet *packet = new Packet("DHCPDISCOVER");
     const auto& discover = makeShared<DhcpMessage>();
     discover->setOp(BOOTREQUEST);
-    discover->setChunkLength(B(280));    // DHCP Discover packet size;
+    uint16_t length = 236;      // packet size without the options field
     discover->setHtype(1);    // ethernet
     discover->setHlen(6);    // hardware Address lenght (6 octets)
     discover->setHops(0);
@@ -600,21 +613,31 @@ void DhcpClient::sendDiscover()
     discover->setChaddr(macAddress);    // my mac address
     discover->setSname("");    // no server name given
     discover->setFile("");    // no file given
-    discover->getOptionsForUpdate().setMessageType(DHCPDISCOVER);
-    discover->getOptionsForUpdate().setClientIdentifier(macAddress);
-    discover->getOptionsForUpdate().setRequestedIp(Ipv4Address());
+    auto& options = discover->getOptionsForUpdate();
+    options.setMessageType(DHCPDISCOVER);
+    length += 3;
+    options.setClientIdentifier(macAddress);
+    length += 9;
+    options.setRequestedIp(Ipv4Address());
+    //length += 6; not added because unspecified
 
     // set the parameters to request
-    discover->getOptionsForUpdate().setParameterRequestListArraySize(4);
-    discover->getOptionsForUpdate().setParameterRequestList(0, SUBNET_MASK);
-    discover->getOptionsForUpdate().setParameterRequestList(1, ROUTER);
-    discover->getOptionsForUpdate().setParameterRequestList(2, DNS);
-    discover->getOptionsForUpdate().setParameterRequestList(3, NTP_SRV);
+    options.setParameterRequestListArraySize(4);
+    options.setParameterRequestList(0, SUBNET_MASK);
+    options.setParameterRequestList(1, ROUTER);
+    options.setParameterRequestList(2, DNS);
+    options.setParameterRequestList(3, NTP_SRV);
+    length += (2 + options.getParameterRequestListArraySize());
+
+    // magic cookie and the end field
+    length += 5;
+
+    discover->setChunkLength(B(length));
 
     packet->insertAtBack(discover);
 
     EV_INFO << "Sending DHCPDISCOVER." << endl;
-    sendToUDP(packet, clientPort, Ipv4Address::ALLONES_ADDRESS, serverPort);
+    sendToUdp(packet, clientPort, Ipv4Address::ALLONES_ADDRESS, serverPort);
 }
 
 void DhcpClient::sendDecline(Ipv4Address declinedIp)
@@ -623,7 +646,7 @@ void DhcpClient::sendDecline(Ipv4Address declinedIp)
     Packet *packet = new Packet("DHCPDECLINE");
     const auto& decline = makeShared<DhcpMessage>();
     decline->setOp(BOOTREQUEST);
-    decline->setChunkLength(B(280));    // DHCPDECLINE packet size
+    uint16_t length = 236;    // packet size without the options field
     decline->setHtype(1);    // ethernet
     decline->setHlen(6);    // hardware Address length (6 octets)
     decline->setHops(0);
@@ -633,16 +656,24 @@ void DhcpClient::sendDecline(Ipv4Address declinedIp)
     decline->setChaddr(macAddress);    // my MAC address
     decline->setSname("");    // no server name given
     decline->setFile("");    // no file given
-    decline->getOptionsForUpdate().setMessageType(DHCPDECLINE);
-    decline->getOptionsForUpdate().setRequestedIp(declinedIp);
+    auto& options = decline->getOptionsForUpdate();
+    options.setMessageType(DHCPDECLINE);
+    length += 3;
+    options.setRequestedIp(declinedIp);
+    length += 6;
+
+    // magic cookie and the end field
+    length += 5;
+
+    decline->setChunkLength(B(length));
 
     packet->insertAtBack(decline);
 
     EV_INFO << "Sending DHCPDECLINE." << endl;
-    sendToUDP(packet, clientPort, Ipv4Address::ALLONES_ADDRESS, serverPort);
+    sendToUdp(packet, clientPort, Ipv4Address::ALLONES_ADDRESS, serverPort);
 }
 
-void DhcpClient::handleDHCPACK(const Ptr<const DhcpMessage>& msg)
+void DhcpClient::handleDhcpAck(const Ptr<const DhcpMessage>& msg)
 {
     recordLease(msg);
     cancelEvent(timerTo);
@@ -651,7 +682,7 @@ void DhcpClient::handleDHCPACK(const Ptr<const DhcpMessage>& msg)
     bindLease();
 }
 
-void DhcpClient::scheduleTimerTO(TimerType type)
+void DhcpClient::scheduleTimerTO(DhcpTimerType type)
 {
     // cancel the previous timeout
     cancelEvent(timerTo);
@@ -673,7 +704,7 @@ void DhcpClient::scheduleTimerT2()
     scheduleAt(simTime() + (lease->rebindTime), timerT2);    // RFC 2131 4.4.5
 }
 
-void DhcpClient::sendToUDP(Packet *msg, int srcPort, const L3Address& destAddr, int destPort)
+void DhcpClient::sendToUdp(Packet *msg, int srcPort, const L3Address& destAddr, int destPort)
 {
     EV_INFO << "Sending packet " << msg << endl;
     msg->addTagIfAbsent<InterfaceReq>()->setInterfaceId(ie->getInterfaceId());
@@ -682,58 +713,46 @@ void DhcpClient::sendToUDP(Packet *msg, int srcPort, const L3Address& destAddr, 
 
 void DhcpClient::openSocket()
 {
-    socket.setOutputGate(gate("socketOut"));
     socket.bind(clientPort);
     socket.setBroadcast(true);
     EV_INFO << "DHCP server bound to port " << serverPort << "." << endl;
 }
 
-void DhcpClient::startApp()
+void DhcpClient::handleStartOperation(LifecycleOperation *operation)
 {
     simtime_t start = std::max(startTime, simTime());
     ie = chooseInterface();
+    macAddress = ie->getMacAddress();
     scheduleAt(start, startTimer);
 }
 
-void DhcpClient::stopApp()
+void DhcpClient::handleStopOperation(LifecycleOperation *operation)
 {
     cancelEvent(timerT1);
     cancelEvent(timerT2);
     cancelEvent(timerTo);
     cancelEvent(leaseTimer);
     cancelEvent(startTimer);
+    ie = nullptr;
 
     // TODO: Client should send DHCPRELEASE to the server. However, the correct operation
     // of DHCP does not depend on the transmission of DHCPRELEASE messages.
-    // TODO: socket.close();
+
+    socket.close();
+    delayActiveOperationFinish(par("stopOperationTimeout"));
 }
 
-bool DhcpClient::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void DhcpClient::handleCrashOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER) {
-            startApp();
-            isOperational = true;
-        }
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
-            stopApp();
-            isOperational = false;
-            ie = nullptr;
-        }
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
-            stopApp();
-            isOperational = false;
-            ie = nullptr;
-        }
-    }
-    else
-        throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
+    cancelEvent(timerT1);
+    cancelEvent(timerT2);
+    cancelEvent(timerTo);
+    cancelEvent(leaseTimer);
+    cancelEvent(startTimer);
+    ie = nullptr;
+
+    if (operation->getRootModule() != getContainingNode(this))     // closes socket when the application crashed only
+        socket.destroy();         //TODO  in real operating systems, program crash detected by OS and OS closes sockets of crashed programs.
 }
 
 } // namespace inet

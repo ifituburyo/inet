@@ -39,11 +39,12 @@
  *
  **************************************************************************/
 
-#include <string>
-#include <stdio.h>
 #include <assert.h>
+#include <stdio.h>
+#include <string>
 
 #include "inet/common/INETMath.h"
+#include "inet/common/INETUtils.h"
 #include "inet/mobility/group/MoBanCoordinator.h"
 #include "inet/mobility/group/MoBanLocal.h"
 
@@ -80,13 +81,14 @@ void MoBanCoordinator::initialize(int stage)
     LineSegmentsMobilityBase::initialize(stage);
 
     EV_TRACE << "initializing MoBanCoordinator stage " << stage << endl;
-    if (stage == INITSTAGE_PHYSICAL_ENVIRONMENT) {
+    if (stage == INITSTAGE_GROUP_MOBILITY) {
         useMobilityPattern = par("useMobilityPattern");
         collectLocalModules(getParentModule());
 
         // preparing output mobility pattern log file
         char log_file_name[70];
         sprintf(log_file_name, "MoBAN_Pattern_out%d.txt", getIndex());
+        inet::utils::makePathForFile(log_file_name);
         logfile = fopen(log_file_name, "w");
 
         if (!readPostureSpecificationFile())
@@ -323,12 +325,14 @@ bool MoBanCoordinator::readMobilityPatternFile()
     while (fscanf(fp, "%49s %d", posture_name, &id) != -1) {
         mobilityPattern[i].postureID = id;
         if (postureList[id]->isMobile()) {
-            assert(fscanf(fp, "%le %le %le %le", &x, &y, &z, &s) != -1);
+            if (fscanf(fp, "%le %le %le %le", &x, &y, &z, &s) == -1)
+                throw cRuntimeError("Couldn't parse parameters");
             mobilityPattern[i].targetPos = Coord(x, y, z);
             mobilityPattern[i].speed = s;
         }
         else {
-            assert(fscanf(fp, "%le", &x) != -1);
+            if (fscanf(fp, "%le", &x) == -1)
+                throw cRuntimeError("Couldn't parse parameters");
             mobilityPattern[i].duration = x;
         }
         ++i;

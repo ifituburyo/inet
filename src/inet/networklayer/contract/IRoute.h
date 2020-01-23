@@ -19,8 +19,8 @@
 #define __INET_IROUTE_H
 
 #include "inet/common/INETDefs.h"
-#include "inet/networklayer/common/L3Address.h"
 #include "inet/networklayer/common/InterfaceEntry.h"
+#include "inet/networklayer/common/L3Address.h"
 
 namespace inet {
 
@@ -50,6 +50,7 @@ class INET_API IRoute
         MANET2,    ///< managed by manet, search approximate address
         DYMO,    ///< managed by DYMO routing
         AODV,    ///< managed by AODV routing
+        EIGRP, LISP, BABEL, ODR, UNKNOWN, ISIS
     };
 
     /** Field codes for NB_ROUTE_CHANGED notifications */
@@ -66,13 +67,34 @@ class INET_API IRoute
         F_LAST
     };
 
+    /** Cisco like administrative distances */
+    enum RouteAdminDist {
+        dDirectlyConnected = 0,
+        dStatic = 1,
+        dEIGRPSummary = 5,
+        dBGPExternal = 20,
+        dEIGRPInternal = 90,
+        dIGRP = 100,
+        dOSPF = 110,
+        dISIS = 115,
+        dRIP = 120,
+        dEGP = 140,
+        dODR = 160,
+        dEIGRPExternal = 170,
+        dBGPInternal = 200,
+        dDHCPlearned = 254,
+        dBABEL = 125,
+        dLISP = 210,
+        dUnknown = 255
+    };
+
 //TODO maybe:
 //    virtual std::string info() const;
 //    virtual std::string detailedInfo() const;
 //
-//    bool operator==(const IGenericRoute& route) const { return equals(route); }
-//    bool operator!=(const IGenericRoute& route) const { return !equals(route); }
-//    bool equals(const IGenericRoute& route) const;
+//    bool operator==(const IRoute& route) const { return equals(route); }
+//    bool operator!=(const IRoute& route) const { return !equals(route); }
+//    bool equals(const IRoute& route) const;
 
     virtual ~IRoute() {}
 
@@ -86,6 +108,7 @@ class INET_API IRoute
     virtual void setSource(cObject *source) = 0;
     virtual void setSourceType(SourceType type) = 0;
     virtual void setMetric(int metric) = 0;    //XXX double?
+    virtual void setAdminDist(unsigned int adminDist) = 0;
 
     /** Destination address prefix to match */
     virtual L3Address getDestinationAsGeneric() const = 0;

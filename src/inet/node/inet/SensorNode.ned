@@ -21,8 +21,9 @@ import inet.node.base.ApplicationLayerNodeBase;
 
 //
 // This module implements a wireless sensor node. It has one 802.15.4 wireless interface
-// and an energy storage module by default. TODO and energyconsumer in the radio
-// TODO there is no management; the IdealEnergyStorage never depletes...
+// and an energy storage module by default. 
+//# TODO and energyconsumer in the radio
+//# TODO there is no management; the IdealEnergyStorage never depletes...
 //
 module SensorNode extends ApplicationLayerNodeBase
 {
@@ -30,7 +31,7 @@ module SensorNode extends ApplicationLayerNodeBase
         @display("i=misc/sensor2");
         @figure[submodules];
         numWlanInterfaces = default(1);
-        energyStorageType = default("IdealEpEnergyStorage");
-		wlan[*].typename = default("Ieee802154NarrowbandInterface");
-        wlan[*].radio.energyConsumerType = default("SensorStateBasedEpEnergyConsumer");
+        energyStorage.typename = default("IdealEpEnergyStorage");
+        wlan[*].typename = default("Ieee802154NarrowbandInterface");
+        wlan[*].radio.energyConsumer.typename = default("SensorStateBasedEpEnergyConsumer"); //FIXME does this consumer exist???
 }

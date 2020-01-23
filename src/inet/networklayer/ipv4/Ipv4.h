@@ -19,18 +19,21 @@
 #ifndef __INET_IPV4_H
 #define __INET_IPV4_H
 
-#include "inet/common/INETDefs.h"
+#include <list>
+#include <map>
+#include <set>
 
+#include "inet/common/INETDefs.h"
 #include "inet/common/IProtocolRegistrationListener.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/lifecycle/OperationalBase.h"
+#include "inet/common/packet/Message.h"
 #include "inet/networklayer/contract/IArp.h"
-#include "inet/networklayer/ipv4/Icmp.h"
-#include "inet/common/lifecycle/ILifecycle.h"
 #include "inet/networklayer/contract/INetfilter.h"
 #include "inet/networklayer/contract/INetworkProtocol.h"
-#include "inet/networklayer/ipv4/Ipv4Header_m.h"
+#include "inet/networklayer/ipv4/Icmp.h"
 #include "inet/networklayer/ipv4/Ipv4FragBuf.h"
-#include "inet/common/ProtocolMap.h"
-#include "inet/common/queue/QueueBase.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 
 namespace inet {
 
@@ -42,7 +45,7 @@ class IIpv4RoutingTable;
 /**
  * Implements the Ipv4 protocol.
  */
-class INET_API Ipv4 : public QueueBase, public NetfilterBase, public ILifecycle, public INetworkProtocol, public IProtocolRegistrationListener, public cListener
+class INET_API Ipv4 : public OperationalBase, public NetfilterBase, public INetworkProtocol, public IProtocolRegistrationListener, public cListener
 {
   public:
     /**
@@ -64,8 +67,11 @@ class INET_API Ipv4 : public QueueBase, public NetfilterBase, public ILifecycle,
     {
         int socketId = -1;
         int protocolId = -1;
+        Ipv4Address localAddress;
+        Ipv4Address remoteAddress;
 
-        SocketDescriptor(int socketId, int protocolId) : socketId(socketId), protocolId(protocolId) { }
+        SocketDescriptor(int socketId, int protocolId, Ipv4Address localAddress)
+                : socketId(socketId), protocolId(protocolId), localAddress(localAddress) { }
     };
 
   protected:
@@ -76,21 +82,21 @@ class INET_API Ipv4 : public QueueBase, public NetfilterBase, public ILifecycle,
     int transportInGateBaseId = -1;
 
     // config
-    CrcMode crcMode = static_cast<CrcMode>(-1);
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
     int defaultTimeToLive = -1;
     int defaultMCTimeToLive = -1;
     simtime_t fragmentTimeoutTime;
-    bool forceBroadcast = false;
-    bool useProxyARP = false;
+    bool limitedBroadcast = false;
+    std::string directBroadcastInterfaces = "";
+
+    cPatternMatcher directBroadcastInterfaceMatcher;
 
     // working vars
-    bool isUp = false;
-    long curFragmentId = -1;    // counter, used to assign unique fragmentIds to datagrams
+    uint16_t curFragmentId = -1;    // counter, used to assign unique fragmentIds to datagrams
     Ipv4FragBuf fragbuf;    // fragmentation reassembly buffer
     simtime_t lastCheckTime;    // when fragbuf was last checked for state fragments
-    ProtocolMapping mapping;    // where to send packets after decapsulation
+    std::set<const Protocol *> upperProtocols;    // where to send packets after decapsulation
     std::map<int, SocketDescriptor *> socketIdToSocketDescriptor;
-    std::multimap<int, SocketDescriptor *> protocolIdToSocketDescriptors;
 
     // ARP related
     PendingPackets pendingPackets;    // map indexed with IPv4Address for outbound packets waiting for ARP resolution
@@ -130,6 +136,10 @@ class INET_API Ipv4 : public QueueBase, public NetfilterBase, public ILifecycle,
     // utility: calculate and set CRC
     void setComputedCrc(Ptr<Ipv4Header>& ipv4Header);
 
+  public:
+    static void insertCrc(const Ptr<Ipv4Header>& ipv4Header);
+
+  protected:
     /**
      * Encapsulate packet coming from higher layers into Ipv4Header, using
      * the given control info. Override if you subclassed controlInfo and/or
@@ -193,7 +203,7 @@ class INET_API Ipv4 : public QueueBase, public NetfilterBase, public ILifecycle,
     virtual void reassembleAndDeliverFinish(Packet *packet);
 
     /**
-     * Decapsulate and return encapsulated packet after attaching Ipv4ControlInfo.
+     * Decapsulate packet.
      */
     virtual void decapsulate(Packet *packet);
 
@@ -231,13 +241,9 @@ class INET_API Ipv4 : public QueueBase, public NetfilterBase, public ILifecycle,
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void handleMessageWhenUp(cMessage *msg) override;
 
-    /**
-     * Processing of Ipv4 datagrams. Called when a datagram reaches the front
-     * of the queue.
-     */
-    virtual void endService(cPacket *packet) override;
+    void handleRequest(Request *request);
 
     // NetFilter functions:
 
@@ -289,17 +295,21 @@ class INET_API Ipv4 : public QueueBase, public NetfilterBase, public ILifecycle,
     virtual void reinjectQueuedDatagram(const Packet *datagram) override;
 
     /**
-     * ILifecycle method
+     * ILifecycle methods
      */
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual bool isInitializeStage(int stage) override { return stage == INITSTAGE_NETWORK_LAYER; }
+    virtual bool isModuleStartStage(int stage) override { return stage == ModuleStartOperation::STAGE_NETWORK_LAYER; }
+    virtual bool isModuleStopStage(int stage) override { return stage == ModuleStopOperation::STAGE_NETWORK_LAYER; }
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
     /// cListener method
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;
 
   protected:
-    virtual bool isNodeUp();
-    virtual void stop();
     virtual void start();
+    virtual void stop();
     virtual void flush();
 };
 

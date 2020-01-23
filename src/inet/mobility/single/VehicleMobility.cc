@@ -15,11 +15,12 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
+#include <fstream>
+#include <iostream>
+
 #include "inet/common/geometry/common/GeographicCoordinateSystem.h"
 #include "inet/common/geometry/common/Quaternion.h"
 #include "inet/mobility/single/VehicleMobility.h"
-#include <fstream>
-#include <iostream>
 
 namespace inet {
 
@@ -37,8 +38,6 @@ void VehicleMobility::initialize(int stage)
         targetPointIndex = 0;
         heading = 0;
         angularSpeed = 0;
-    }
-    else if (stage == INITSTAGE_PHYSICAL_ENVIRONMENT) {
         readWaypointsFromFile(par("waypointFile"));
         ground = findModuleFromPar<IGround>(par("groundModule"), this);
     }
@@ -78,10 +77,10 @@ void VehicleMobility::readWaypointsFromFile(const char *fileName)
                 z = value3;
             }
             else {
-                Coord playgroundCoordinate = coordinateSystem->computePlaygroundCoordinate(GeoCoord(deg(value1), deg(value2), m(value3)));
-                x = playgroundCoordinate.x;
-                y = playgroundCoordinate.y;
-                z = playgroundCoordinate.z;
+                Coord sceneCoordinate = coordinateSystem->computeSceneCoordinate(GeoCoord(deg(value1), deg(value2), m(value3)));
+                x = sceneCoordinate.x;
+                y = sceneCoordinate.y;
+                z = sceneCoordinate.z;
             }
             waypoints.push_back(Waypoint(x, y, z));
         }
@@ -146,7 +145,7 @@ void VehicleMobility::orient()
         // and finally rotating around the now-ground-orthogonal local Z
         quat *= Quaternion(Coord(0, 0, 1), angle);
 
-        lastOrientation = quat.toEulerAngles();
+        lastOrientation = quat;
     }
     else
         MovingMobilityBase::orient();

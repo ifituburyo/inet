@@ -18,11 +18,12 @@
 //
 
 #include <algorithm>
+
 #include "inet/common/INETUtils.h"
 #include "inet/common/IProtocolRegistrationListener.h"
-#include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/HopLimitTag_m.h"
 #include "inet/networklayer/common/IpProtocolId_m.h"
@@ -41,8 +42,8 @@
 #include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
 #endif
 
-#ifdef WITH_GENERIC
-#include "inet/networklayer/generic/GenericDatagram_m.h"
+#ifdef WITH_NEXTHOP
+#include "inet/networklayer/nexthop/NextHopForwardingHeader_m.h"
 #endif
 
 namespace inet {
@@ -70,7 +71,10 @@ Gpsr::~Gpsr()
 
 void Gpsr::initialize(int stage)
 {
-    cSimpleModule::initialize(stage);
+    if (stage == INITSTAGE_ROUTING_PROTOCOLS)
+        addressType = getSelfAddress().getAddressType();
+
+    RoutingProtocolBase::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL) {
         // Gpsr parameters
@@ -90,7 +94,6 @@ void Gpsr::initialize(int stage)
         displayBubbles = par("displayBubbles");
         // context
         host = getContainingNode(this);
-        nodeStatus = dynamic_cast<NodeStatus *>(host->getSubmodule("status"));
         interfaceTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
         outputInterface = par("outputInterface");
         mobility = check_and_cast<IMobility *>(host->getSubmodule("mobility"));
@@ -108,18 +111,12 @@ void Gpsr::initialize(int stage)
         registerService(Protocol::manet, nullptr, gate("ipIn"));
         registerProtocol(Protocol::manet, gate("ipOut"), nullptr);
         host->subscribe(linkBrokenSignal, this);
-        addressType = getSelfAddress().getAddressType();
         networkProtocol->registerHook(0, this);
-        if (isNodeUp()) {
-            configureInterfaces();
-            storeSelfPositionInGlobalRegistry();
-            scheduleBeaconTimer();
-        }
         WATCH(neighborPositionTable);
     }
 }
 
-void Gpsr::handleMessage(cMessage *message)
+void Gpsr::handleMessageWhenUp(cMessage *message)
 {
     if (message->isSelfMessage())
         processSelfMessage(message);
@@ -144,7 +141,7 @@ void Gpsr::processSelfMessage(cMessage *message)
 void Gpsr::processMessage(cMessage *message)
 {
     if (auto pk = dynamic_cast<Packet *>(message))
-        processUDPPacket(pk);
+        processUdpPacket(pk);
     else
         throw cRuntimeError("Unknown message");
 }
@@ -206,12 +203,12 @@ void Gpsr::processPurgeNeighborsTimer()
 // handling UDP packets
 //
 
-void Gpsr::sendUDPPacket(Packet *packet)
+void Gpsr::sendUdpPacket(Packet *packet)
 {
     send(packet, "ipOut");
 }
 
-void Gpsr::processUDPPacket(Packet *packet)
+void Gpsr::processUdpPacket(Packet *packet)
 {
     packet->popAtFront<UdpHeader>();
     processBeacon(packet);
@@ -239,14 +236,15 @@ void Gpsr::sendBeacon(const Ptr<GpsrBeacon>& beacon)
     auto udpHeader = makeShared<UdpHeader>();
     udpHeader->setSourcePort(GPSR_UDP_PORT);
     udpHeader->setDestinationPort(GPSR_UDP_PORT);
+    udpHeader->setCrcMode(CRC_DISABLED);
     udpPacket->insertAtFront(udpHeader);
-    auto addresses = udpPacket->addTagIfAbsent<L3AddressReq>();
+    auto addresses = udpPacket->addTag<L3AddressReq>();
     addresses->setSrcAddress(getSelfAddress());
     addresses->setDestAddress(addressType->getLinkLocalManetRoutersMulticastAddress());
-    udpPacket->addTagIfAbsent<HopLimitReq>()->setHopLimit(255);
-    udpPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::manet);
-    udpPacket->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(addressType->getNetworkProtocol());
-    sendUDPPacket(udpPacket);
+    udpPacket->addTag<HopLimitReq>()->setHopLimit(255);
+    udpPacket->addTag<PacketProtocolTag>()->setProtocol(&Protocol::manet);
+    udpPacket->addTag<DispatchProtocolReq>()->setProtocol(addressType->getNetworkProtocol());
+    sendUdpPacket(udpPacket);
 }
 
 void Gpsr::processBeacon(Packet *packet)
@@ -286,11 +284,6 @@ int Gpsr::computeOptionLength(GpsrOption *option)
 //
 // configuration
 //
-
-bool Gpsr::isNodeUp() const
-{
-    return !nodeStatus || nodeStatus->getState() == NodeStatus::UP;
-}
 
 void Gpsr::configureInterfaces()
 {
@@ -396,9 +389,11 @@ L3Address Gpsr::getSelfAddress() const
     if (ret.getType() == L3Address::IPv6) {
         for (int i = 0; i < interfaceTable->getNumInterfaces(); i++) {
             InterfaceEntry *ie = interfaceTable->getInterface(i);
-            if ((!ie->isLoopback()) && ie->ipv6Data() != nullptr) {
-                ret = interfaceTable->getInterface(i)->ipv6Data()->getPreferredAddress();
-                break;
+            if ((!ie->isLoopback())) {
+                if (auto ipv6Data = ie->findProtocolData<Ipv6InterfaceData>()) {
+                    ret = ipv6Data->getPreferredAddress();
+                    break;
+                }
             }
         }
     }
@@ -492,20 +487,18 @@ std::vector<L3Address> Gpsr::getPlanarNeighborsCounterClockwise(double startAngl
 // next hop
 //
 
-L3Address Gpsr::findNextHop(const Ptr<const NetworkHeaderBase>& networkHeader, const L3Address& destination)
+L3Address Gpsr::findNextHop(const L3Address& destination, GpsrOption *gpsrOption)
 {
-    const GpsrOption *gpsrOption = getGpsrOptionFromNetworkDatagram(networkHeader);
     switch (gpsrOption->getRoutingMode()) {
-        case GPSR_GREEDY_ROUTING: return findGreedyRoutingNextHop(networkHeader, destination);
-        case GPSR_PERIMETER_ROUTING: return findPerimeterRoutingNextHop(networkHeader, destination);
+        case GPSR_GREEDY_ROUTING: return findGreedyRoutingNextHop(destination, gpsrOption);
+        case GPSR_PERIMETER_ROUTING: return findPerimeterRoutingNextHop(destination, gpsrOption);
         default: throw cRuntimeError("Unknown routing mode");
     }
 }
 
-L3Address Gpsr::findGreedyRoutingNextHop(const Ptr<const NetworkHeaderBase>& networkHeader, const L3Address& destination)
+L3Address Gpsr::findGreedyRoutingNextHop(const L3Address& destination, GpsrOption *gpsrOption)
 {
     EV_DEBUG << "Finding next hop using greedy routing: destination = " << destination << endl;
-    const GpsrOption *gpsrOption = getGpsrOptionFromNetworkDatagram(networkHeader);
     L3Address selfAddress = getSelfAddress();
     Coord selfPosition = mobility->getCurrentPosition();
     Coord destinationPosition = gpsrOption->getDestinationPosition();
@@ -524,22 +517,20 @@ L3Address Gpsr::findGreedyRoutingNextHop(const Ptr<const NetworkHeaderBase>& net
         EV_DEBUG << "Switching to perimeter routing: destination = " << destination << endl;
         if (displayBubbles && hasGUI())
             getContainingNode(host)->bubble("Switching to perimeter routing");
-        // KLUDGE: TODO: const_cast<GpsrOption *>(gpsrOption)
-        const_cast<GpsrOption *>(gpsrOption)->setRoutingMode(GPSR_PERIMETER_ROUTING);
-        const_cast<GpsrOption *>(gpsrOption)->setPerimeterRoutingStartPosition(selfPosition);
-        const_cast<GpsrOption *>(gpsrOption)->setPerimeterRoutingForwardPosition(selfPosition);
-        const_cast<GpsrOption *>(gpsrOption)->setCurrentFaceFirstSenderAddress(selfAddress);
-        const_cast<GpsrOption *>(gpsrOption)->setCurrentFaceFirstReceiverAddress(L3Address());
-        return findPerimeterRoutingNextHop(networkHeader, destination);
+        gpsrOption->setRoutingMode(GPSR_PERIMETER_ROUTING);
+        gpsrOption->setPerimeterRoutingStartPosition(selfPosition);
+        gpsrOption->setPerimeterRoutingForwardPosition(selfPosition);
+        gpsrOption->setCurrentFaceFirstSenderAddress(selfAddress);
+        gpsrOption->setCurrentFaceFirstReceiverAddress(L3Address());
+        return findPerimeterRoutingNextHop(destination, gpsrOption);
     }
     else
         return bestNeighbor;
 }
 
-L3Address Gpsr::findPerimeterRoutingNextHop(const Ptr<const NetworkHeaderBase>& networkHeader, const L3Address& destination)
+L3Address Gpsr::findPerimeterRoutingNextHop(const L3Address& destination, GpsrOption *gpsrOption)
 {
     EV_DEBUG << "Finding next hop using perimeter routing: destination = " << destination << endl;
-    const GpsrOption *gpsrOption = getGpsrOptionFromNetworkDatagram(networkHeader);
     L3Address selfAddress = getSelfAddress();
     Coord selfPosition = mobility->getCurrentPosition();
     Coord perimeterRoutingStartPosition = gpsrOption->getPerimeterRoutingStartPosition();
@@ -550,18 +541,17 @@ L3Address Gpsr::findPerimeterRoutingNextHop(const Ptr<const NetworkHeaderBase>& 
         EV_DEBUG << "Switching to greedy routing: destination = " << destination << endl;
         if (displayBubbles && hasGUI())
             getContainingNode(host)->bubble("Switching to greedy routing");
-        // KLUDGE: TODO: const_cast<GpsrOption *>(gpsrOption)
-        const_cast<GpsrOption *>(gpsrOption)->setRoutingMode(GPSR_GREEDY_ROUTING);
-        const_cast<GpsrOption *>(gpsrOption)->setPerimeterRoutingStartPosition(Coord());
-        const_cast<GpsrOption *>(gpsrOption)->setPerimeterRoutingForwardPosition(Coord());
-        const_cast<GpsrOption *>(gpsrOption)->setCurrentFaceFirstSenderAddress(L3Address());
-        const_cast<GpsrOption *>(gpsrOption)->setCurrentFaceFirstReceiverAddress(L3Address());
-        return findGreedyRoutingNextHop(networkHeader, destination);
+        gpsrOption->setRoutingMode(GPSR_GREEDY_ROUTING);
+        gpsrOption->setPerimeterRoutingStartPosition(Coord());
+        gpsrOption->setPerimeterRoutingForwardPosition(Coord());
+        gpsrOption->setCurrentFaceFirstSenderAddress(L3Address());
+        gpsrOption->setCurrentFaceFirstReceiverAddress(L3Address());
+        return findGreedyRoutingNextHop(destination, gpsrOption);
     }
     else {
         const L3Address& firstSenderAddress = gpsrOption->getCurrentFaceFirstSenderAddress();
         const L3Address& firstReceiverAddress = gpsrOption->getCurrentFaceFirstReceiverAddress();
-        auto senderNeighborAddress = getSenderNeighborAddress(networkHeader);
+        auto senderNeighborAddress = gpsrOption->getSenderAddress();
         auto neighborAngle = senderNeighborAddress.isUnspecified() ? getVectorAngle(destinationPosition - mobility->getCurrentPosition()) : getNeighborAngle(senderNeighborAddress);
         L3Address selectedNeighborAddress;
         std::vector<L3Address> neighborAddresses = getPlanarNeighborsCounterClockwise(neighborAngle);
@@ -574,10 +564,9 @@ L3Address Gpsr::findPerimeterRoutingNextHop(const Ptr<const NetworkHeaderBase>& 
             }
             else {
                 EV_DEBUG << "Edge to next hop intersects: intersection = " << intersection << ", nextNeighbor = " << selectedNeighborAddress << ", firstSender = " << firstSenderAddress << ", firstReceiver = " << firstReceiverAddress << ", destination = " << destination << endl;
-                // KLUDGE: TODO: const_cast<GpsrOption *>(gpsrOption)
-                const_cast<GpsrOption *>(gpsrOption)->setCurrentFaceFirstSenderAddress(selfAddress);
-                const_cast<GpsrOption *>(gpsrOption)->setCurrentFaceFirstReceiverAddress(L3Address());
-                const_cast<GpsrOption *>(gpsrOption)->setPerimeterRoutingForwardPosition(intersection);
+                gpsrOption->setCurrentFaceFirstSenderAddress(selfAddress);
+                gpsrOption->setCurrentFaceFirstReceiverAddress(L3Address());
+                gpsrOption->setPerimeterRoutingForwardPosition(intersection);
             }
         }
         if (selectedNeighborAddress.isUnspecified()) {
@@ -592,8 +581,7 @@ L3Address Gpsr::findPerimeterRoutingNextHop(const Ptr<const NetworkHeaderBase>& 
         }
         else {
             if (gpsrOption->getCurrentFaceFirstReceiverAddress().isUnspecified())
-                // KLUDGE: TODO: const_cast<GpsrOption *>(gpsrOption)
-                const_cast<GpsrOption *>(gpsrOption)->setCurrentFaceFirstReceiverAddress(selectedNeighborAddress);
+                gpsrOption->setCurrentFaceFirstReceiverAddress(selectedNeighborAddress);
             return selectedNeighborAddress;
         }
     }
@@ -603,13 +591,13 @@ L3Address Gpsr::findPerimeterRoutingNextHop(const Ptr<const NetworkHeaderBase>& 
 // routing
 //
 
-INetfilter::IHook::Result Gpsr::routeDatagram(Packet *datagram)
+INetfilter::IHook::Result Gpsr::routeDatagram(Packet *datagram, GpsrOption *gpsrOption)
 {
     const auto& networkHeader = getNetworkProtocolHeader(datagram);
     const L3Address& source = networkHeader->getSourceAddress();
     const L3Address& destination = networkHeader->getDestinationAddress();
     EV_INFO << "Finding next hop: source = " << source << ", destination = " << destination << endl;
-    auto nextHop = findNextHop(networkHeader, destination);
+    auto nextHop = findNextHop(destination, gpsrOption);
     datagram->addTagIfAbsent<NextHopAddressReq>()->setNextHopAddress(nextHop);
     if (nextHop.isUnspecified()) {
         EV_WARN << "No next hop found, dropping packet: source = " << source << ", destination = " << destination << endl;
@@ -619,63 +607,59 @@ INetfilter::IHook::Result Gpsr::routeDatagram(Packet *datagram)
     }
     else {
         EV_INFO << "Next hop found: source = " << source << ", destination = " << destination << ", nextHop: " << nextHop << endl;
-        const GpsrOption *gpsrOption = getGpsrOptionFromNetworkDatagram(networkHeader);
-        // KLUDGE: TODO: const_cast<GpsrOption *>(gpsrOption)
-        const_cast<GpsrOption *>(gpsrOption)->setSenderAddress(getSelfAddress());
-        auto interfaceEntry = interfaceTable->getInterfaceByName(outputInterface);
-        ASSERT(interfaceEntry);
+        gpsrOption->setSenderAddress(getSelfAddress());
+        auto interfaceEntry = CHK(interfaceTable->findInterfaceByName(outputInterface));
         datagram->addTagIfAbsent<InterfaceReq>()->setInterfaceId(interfaceEntry->getInterfaceId());
         return ACCEPT;
     }
 }
 
-void Gpsr::setGpsrOptionOnNetworkDatagram(Packet *packet, const Ptr<const NetworkHeaderBase>& nwHeader)
+void Gpsr::setGpsrOptionOnNetworkDatagram(Packet *packet, const Ptr<const NetworkHeaderBase>& networkHeader, GpsrOption *gpsrOption)
 {
     packet->trimFront();
-    GpsrOption *gpsrOption = createGpsrOption(nwHeader->getDestinationAddress());
 #ifdef WITH_IPv4
-    if (dynamicPtrCast<const Ipv4Header>(nwHeader)) {
+    if (dynamicPtrCast<const Ipv4Header>(networkHeader)) {
         auto ipv4Header = removeNetworkProtocolHeader<Ipv4Header>(packet);
         gpsrOption->setType(IPOPTION_TLV_GPSR);
-        int oldHlen = ipv4Header->calculateHeaderByteLength();
+        B oldHlen = ipv4Header->calculateHeaderByteLength();
         ASSERT(ipv4Header->getHeaderLength() == oldHlen);
         ipv4Header->addOption(gpsrOption);
-        int newHlen = ipv4Header->calculateHeaderByteLength();
+        B newHlen = ipv4Header->calculateHeaderByteLength();
         ipv4Header->setHeaderLength(newHlen);
-        ipv4Header->setChunkLength(ipv4Header->getChunkLength() + B(newHlen - oldHlen));  // it was ipv4Header->addByteLength(newHlen - oldHlen);
+        ipv4Header->addChunkLength(newHlen - oldHlen);
         ipv4Header->setTotalLengthField(ipv4Header->getTotalLengthField() + newHlen - oldHlen);
         insertNetworkProtocolHeader(packet, Protocol::ipv4, ipv4Header);
     }
     else
 #endif
 #ifdef WITH_IPv6
-    if (dynamicPtrCast<const Ipv6Header>(nwHeader)) {
+    if (dynamicPtrCast<const Ipv6Header>(networkHeader)) {
         auto ipv6Header = removeNetworkProtocolHeader<Ipv6Header>(packet);
         gpsrOption->setType(IPv6TLVOPTION_TLV_GPSR);
-        int oldHlen = ipv6Header->calculateHeaderByteLength();
+        B oldHlen = ipv6Header->calculateHeaderByteLength();
         Ipv6HopByHopOptionsHeader *hdr = check_and_cast_nullable<Ipv6HopByHopOptionsHeader *>(ipv6Header->findExtensionHeaderByTypeForUpdate(IP_PROT_IPv6EXT_HOP));
         if (hdr == nullptr) {
             hdr = new Ipv6HopByHopOptionsHeader();
-            hdr->setByteLength(8);
+            hdr->setByteLength(B(8));
             ipv6Header->addExtensionHeader(hdr);
         }
         hdr->getTlvOptionsForUpdate().insertTlvOption(gpsrOption);
-        hdr->setByteLength(utils::roundUp(2 + hdr->getTlvOptions().getLength(), 8));
-        int newHlen = ipv6Header->calculateHeaderByteLength();
-        ipv6Header->setChunkLength(ipv6Header->getChunkLength() + B(newHlen - oldHlen));
+        hdr->setByteLength(B(utils::roundUp(2 + B(hdr->getTlvOptions().getLength()).get(), 8)));
+        B newHlen = ipv6Header->calculateHeaderByteLength();
+        ipv6Header->addChunkLength(newHlen - oldHlen);
         insertNetworkProtocolHeader(packet, Protocol::ipv6, ipv6Header);
     }
     else
 #endif
-#ifdef WITH_GENERIC
-    if (dynamicPtrCast<const GenericDatagramHeader>(nwHeader)) {
-        auto gnpHeader = removeNetworkProtocolHeader<GenericDatagramHeader>(packet);
-        gpsrOption->setType(GENERIC_TLVOPTION_TLV_GPSR);
-        int oldHlen = gnpHeader->getTlvOptions().getLength();
-        gnpHeader->getTlvOptionsForUpdate().insertTlvOption(gpsrOption);
-        int newHlen = gnpHeader->getTlvOptions().getLength();
-        gnpHeader->setChunkLength(gnpHeader->getChunkLength() + B(newHlen - oldHlen));
-        insertNetworkProtocolHeader(packet, Protocol::gnp, gnpHeader);
+#ifdef WITH_NEXTHOP
+    if (dynamicPtrCast<const NextHopForwardingHeader>(networkHeader)) {
+        auto nextHopHeader = removeNetworkProtocolHeader<NextHopForwardingHeader>(packet);
+        gpsrOption->setType(NEXTHOP_TLVOPTION_TLV_GPSR);
+        int oldHlen = nextHopHeader->getTlvOptions().getLength();
+        nextHopHeader->getTlvOptionsForUpdate().insertTlvOption(gpsrOption);
+        int newHlen = nextHopHeader->getTlvOptions().getLength();
+        nextHopHeader->addChunkLength(B(newHlen - oldHlen));
+        insertNetworkProtocolHeader(packet, Protocol::nextHopForwarding, nextHopHeader);
     }
     else
 #endif
@@ -704,11 +688,11 @@ const GpsrOption *Gpsr::findGpsrOptionInNetworkDatagram(const Ptr<const NetworkH
     }
     else
 #endif
-#ifdef WITH_GENERIC
-    if (auto gnpHeader = dynamicPtrCast<const GenericDatagramHeader>(networkHeader)) {
-        int i = (gnpHeader->getTlvOptions().findByType(GENERIC_TLVOPTION_TLV_GPSR));
+#ifdef WITH_NEXTHOP
+    if (auto nextHopHeader = dynamicPtrCast<const NextHopForwardingHeader>(networkHeader)) {
+        int i = (nextHopHeader->getTlvOptions().findByType(NEXTHOP_TLVOPTION_TLV_GPSR));
         if (i >= 0)
-            gpsrOption = check_and_cast<const GpsrOption *>(gnpHeader->getTlvOptions().getTlvOption(i));
+            gpsrOption = check_and_cast<const GpsrOption *>(nextHopHeader->getTlvOptions().getTlvOption(i));
     }
     else
 #endif
@@ -738,11 +722,11 @@ GpsrOption *Gpsr::findGpsrOptionInNetworkDatagramForUpdate(const Ptr<NetworkHead
     }
     else
 #endif
-#ifdef WITH_GENERIC
-    if (auto gnpHeader = dynamicPtrCast<GenericDatagramHeader>(networkHeader)) {
-        int i = (gnpHeader->getTlvOptions().findByType(GENERIC_TLVOPTION_TLV_GPSR));
+#ifdef WITH_NEXTHOP
+    if (auto nextHopHeader = dynamicPtrCast<NextHopForwardingHeader>(networkHeader)) {
+        int i = (nextHopHeader->getTlvOptions().findByType(NEXTHOP_TLVOPTION_TLV_GPSR));
         if (i >= 0)
-            gpsrOption = check_and_cast<GpsrOption *>(gnpHeader->getTlvOptionsForUpdate().getTlvOptionForUpdate(i));
+            gpsrOption = check_and_cast<GpsrOption *>(nextHopHeader->getTlvOptionsForUpdate().getTlvOptionForUpdate(i));
     }
     else
 #endif
@@ -778,8 +762,11 @@ INetfilter::IHook::Result Gpsr::datagramPreRoutingHook(Packet *datagram)
     const L3Address& destination = networkHeader->getDestinationAddress();
     if (destination.isMulticast() || destination.isBroadcast() || routingTable->isLocalAddress(destination))
         return ACCEPT;
-    else
-        return routeDatagram(datagram);
+    else {
+        // KLUDGE: this allows overwriting the GPSR option inside
+        auto gpsrOption = const_cast<GpsrOption *>(getGpsrOptionFromNetworkDatagram(networkHeader));
+        return routeDatagram(datagram, gpsrOption);
+    }
 }
 
 INetfilter::IHook::Result Gpsr::datagramLocalOutHook(Packet *packet)
@@ -790,8 +777,9 @@ INetfilter::IHook::Result Gpsr::datagramLocalOutHook(Packet *packet)
     if (destination.isMulticast() || destination.isBroadcast() || routingTable->isLocalAddress(destination))
         return ACCEPT;
     else {
-        setGpsrOptionOnNetworkDatagram(packet, networkHeader);
-        return routeDatagram(packet);
+        GpsrOption *gpsrOption = createGpsrOption(networkHeader->getDestinationAddress());
+        setGpsrOptionOnNetworkDatagram(packet, networkHeader, gpsrOption);
+        return routeDatagram(packet, gpsrOption);
     }
 }
 
@@ -799,34 +787,26 @@ INetfilter::IHook::Result Gpsr::datagramLocalOutHook(Packet *packet)
 // lifecycle
 //
 
-bool Gpsr::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void Gpsr::handleStartOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER) {
-            configureInterfaces();
-            storeSelfPositionInGlobalRegistry();
-            scheduleBeaconTimer();
-        }
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
-            // TODO: send a beacon to remove ourself from peers neighbor position table
-            neighborPositionTable.clear();
-            cancelEvent(beaconTimer);
-            cancelEvent(purgeNeighborsTimer);
-        }
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
-            neighborPositionTable.clear();
-            cancelEvent(beaconTimer);
-            cancelEvent(purgeNeighborsTimer);
-        }
-    }
-    else
-        throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
+    configureInterfaces();
+    storeSelfPositionInGlobalRegistry();
+    scheduleBeaconTimer();
+}
+
+void Gpsr::handleStopOperation(LifecycleOperation *operation)
+{
+    // TODO: send a beacon to remove ourself from peers neighbor position table
+    neighborPositionTable.clear();
+    cancelEvent(beaconTimer);
+    cancelEvent(purgeNeighborsTimer);
+}
+
+void Gpsr::handleCrashOperation(LifecycleOperation *operation)
+{
+    neighborPositionTable.clear();
+    cancelEvent(beaconTimer);
+    cancelEvent(purgeNeighborsTimer);
 }
 
 //
@@ -843,4 +823,3 @@ void Gpsr::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj,
 }
 
 } // namespace inet
-

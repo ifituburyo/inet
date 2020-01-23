@@ -15,8 +15,8 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/networklayer/ipv6/Ipv6Header.h"
 #include "inet/networklayer/ipv6/Ipv6ExtensionHeaders_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header.h"
 
 namespace inet {
 
@@ -45,7 +45,7 @@ const Ipv6ExtensionHeader *Ipv6Header::findExtensionHeaderByType(IpProtocolId ex
 
 void Ipv6Header::addExtensionHeader(Ipv6ExtensionHeader *eh)
 {
-    ASSERT((eh->getByteLength() >= 1) && (eh->getByteLength() % 8 == 0));
+    ASSERT((eh->getByteLength() >= B(1)) && (eh->getByteLength().get() % 8 == 0));
     int thisOrder = eh->getOrder();
     size_t i;
     for (i = 0; i < extensionHeader_arraysize; i++) {
@@ -101,9 +101,9 @@ int Ipv6ExtensionHeader::getOrder() const
     }
 }
 
-int Ipv6Header::calculateHeaderByteLength() const
+B Ipv6Header::calculateHeaderByteLength() const
 {
-    int len = 40;
+    B len = B(40);
     for (size_t i = 0; i < extensionHeader_arraysize; i++)
         len += extensionHeader[i]->getByteLength();
     return len;
@@ -112,7 +112,7 @@ int Ipv6Header::calculateHeaderByteLength() const
 /**
  * Note: it is assumed that headers are ordered as described in RFC 2460 4.1
  */
-int Ipv6Header::calculateUnfragmentableHeaderByteLength() const
+B Ipv6Header::calculateUnfragmentableHeaderByteLength() const
 {
     size_t firstFragmentableExtensionIndex = 0;
     for (size_t i = extensionHeader_arraysize; i > 0; i--) {
@@ -123,7 +123,7 @@ int Ipv6Header::calculateUnfragmentableHeaderByteLength() const
         }
     }
 
-    int len = 40;
+    B len = B(40);
     for (size_t i = 0; i < firstFragmentableExtensionIndex; i++)
         len += extensionHeader[i]->getByteLength();
     return len;
@@ -132,9 +132,9 @@ int Ipv6Header::calculateUnfragmentableHeaderByteLength() const
 /**
  * Note: it is assumed that headers are ordered as described in RFC 2460 4.1
  */
-int Ipv6Header::calculateFragmentLength() const
+B Ipv6Header::calculateFragmentLength() const
 {
-    int len = B(getChunkLength()).get() - IPv6_HEADER_BYTES;
+    B len = getChunkLength() - IPv6_HEADER_BYTES;
     size_t i;
     for (i = 0; i < extensionHeader_arraysize; i++) {
         len -= extensionHeader[i]->getByteLength();
@@ -171,15 +171,24 @@ Ipv6ExtensionHeader *Ipv6Header::removeExtensionHeader(IpProtocolId extensionTyp
     return nullptr;
 }
 
-short Ipv6Header::getTrafficClass() const
+short Ipv6Header::getDscp() const
 {
-    return (getExplicitCongestionNotification() & 0xc0) | (getDiffServCodePoint() & 0x3f);
+    return (trafficClass & 0xfc) >> 2;
 }
 
-void Ipv6Header::setTrafficClass(short trafficClass)
+void Ipv6Header::setDscp(short dscp)
 {
-    setDiffServCodePoint(trafficClass & 0x3f);
-    setExplicitCongestionNotification((trafficClass >> 6) & 0x03);
+    setTrafficClass(((dscp & 0x3f) << 2) | (trafficClass & 0x03));
+}
+
+short Ipv6Header::getEcn() const
+{
+    return trafficClass & 0x03;
+}
+
+void Ipv6Header::setEcn(short ecn)
+{
+    setTrafficClass((trafficClass & 0xfc) | (ecn & 0x03));
 }
 
 std::ostream& operator<<(std::ostream& out, const Ipv6ExtensionHeader& h)

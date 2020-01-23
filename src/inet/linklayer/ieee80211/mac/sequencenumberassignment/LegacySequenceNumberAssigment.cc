@@ -15,7 +15,7 @@
 // along with this program; if not, see http://www.gnu.org/licenses/.
 // 
 
-#include "LegacySequenceNumberAssigment.h"
+#include "inet/linklayer/ieee80211/mac/sequencenumberassignment/LegacySequenceNumberAssigment.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -28,7 +28,7 @@ namespace ieee80211 {
 void LegacySequenceNumberAssigment::assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header)
 {
     ASSERT(header->getType() != ST_DATA_WITH_QOS);
-    lastSeqNum = (lastSeqNum + 1) % 4096;
+    lastSeqNum = lastSeqNum + 1;
     header->setSequenceNumber(lastSeqNum);
 }
 

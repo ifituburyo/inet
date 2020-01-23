@@ -9,10 +9,9 @@ based retransmissions.
 %inifile: omnetpp.ini
 
 [General]
-network=multihomed
+network = inet.test.moduletest.lib.multihomed
 cmdenv-event-banners=false
 cmdenv-express-mode = false
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 
 #omnetpp 5.0 - 5.1 compatibility:

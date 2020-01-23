@@ -13,19 +13,20 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program; if not, see http://www.gnu.org/licenses/.
-// 
+//
 
 package inet.linklayer.ieee80211.mac.originator;
 
-simple OriginatorQosAckPolicy 
+simple OriginatorQosAckPolicy
 {
     parameters:
         string rateSelectionModule;
 
-        int blockAckReqTreshold = default(5);
+        int blockAckReqThreshold = default(5);
         int maxBlockAckPolicyFrameLength @unit(B) = default(1000B);
         double blockAckTimeout @unit(s) = default(-1s);
         double ackTimeout @unit(s) = default(-1s);
-        
+
         @display("i=block/control");
 }
+

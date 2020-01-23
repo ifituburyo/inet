@@ -18,6 +18,9 @@
 
 package inet.applications.contract;
 
+//
+// Generic application interface.
+//
 moduleinterface IApp
 {
     parameters:
@@ -26,3 +29,4 @@ moduleinterface IApp
         input socketIn;
         output socketOut;
 }
+

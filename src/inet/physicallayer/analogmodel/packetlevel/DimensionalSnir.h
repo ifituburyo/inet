@@ -18,9 +18,9 @@
 #ifndef __INET_DIMENSIONALSNIR_H
 #define __INET_DIMENSIONALSNIR_H
 
-#include "inet/physicallayer/base/packetlevel/SnirBase.h"
-#include "inet/physicallayer/analogmodel/packetlevel/DimensionalReception.h"
 #include "inet/physicallayer/analogmodel/packetlevel/DimensionalNoise.h"
+#include "inet/physicallayer/analogmodel/packetlevel/DimensionalReception.h"
+#include "inet/physicallayer/base/packetlevel/SnirBase.h"
 
 namespace inet {
 
@@ -31,10 +31,12 @@ class INET_API DimensionalSnir : public SnirBase
   protected:
     mutable double minSNIR;
     mutable double maxSNIR;
+    mutable double meanSNIR;
 
   protected:
     virtual double computeMin() const;
     virtual double computeMax() const;
+    virtual double computeMean() const;
 
   public:
     DimensionalSnir(const DimensionalReception *reception, const DimensionalNoise *noise);
@@ -43,6 +45,7 @@ class INET_API DimensionalSnir : public SnirBase
 
     virtual double getMin() const override;
     virtual double getMax() const override;
+    virtual double getMean() const override;
 };
 
 } // namespace physicallayer

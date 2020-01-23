@@ -15,9 +15,8 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/networklayer/ipv4/Ipv4Header_m.h"
-
 #include "inet/common/INETUtils.h"
+#include "inet/networklayer/ipv4/Ipv4Header_m.h"
 
 namespace inet {
 
@@ -48,25 +47,33 @@ void Ipv4Header::addOption(TlvOptionBase *opt, int atPos)
     options.insertTlvOption(atPos, opt);
 }
 
-int Ipv4Header::calculateHeaderByteLength() const
+B Ipv4Header::calculateHeaderByteLength() const
 {
     int length = utils::roundUp(20 + options.getLength(), 4);
     ASSERT(length >= 20 && length <= 60 && (length % 4 == 0));
 
-    return length;
+    return B(length);
 }
 
-short Ipv4Header::getTypeOfService() const
+short Ipv4Header::getDscp() const
 {
-    return ((getExplicitCongestionNotification() << 6) & 0xc0) | (getDiffServCodePoint() & 0x3f);
+    return (typeOfService & 0xfc) >> 2;
 }
 
-void Ipv4Header::setTypeOfService(short trafficClass)
+void Ipv4Header::setDscp(short dscp)
 {
-    setDiffServCodePoint(trafficClass & 0x3f);
-    setExplicitCongestionNotification((trafficClass >> 6) & 0x03);
+    setTypeOfService(((dscp & 0x3f) << 2) | (typeOfService & 0x03));
 }
 
+short Ipv4Header::getEcn() const
+{
+    return typeOfService & 0x03;
+}
+
+void Ipv4Header::setEcn(short ecn)
+{
+    setTypeOfService((typeOfService & 0xfc) | (ecn & 0x03));
+}
 
 } // namespace inet
 

@@ -19,8 +19,8 @@ package inet.examples.ieee802154;
 
 import inet.applications.generic.PRRTrafGen;
 import inet.node.inet.WirelessHost;
-import inet.linklayer.ieee802154.Ieee802154NarrowbandNic;
-import inet.routing.gpsr.GPSR;
+import inet.linklayer.ieee802154.Ieee802154NarrowbandInterface;
+import inet.routing.gpsr.Gpsr;
 
 //
 // A wireless host containing an Ieee802154NarrowbandNic,
@@ -31,10 +31,10 @@ module IEEE802154ExampleHost extends WirelessHost
     parameters:
         hasIpv4 = false;
         hasGn = true;
-        networkLayerType = "GenericNetworkLayer";
+        **.generic.typename = "NextHopNetworkLayer";
         forwarding = default(true);
 
-        wlan[0].typename = default("WirelessNic");
+        wlan[0].typename = default("WirelessInterface");
         wlan[0].radioType = default("Ieee802154NarrowbandScalarRadio");
 
         trafficgen.protocol = 17;
@@ -52,14 +52,14 @@ module IEEE802154ExampleHost extends WirelessHost
             @display("p=188,287");
         }
 
-        gpsr: GPSR {
+        gpsr: Gpsr {
             @display("p=739,339");
         }
 
     connections:
-        trafficgen.ipOut --> tn.upperLayerIn++;
-        trafficgen.ipIn <-- tn.upperLayerOut++;
+        trafficgen.ipOut --> tn.in++;
+        trafficgen.ipIn <-- tn.out++;
 
-        gpsr.ipOut --> tn.upperLayerIn++;
-        gpsr.ipIn <-- tn.upperLayerOut++;
+        gpsr.ipOut --> tn.in++;
+        gpsr.ipIn <-- tn.out++;
 }

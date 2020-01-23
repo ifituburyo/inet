@@ -36,7 +36,7 @@ namespace inet {
  * and UdpVideoStreamServer starts streaming to them. Capable of handling
  * streaming to multiple clients.
  */
-class INET_API UdpVideoStreamServer : public ApplicationBase
+class INET_API UdpVideoStreamServer : public ApplicationBase, public UdpSocket::ICallback
 {
   public:
     struct VideoStreamData
@@ -77,9 +77,13 @@ class INET_API UdpVideoStreamServer : public ApplicationBase
 
     virtual void clearStreams();
 
-    virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
-    virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
-    virtual void handleNodeCrash() override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
+
+    virtual void socketDataArrived(UdpSocket *socket, Packet *packet) override;
+    virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) override;
+    virtual void socketClosed(UdpSocket *socket) override;
 
   public:
     UdpVideoStreamServer() {}

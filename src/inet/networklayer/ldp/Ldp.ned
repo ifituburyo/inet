@@ -13,11 +13,9 @@
 // See the GNU Lesser General Public License for more details.
 //
 
-
 package inet.networklayer.ldp;
 
-import inet.networklayer.mpls.IIngressClassifier;
-
+import inet.applications.contract.IApp;
 
 //
 // Handles and processes LDP messages.
@@ -29,7 +27,7 @@ import inet.networklayer.mpls.IIngressClassifier;
 //
 // Operations
 //
-// All Ldp message types are subclassed from ~LdpPacket, and include
+// All LDP message types are subclassed from ~LdpPacket, and include
 // ~LdpHello, ~LdpNotify, ~LdpLabelRequest, ~LdpIni and ~LdpAddress.
 //
 // Message processing in the ~Ldp module is explained in
@@ -37,7 +35,7 @@ import inet.networklayer.mpls.IIngressClassifier;
 //
 // @author Andras Varga, Vojta Janota
 //
-simple Ldp like IIngressClassifier     //FIXME like IApp
+simple Ldp like IApp
 {
     parameters:
         string interfaceTableModule;   // The path to the InterfaceTable module
@@ -47,10 +45,12 @@ simple Ldp like IIngressClassifier     //FIXME like IApp
         double holdTime @unit(s) = default(15s);
         double helloInterval @unit(s) = default(5s);
         @display("i=block/control");
+        @lifecycleSupport;
+        double stopOperationExtraTime @unit(s) = default(-1s);    // extra time after lifecycle stop operation finished
+        double stopOperationTimeout @unit(s) = default(2s);    // timeout value for lifecycle stop operation
+
     gates:
-        //FIXME use socketIn/socketOut gates instead of tcpIn/Out, udpIn/Out
-        input tcpIn @labels(TcpCommand/up);
-        input udpIn @labels(UdpControlInfo/up);
-        output tcpOut @labels(TcpCommand/down);
-        output udpOut @labels(UdpControlInfo/down);
+        input socketIn @labels(TcpCommand/up,UdpControlInfo/up);
+        output socketOut @labels(TcpCommand/down,UdpControlInfo/down);
 }
+

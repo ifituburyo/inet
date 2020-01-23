@@ -21,8 +21,8 @@
 #ifndef __INET_UDPBASICBURST_H
 #define __INET_UDPBASICBURST_H
 
-#include <vector>
 #include <map>
+#include <vector>
 
 #include "inet/common/INETDefs.h"
 
@@ -34,7 +34,7 @@ namespace inet {
 /**
  * UDP application. See NED for more info.
  */
-class INET_API UdpBasicBurst : public ApplicationBase
+class INET_API UdpBasicBurst : public ApplicationBase, public UdpSocket::ICallback
 {
   public:
     enum ChooseDestAddrMode {
@@ -71,6 +71,7 @@ class INET_API UdpBasicBurst : public ApplicationBase
     bool isSource = false;
     bool activeBurst = false;
     bool haveSleepDuration = false;
+    bool dontFragment = false;
 
     // statistics:
     static int counter;    // counter for generating a global number for each packet
@@ -99,9 +100,13 @@ class INET_API UdpBasicBurst : public ApplicationBase
     virtual void processSend();
     virtual void processStop();
 
-    virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
-    virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
-    virtual void handleNodeCrash() override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
+
+    virtual void socketDataArrived(UdpSocket *socket, Packet *packet) override;
+    virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) override;
+    virtual void socketClosed(UdpSocket *socket) override;
 
   public:
     UdpBasicBurst() {}

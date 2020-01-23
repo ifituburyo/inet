@@ -16,10 +16,10 @@
 //
 
 #include <algorithm>
+
 #include "inet/physicallayer/common/packetlevel/MediumLimitCache.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 Define_Module(MediumLimitCache);
@@ -161,9 +161,9 @@ W MediumLimitCache::computeMaxTransmissionPower() const
 
 W MediumLimitCache::computeMinInterferencePower() const
 {
-    W minInterferencePower = mW(math::dBm2mW(par("minInterferencePower")));
+    W minInterferencePower = mW(math::dBmW2mW(par("minInterferencePower")));
     for (const auto radio : radios) {
-        if (radio != nullptr)
+        if (radio != nullptr && radio->getReceiver() != nullptr)
             minInterferencePower = minIgnoreNaN(minInterferencePower, radio->getReceiver()->getMinInterferencePower());
     }
     return minInterferencePower;
@@ -171,9 +171,9 @@ W MediumLimitCache::computeMinInterferencePower() const
 
 W MediumLimitCache::computeMinReceptionPower() const
 {
-    W minReceptionPower = mW(math::dBm2mW(par("minReceptionPower")));
+    W minReceptionPower = mW(math::dBmW2mW(par("minReceptionPower")));
     for (const auto radio : radios) {
-        if (radio != nullptr)
+        if (radio != nullptr && radio->getReceiver() != nullptr)
             minReceptionPower = minIgnoreNaN(minReceptionPower, radio->getReceiver()->getMinReceptionPower());
     }
     return minReceptionPower;
@@ -192,9 +192,9 @@ double MediumLimitCache::computeMaxAntennaGain() const
 m MediumLimitCache::computeMaxRange(W maxTransmissionPower, W minReceptionPower) const
 {
     // TODO: this is NaN by default
-    Hz carrierFrequency = Hz(par("carrierFrequency"));
+    Hz centerFrequency = Hz(par("centerFrequency"));
     double loss = unit(minReceptionPower / maxTransmissionPower).get() / maxAntennaGain / maxAntennaGain;
-    return radioMedium->getPathLoss()->computeRange(radioMedium->getPropagation()->getPropagationSpeed(), carrierFrequency, loss);
+    return radioMedium->getPathLoss()->computeRange(radioMedium->getPropagation()->getPropagationSpeed(), centerFrequency, loss);
 }
 
 m MediumLimitCache::computeMaxCommunicationRange() const
@@ -258,6 +258,5 @@ m MediumLimitCache::getMaxCommunicationRange(const IRadio* radio) const
 }
 
 } // namespace physicallayer
-
 } // namespace inet
 

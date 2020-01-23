@@ -19,11 +19,14 @@
 #define __INET_UDPSOCKET_H
 
 #include <vector>
+
 #include "inet/common/INETDefs.h"
+#include "inet/common/packet/Message.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/common/socket/ISocket.h"
 #include "inet/networklayer/common/L3Address.h"
-#include "inet/transportlayer/contract/udp/UdpControlInfo.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/transportlayer/contract/udp/UdpControlInfo.h"
 
 namespace inet {
 
@@ -34,7 +37,7 @@ namespace inet {
  * its member functions (bind(), connect(), sendTo(), etc.) to create and
  * configure a socket, and to send datagrams.
  *
- * UdpSocket chooses and remembers the sockId for you, assembles and sends command
+ * UdpSocket chooses and remembers the socketId for you, assembles and sends command
  * packets such as UDP_C_BIND to UDP, and can also help you deal with packets and
  * notification messages arriving from UDP.
  *
@@ -60,11 +63,37 @@ namespace inet {
  * USPSocket provides some help for this with the belongsToSocket() and
  * belongsToAnyUDPSocket() methods.
  */
-class INET_API UdpSocket
+class INET_API UdpSocket : public ISocket
 {
+  public:
+    class INET_API ICallback
+    {
+      public:
+        virtual ~ICallback() {}
+
+        /**
+         * Notifies about data arrival, packet ownership is transferred to the callee.
+         */
+        virtual void socketDataArrived(UdpSocket *socket, Packet *packet) = 0;
+
+        /**
+         * Notifies about error indication arrival, indication ownership is transferred to the callee.
+         */
+        virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) = 0;
+
+        /**
+         * Notifies about socket closed, indication ownership is transferred to the callee.
+         */
+        virtual void socketClosed(UdpSocket *socket) = 0;
+    };
+    enum State { CONNECTED, CLOSED};
+
   protected:
-    int sockId;
-    cGate *gateToUdp;
+    int socketId;
+    ICallback *cb = nullptr;
+    void *userData = nullptr;
+    cGate *gateToUdp = nullptr;
+    State sockState = CLOSED;
 
   protected:
     void sendToUDP(cMessage *msg);
@@ -81,15 +110,14 @@ class INET_API UdpSocket
      */
     ~UdpSocket() {}
 
+    void *getUserData() const { return userData; }
+    void setUserData(void *userData) { this->userData = userData; }
+    State getState() const { return sockState; }
+
     /**
      * Returns the internal socket Id.
      */
-    int getSocketId() const { return sockId; }
-
-    /**
-     * Generates a new socket id.
-     */
-    static int generateSocketId();
+    int getSocketId() const override { return socketId; }
 
     /** @name Opening and closing connections, sending data */
     //@{
@@ -124,10 +152,16 @@ class INET_API UdpSocket
     void setTimeToLive(int ttl);
 
     /**
+     * Sets the Ipv4 / Ipv6 dscp fields of packets
+     * sent from the UDP socket.
+     */
+    void setDscp(short dscp);
+
+    /**
      * Sets the Ipv4 Type of Service / Ipv6 Traffic Class fields of packets
      * sent from the UDP socket.
      */
-    void setTypeOfService(unsigned char tos);
+    void setTos(short tos);
 
     /**
      * Set the Broadcast option on the UDP socket. This will cause the
@@ -236,17 +270,39 @@ class INET_API UdpSocket
      * Unbinds the socket. Once closed, a closed socket may be bound to another
      * (or the same) port, and reused.
      */
-    void close();
+    void close() override;
     //@}
+
+    virtual void destroy() override;
 
     /** @name Handling of messages arriving from UDP */
     //@{
     /**
      * Returns true if the message belongs to this socket instance (message
-     * has a UdpControlInfo as getControlInfo(), and the sockId in it matches
+     * has a UdpControlInfo as getControlInfo(), and the socketId in it matches
      * that of the socket.)
      */
-    bool belongsToSocket(cMessage *msg);
+    virtual bool belongsToSocket(cMessage *msg) const override;
+
+    /**
+     * Sets a callback object, to be used with processMessage().
+     * This callback object may be your simple module itself (if it
+     * multiply inherits from ICallback too, that is you
+     * declared it as
+     * <pre>
+     * class MyAppModule : public cSimpleModule, public UdpSocket::ICallback
+     * </pre>
+     * and redefined the necessary virtual functions; or you may use
+     * dedicated class (and objects) for this purpose.
+     *
+     * UdpSocket doesn't delete the callback object in the destructor
+     * or on any other occasion.
+     */
+    void setCallback(ICallback *cb);
+
+    virtual void processMessage(cMessage *msg) override;
+
+    virtual bool isOpen() const override { return sockState != CLOSED; }
 
     /**
      * Utility function: returns a line of information about a packet received via UDP.

@@ -18,7 +18,6 @@
 #include <algorithm>
 #include "inet/common/LayeredProtocolBase.h"
 #include "inet/common/ModuleAccess.h"
-#include "inet/common/queue/PassiveQueueBase.h"
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/visualizer/base/PacketDropVisualizerBase.h"
 
@@ -71,8 +70,9 @@ PacketDropVisualizerBase::DirectiveResolver::DirectiveResolver(const PacketDrop*
 {
 }
 
-const char *PacketDropVisualizerBase::DirectiveResolver::resolveDirective(char directive)
+const char *PacketDropVisualizerBase::DirectiveResolver::resolveDirective(char directive) const
 {
+    static std::string result;
     switch (directive) {
         case 'n':
             result = packetDrop->getPacket_()->getName();
@@ -135,6 +135,7 @@ void PacketDropVisualizerBase::initialize(int stage)
 
 void PacketDropVisualizerBase::handleParameterChange(const char *name)
 {
+    if (!hasGUI()) return;
     if (name != nullptr) {
         if (!strcmp(name, "nodeFilter"))
             nodeFilter.setPattern(par("nodeFilter"));
@@ -177,17 +178,16 @@ void PacketDropVisualizerBase::refreshDisplay() const
 
 void PacketDropVisualizerBase::subscribe()
 {
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this);
-    subscriptionModule->subscribe(packetDroppedSignal, this);
+    visualizationSubjectModule->subscribe(packetDroppedSignal, this);
 
 }
 
 void PacketDropVisualizerBase::unsubscribe()
 {
     // NOTE: lookup the module again because it may have been deleted first
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this, false);
-    if (subscriptionModule != nullptr)
-        subscriptionModule->unsubscribe(packetDroppedSignal, this);
+    auto visualizationSubjectModule = getModuleFromPar<cModule>(par("visualizationSubjectModule"), this, false);
+    if (visualizationSubjectModule != nullptr)
+        visualizationSubjectModule->unsubscribe(packetDroppedSignal, this);
 }
 
 void PacketDropVisualizerBase::receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *details)
@@ -224,7 +224,7 @@ void PacketDropVisualizerBase::removePacketDropVisualization(const PacketDropVis
 
 void PacketDropVisualizerBase::removeAllPacketDropVisualizations()
 {
-    for (auto packetDropVisualization : packetDropVisualizations) {
+    for (auto packetDropVisualization : std::vector<const PacketDropVisualization *>(packetDropVisualizations)) {
         removePacketDropVisualization(packetDropVisualization);
         delete packetDropVisualization;
     }

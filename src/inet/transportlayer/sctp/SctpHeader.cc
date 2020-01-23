@@ -16,11 +16,10 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/transportlayer/sctp/SctpHeader.h"
 #include "inet/transportlayer/sctp/SctpAssociation.h"
+#include "inet/transportlayer/sctp/SctpHeader.h"
 
 namespace inet {
-
 namespace sctp {
 
 Register_Class(SctpHeader);
@@ -76,12 +75,21 @@ void SctpHeader::clean()
 
 void SctpHeader::setSctpChunksArraySize(size_t size)
 {
-    throw new cException(this, "setSctpChunkArraySize() not supported, use insertSctpChunks()");
+    throw cException(this, "setSctpChunkArraySize() not supported, use insertSctpChunks()");
 }
 
-void SctpHeader::setSctpChunks(size_t k, SctpChunk * sctpChunks)
+void SctpHeader::setSctpChunks(size_t k, SctpChunk *chunk)
 {
-    sctpChunkList.at(k) = sctpChunks;
+    handleChange();
+    SctpChunk *tmp = sctpChunkList.at(k);
+    if (tmp == chunk)
+        return;
+    headerLength -= ADD_PADDING(tmp->getByteLength());
+    dropAndDelete(tmp);
+    sctpChunkList[k] = chunk;
+    take(chunk);
+    headerLength += ADD_PADDING(chunk->getByteLength());
+    setChunkLength(B(headerLength));
 }
 
 size_t SctpHeader::getSctpChunksArraySize() const
@@ -90,45 +98,33 @@ size_t SctpHeader::getSctpChunksArraySize() const
 }
 
 
-/*void SctpHeader::replaceChunk(SctpChunk *msg, uint32 k) const
+void SctpHeader::replaceSctpChunk(SctpChunk *chunk, uint32 k)
 {
-   // sctpChunkList[k] = msg;
-    setSctpChunks(k, msg);
-}*/
-
-/*void SctpHeader::addChunk(SctpChunk *chunk)
-{
-    take(chunk);
-    if (this->sctpChunkList.size() < 9) {
-        snprintf(str, sizeof(str), "%s %s", this->getName(), chunk->getName());
-        this->setName(str);
-    }
-    this->setChunkLength(B(B(this->getChunkLength()).get() + ADD_PADDING(chunk->getByteLength())));
-    sctpChunkList.push_back(chunk);
-}*/
+    setSctpChunks(k, chunk);
+}
 
 void SctpHeader::insertSctpChunks(SctpChunk * chunk)
 {
     handleChange();
     sctpChunkList.push_back(chunk);
-    headerLength += chunk->getByteLength();
+    take(chunk);
+    headerLength += ADD_PADDING(chunk->getByteLength());
     setChunkLength(B(headerLength));
 }
 
 void SctpHeader::insertSctpChunks(size_t k, SctpChunk * chunk)
 {
     handleChange();
-    SctpChunk *tmp = sctpChunkList.at(k);
-    headerLength -= ADD_PADDING(tmp->getByteLength());
+    sctpChunkList.insert(sctpChunkList.begin()+k, chunk);
+    take(chunk);
     headerLength += ADD_PADDING(chunk->getByteLength());
-    sctpChunkList[k] = chunk;
     setChunkLength(B(headerLength));
 }
 
 //void SctpHeader::eraseSctpChunks(size_t k)
-SctpChunk *SctpHeader::removeChunk()
+SctpChunk *SctpHeader::removeFirstChunk()
 {
-   // handleChange();
+    handleChange();
     if (sctpChunkList.empty())
         return nullptr;
 
@@ -136,31 +132,6 @@ SctpChunk *SctpHeader::removeChunk()
     headerLength -= ADD_PADDING(msg->getByteLength());
     sctpChunkList.erase(sctpChunkList.begin());
     drop(msg);
-    setChunkLength(B(headerLength));
-    return msg;
-}
-
-void SctpHeader::removeFirstChunk()
-{
-   // handleChange();
-    if (sctpChunkList.empty())
-        return;
-
-    SctpChunk *msg = sctpChunkList.front();
-    headerLength -= ADD_PADDING(msg->getByteLength());
-    sctpChunkList.erase(sctpChunkList.begin());
-    setChunkLength(B(headerLength));
-}
-
-SctpChunk *SctpHeader::getFirstChunk()
-{
-   // handleChange();
-    if (sctpChunkList.empty())
-        return nullptr;
-
-    SctpChunk *msg = sctpChunkList.front();
-    headerLength -= ADD_PADDING(msg->getByteLength());
-    sctpChunkList.erase(sctpChunkList.begin());
     setChunkLength(B(headerLength));
     return msg;
 }
@@ -174,7 +145,7 @@ SctpChunk *SctpHeader::removeLastChunk()
     SctpChunk *msg = sctpChunkList.back();
     sctpChunkList.pop_back();
     drop(msg);
-    this->setChunkLength(B(B(this->getChunkLength()).get() + ADD_PADDING(msg->getByteLength())));
+    this->addChunkLength(B(ADD_PADDING(msg->getByteLength())));
     return msg;
 }
 
@@ -219,7 +190,7 @@ void SctpErrorChunk::copy(const SctpErrorChunk& other)
 
 void SctpErrorChunk::setParametersArraySize(size_t size)
 {
-    throw new cException(this, "setParametersArraySize() not supported, use addParameter()");
+    throw cException(this, "setParametersArraySize() not supported, use addParameter()");
 }
 
 size_t SctpErrorChunk::getParametersArraySize() const
@@ -234,7 +205,7 @@ SctpParameter * SctpErrorChunk::getParameters(size_t k) const
 
 void SctpErrorChunk::setParameters(size_t k, SctpParameter * parameters)
 {
-    throw new cException(this, "setParameter() not supported, use addParameter()");
+    throw cException(this, "setParameter() not supported, use addParameter()");
 }
 
 void SctpErrorChunk::addParameters(SctpParameter *msg)
@@ -295,7 +266,7 @@ void SctpStreamResetChunk::copy(const SctpStreamResetChunk& other)
 
 void SctpStreamResetChunk::setParametersArraySize(size_t size)
 {
-    throw new cException(this, "setParametersArraySize() not supported, use addParameter()");
+    throw cException(this, "setParametersArraySize() not supported, use addParameter()");
 }
 
 size_t SctpStreamResetChunk::getParametersArraySize() const
@@ -310,7 +281,7 @@ const SctpParameter * SctpStreamResetChunk::getParameters(size_t k) const
 
 void SctpStreamResetChunk::setParameters(size_t k, SctpParameter * parameters)
 {
-    throw new cException(this, "setParameters() not supported, use addParameter()");
+    throw cException(this, "setParameters() not supported, use addParameter()");
 }
 
 void SctpStreamResetChunk::addParameter(SctpParameter *msg)
@@ -377,7 +348,7 @@ SctpAsconfChunk& SctpAsconfChunk::operator=(const SctpAsconfChunk& other)
 
 void SctpAsconfChunk::setAsconfParamsArraySize(size_t size)
 {
-    throw new cException(this, "setAsconfParamsArraySize() not supported, use addAsconfParam()");
+    throw cException(this, "setAsconfParamsArraySize() not supported, use addAsconfParam()");
 }
 
 size_t SctpAsconfChunk::getAsconfParamsArraySize() const
@@ -392,7 +363,7 @@ const SctpParameter * SctpAsconfChunk::getAsconfParams(size_t k) const
 
 void SctpAsconfChunk::setAsconfParams(size_t k, SctpParameter * asconfParams)
 {
-    throw new cException(this, "setAsconfParams() not supported, use addAsconfParam()");
+    throw cException(this, "setAsconfParams() not supported, use addAsconfParam()");
 }
 
 void SctpAsconfChunk::addAsconfParam(SctpParameter *msg)
@@ -429,7 +400,7 @@ SctpAsconfAckChunk& SctpAsconfAckChunk::operator=(const SctpAsconfAckChunk& othe
 
 void SctpAsconfAckChunk::setAsconfResponseArraySize(size_t size)
 {
-    throw new cException(this, "setAsconfResponseArraySize() not supported, use addAsconfResponse()");
+    throw cException(this, "setAsconfResponseArraySize() not supported, use addAsconfResponse()");
 }
 
 size_t SctpAsconfAckChunk::getAsconfResponseArraySize() const
@@ -444,7 +415,7 @@ SctpParameter * SctpAsconfAckChunk::getAsconfResponse(size_t k) const
 
 void SctpAsconfAckChunk::setAsconfResponse(size_t k, SctpParameter * asconfResponse)
 {
-    throw new cException(this, "setAsconfresponse() not supported, use addAsconfResponse()");
+    throw cException(this, "setAsconfresponse() not supported, use addAsconfResponse()");
 }
 
 void SctpAsconfAckChunk::addAsconfResponse(SctpParameter *msg)
@@ -467,6 +438,5 @@ SctpParameter *SctpAsconfAckChunk::removeAsconfResponse()
 }
 
 } // namespace sctp
-
 } // namespace inet
 

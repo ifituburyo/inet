@@ -17,17 +17,17 @@
 //
 
 #include <string.h>
-#include "inet/transportlayer/sctp/Sctp.h"
-#include "inet/transportlayer/sctp/SctpAssociation.h"
-#include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
-#include "inet/transportlayer/sctp/SctpAlgorithm.h"
-#include "inet/common/packet/chunk/ByteCountChunk.h"
+
 #include "inet/common/TimeTag_m.h"
-#include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/common/packet/Message.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
+#include "inet/transportlayer/sctp/Sctp.h"
+#include "inet/transportlayer/sctp/SctpAlgorithm.h"
+#include "inet/transportlayer/sctp/SctpAssociation.h"
 
 namespace inet {
-
 namespace sctp {
 
 //
@@ -154,9 +154,9 @@ void SctpAssociation::process_SEND(SctpEventCode& event, SctpCommandReq *sctpCom
              << " streamId=" << sendCommand->getSid() << endl;
 
     Packet *applicationPacket = check_and_cast<Packet *>(msg);
-    const auto& applicationData = staticPtrCast<const BytesChunk>(applicationPacket->peekData());
-    int sendBytes = applicationData->getChunkLength().get() / 8;
-    EV_INFO << "got msg of length " << applicationData->getChunkLength().get() << "sendBytes=" << sendBytes << endl;
+    const auto& applicationData = applicationPacket->peekDataAsBytes();
+    int sendBytes = B(applicationData->getChunkLength()).get();
+    EV_INFO << "got msg of length " << applicationData->getChunkLength() << " sendBytes=" << sendBytes << endl;
 
     auto iter = sctpMain->assocStatMap.find(assocId);
     iter->second.sentBytes += sendBytes;
@@ -178,14 +178,12 @@ void SctpAssociation::process_SEND(SctpEventCode& event, SctpCommandReq *sctpCom
     SctpSimpleMessage *smsg = new SctpSimpleMessage();
     smsg->setDataArraySize(sendBytes);
     std::vector<uint8_t> vec = applicationData->getBytes();
-    for (unsigned int i = 0; i < sendBytes; i++)
+    for (int i = 0; i < sendBytes; i++)
         smsg->setData(i, vec[i]);
     smsg->setDataLen(sendBytes);
     smsg->setEncaps(false);
     smsg->setByteLength(sendBytes);
-    auto creationTimeTag = applicationPacket->findTag<CreationTimeTag>();
-    smsg->setCreationTime(creationTimeTag->getCreationTime()); // TODO : get CreationTime from Tag
-    datMsg->encapsulate((cPacket *)smsg);
+    datMsg->encapsulate(smsg);
     datMsg->setSid(streamId);
     datMsg->setPpid(ppid);
     datMsg->setEnqueuingTime(simTime());
@@ -241,6 +239,7 @@ void SctpAssociation::process_SEND(SctpEventCode& event, SctpCommandReq *sctpCom
                 EV_DEBUG << "msg will be abandoned, buffer is full and priority too low ("
                          << datMsg->getPriority() << ")\n";
                 state->queuedDroppableBytes -= PK(msg)->getByteLength();
+                delete datMsg;
                 delete smsg;
                 delete msg;
                 sendIndicationToApp(SCTP_I_ABANDONED);
@@ -451,6 +450,5 @@ void SctpAssociation::process_STATUS(SctpEventCode& event, SctpCommandReq *sctpC
 }
 
 } // namespace sctp
-
 } // namespace inet
 

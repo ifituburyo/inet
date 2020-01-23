@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211Primitives_m.h"
 #include "inet/networklayer/common/InterfaceTable.h"
 
@@ -38,7 +37,7 @@ namespace ieee80211 {
  *
  * @author Andras Varga
  */
-class INET_API Ieee80211AgentSta : public cSimpleModule, public cListener
+class INET_API Ieee80211AgentSta : public cSimpleModule, public cListener       //TODO add ILifecycle
 {
   protected:
     InterfaceEntry *myIface = nullptr;
@@ -51,7 +50,7 @@ class INET_API Ieee80211AgentSta : public cSimpleModule, public cListener
     simtime_t authenticationTimeout;
     simtime_t associationTimeout;
 
-    std::string default_ssid;
+    std::string defaultSsid;
 
     //Statistics:
     static simsignal_t sentRequestSignal;

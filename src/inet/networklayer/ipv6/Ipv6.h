@@ -18,20 +18,21 @@
 #ifndef __INET_IPV6_H
 #define __INET_IPV6_H
 
+#include <map>
+#include <set>
+
 #include "inet/common/INETDefs.h"
 #include "inet/common/IProtocolRegistrationListener.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
+#include "inet/common/packet/Message.h"
 #include "inet/networklayer/contract/INetfilter.h"
 #include "inet/networklayer/contract/INetworkProtocol.h"
-#include "inet/common/queue/QueueBase.h"
-#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
 #include "inet/networklayer/icmpv6/Icmpv6.h"
 #include "inet/networklayer/icmpv6/Ipv6NeighbourDiscovery.h"
-
-#include "inet/networklayer/ipv6tunneling/Ipv6Tunneling.h"
-
-#include "inet/networklayer/ipv6/Ipv6Header.h"
 #include "inet/networklayer/ipv6/Ipv6FragBuf.h"
-#include "inet/common/ProtocolMap.h"
+#include "inet/networklayer/ipv6/Ipv6Header.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include "inet/networklayer/ipv6tunneling/Ipv6Tunneling.h"
 
 namespace inet {
 
@@ -40,7 +41,7 @@ class Icmpv6Header;
 /**
  * Ipv6 implementation.
  */
-class INET_API Ipv6 : public QueueBase, public NetfilterBase, public ILifecycle, public INetworkProtocol, public IProtocolRegistrationListener
+class INET_API Ipv6 : public cSimpleModule, public NetfilterBase, public LifecycleUnsupported, public INetworkProtocol, public IProtocolRegistrationListener
 {
   public:
     /**
@@ -66,8 +67,11 @@ class INET_API Ipv6 : public QueueBase, public NetfilterBase, public ILifecycle,
     {
         int socketId = -1;
         int protocolId = -1;
+        Ipv6Address localAddress;
+        Ipv6Address remoteAddress;
 
-        SocketDescriptor(int socketId, int protocolId) : socketId(socketId), protocolId(protocolId) { }
+        SocketDescriptor(int socketId, int protocolId, Ipv6Address localAddress)
+                : socketId(socketId), protocolId(protocolId), localAddress(localAddress) { }
     };
 
     IInterfaceTable *ift = nullptr;
@@ -81,9 +85,8 @@ class INET_API Ipv6 : public QueueBase, public NetfilterBase, public ILifecycle,
     unsigned int curFragmentId = -1;    // counter, used to assign unique fragmentIds to datagrams
     Ipv6FragBuf fragbuf;    // fragmentation reassembly buffer
     simtime_t lastCheckTime;    // when fragbuf was last checked for state fragments
-    ProtocolMapping mapping;    // where to send packets after decapsulation
+    std::set<const Protocol *> upperProtocols;    // where to send packets after decapsulation
     std::map<int, SocketDescriptor *> socketIdToSocketDescriptor;
-    std::multimap<int, SocketDescriptor *> protocolIdToSocketDescriptors;
 
     // statistics
     int numMulticast = 0;
@@ -135,6 +138,8 @@ class INET_API Ipv6 : public QueueBase, public NetfilterBase, public ILifecycle,
 
     virtual void handleMessage(cMessage *msg) override;
 
+    virtual void handleRequest(Request *request);
+
     /**
      * Handle messages (typically packets to be send in Ipv6) from transport or ICMP.
      * Invokes encapsulate(), then routePacket().
@@ -176,7 +181,7 @@ class INET_API Ipv6 : public QueueBase, public NetfilterBase, public ILifecycle,
     virtual void localDeliver(Packet *packet, const InterfaceEntry *fromIE);
 
     /**
-     * Decapsulate and return encapsulated packet after attaching Ipv6ControlInfo.
+     * Decapsulate packet.
      */
     virtual void decapsulate(Packet *packet);
 
@@ -234,14 +239,6 @@ class INET_API Ipv6 : public QueueBase, public NetfilterBase, public ILifecycle,
      */
     virtual void initialize(int stage) override;
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
-
-    /**
-     * Processing of Ipv6 datagrams. Called when a datagram reaches the front
-     * of the queue.
-     */
-    virtual void endService(cPacket *msg) override;
-
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
 
     /**
      * Determines the correct interface for the specified destination address.

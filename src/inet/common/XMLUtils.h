@@ -2,7 +2,6 @@
 #define __INET_XMLUTILS_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 
 namespace inet {
@@ -25,7 +24,8 @@ INET_API Ipv4Address getParameterIPAddressValue(const cXMLElement *ptr, const ch
 INET_API double getParameterDoubleValue(const cXMLElement *ptr, const char *name);
 INET_API double getParameterDoubleValue(const cXMLElement *ptr, const char *name, double def);
 
-INET_API const char *getRequiredAttribute(const cXMLElement& node, const char *attr);
+INET_API const char *getMandatoryAttribute(const cXMLElement& node, const char *attr);
+INET_API const char *getMandatoryFilledAttribute(const cXMLElement& node, const char *attr);
 INET_API bool getAttributeBoolValue(const cXMLElement *node, const char *attrName, bool defVal);
 INET_API bool getAttributeBoolValue(const cXMLElement *node, const char *attrName);
 

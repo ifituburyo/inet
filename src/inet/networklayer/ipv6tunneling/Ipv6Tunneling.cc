@@ -34,25 +34,24 @@
 // TODO
 //  - 8.: Tunnel Error Reporting and Processing
 
-#include "inet/networklayer/ipv6tunneling/Ipv6Tunneling.h"
+#include <algorithm>
 
-#include "inet/networklayer/common/L3AddressTag_m.h"
-#include "inet/networklayer/ipv6/Ipv6ExtHeaderTag_m.h"
-#include "inet/networklayer/ipv6/Ipv6Header.h"
-#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
-#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
-#include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/networklayer/ipv6/Ipv6ExtHeaderTag_m.h"
+#include "inet/networklayer/ipv6/Ipv6Header.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
+#include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
+#include "inet/networklayer/ipv6tunneling/Ipv6Tunneling.h"
 
 #ifdef WITH_xMIPv6
 #include "inet/networklayer/xmipv6/xMIPv6.h"
 #include "inet/networklayer/xmipv6/MobilityHeader_m.h"    // for HA Option header
 #endif // ifdef WITH_xMIPv6
-
-#include <algorithm>
 
 namespace inet {
 
@@ -76,9 +75,9 @@ void Ipv6Tunneling::initialize(int stage)
         WATCH_MAP(tunnels);
     }
     else if (stage == INITSTAGE_NETWORK_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
     }
@@ -98,11 +97,6 @@ void Ipv6Tunneling::handleMessage(cMessage *msg)
     }
     else
         throw cRuntimeError("Ipv6Tunneling: Unknown gate: %s!", packet->getArrivalGate()->getFullName());
-}
-
-bool Ipv6Tunneling::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
-{
-    throw cRuntimeError("Lifecycle operation support not implemented");
 }
 
 Ipv6Tunneling::Tunnel::Tunnel(const Ipv6Address& _entry, const Ipv6Address& _exit, const Ipv6Address& _destTrigger)
@@ -426,7 +420,7 @@ void Ipv6Tunneling::encapsulateDatagram(Packet *packet)
             t2RH->setRoutingType(2);
             t2RH->setSegmentsLeft(1);
             t2RH->setAddressArraySize(1);
-            t2RH->setByteLength(8 + 1 * 16);
+            t2RH->setByteLength(B(8 + 1 * 16));
             // old src becomes address of T2RH
             t2RH->setAddress(0, rh2);
 
@@ -512,13 +506,13 @@ void Ipv6Tunneling::decapsulateDatagram(Packet *packet)
     // Alain Tigyo, 21.03.2008
     // The following code is used for triggering RO to a CN
     InterfaceEntry *ie = ift->getInterfaceById(packet->getTag<InterfaceInd>()->getInterfaceId());
-    if (rt->isMobileNode() && (srcAddr == ie->ipv6Data()->getHomeAgentAddress())
+    if (rt->isMobileNode() && (srcAddr == ie->getProtocolData<Ipv6InterfaceData>()->getHomeAgentAddress())
         && (ipv6Header->getProtocolId() != IP_PROT_IPv6EXT_MOB))
     {
         EV_INFO << "Checking Route Optimization for: " << ipv6Header->getSrcAddress() << endl;
         xMIPv6 *mipv6 = findModuleFromPar<xMIPv6>(par("xmipv6Module"), this);
         if (mipv6)
-            mipv6->triggerRouteOptimization(ipv6Header->getSrcAddress(), ie->ipv6Data()->getMNHomeAddress(), ie);
+            mipv6->triggerRouteOptimization(ipv6Header->getSrcAddress(), ie->getProtocolData<Ipv6InterfaceData>()->getMNHomeAddress(), ie);
     }
 #endif // ifdef WITH_xMIPv6
 }

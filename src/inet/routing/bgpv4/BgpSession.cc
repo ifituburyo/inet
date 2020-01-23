@@ -15,21 +15,15 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/routing/bgpv4/BgpSession.h"
 #include "inet/routing/bgpv4/Bgp.h"
 #include "inet/routing/bgpv4/BgpFsm.h"
+#include "inet/routing/bgpv4/BgpSession.h"
+#include "inet/routing/bgpv4/bgpmessage/BgpUpdate.h"
 
 namespace inet {
-
 namespace bgp {
 
-BgpSession::BgpSession(Bgp& _bgpRouting)
-    : _bgpRouting(_bgpRouting), _ptrStartEvent(nullptr), _connectRetryCounter(0)
-    , _connectRetryTime(BGP_RETRY_TIME), _ptrConnectRetryTimer(nullptr)
-    , _holdTime(BGP_HOLD_TIME), _ptrHoldTimer(nullptr)
-    , _keepAliveTime(BGP_KEEP_ALIVE), _ptrKeepAliveTimer(nullptr)
-    , _openMsgSent(0), _openMsgRcv(0), _keepAliveMsgSent(0)
-    , _keepAliveMsgRcv(0), _updateMsgSent(0), _updateMsgRcv(0)
+BgpSession::BgpSession(BgpRouter& bgpRouter) : bgpRouter(bgpRouter)
 {
     _box = new fsm::TopState::Box(*this);
     _fsm = new Macho::Machine<fsm::TopState>(_box);
@@ -38,10 +32,10 @@ BgpSession::BgpSession(Bgp& _bgpRouting)
 
 BgpSession::~BgpSession()
 {
-    _bgpRouting.getCancelAndDelete(_ptrConnectRetryTimer);
-    _bgpRouting.getCancelAndDelete(_ptrStartEvent);
-    _bgpRouting.getCancelAndDelete(_ptrHoldTimer);
-    _bgpRouting.getCancelAndDelete(_ptrKeepAliveTimer);
+    bgpRouter.getCancelAndDelete(_ptrConnectRetryTimer);
+    bgpRouter.getCancelAndDelete(_ptrStartEvent);
+    bgpRouter.getCancelAndDelete(_ptrHoldTimer);
+    bgpRouter.getCancelAndDelete(_ptrKeepAliveTimer);
     delete _info.socket;
     delete _info.socketListen;
     delete _fsm;
@@ -55,6 +49,7 @@ void BgpSession::setInfo(SessionInfo info)
     _info.peerAddr = info.peerAddr;
     _info.sessionID = info.sessionID;
     _info.linkIntf = info.linkIntf;
+    _info.ebgpMultihop = info.ebgpMultihop;
     _info.socket = new TcpSocket();
 }
 
@@ -65,11 +60,17 @@ void BgpSession::setTimers(simtime_t *delayTab)
     _keepAliveTime = delayTab[2];
     if (_info.sessionType == IGP) {
         _StartEventTime = delayTab[3];
+        // if this BGP router does not establish any EGP connection, then start this IGP session
+        if(bgpRouter.getNumEgpSessions() == 0) {
+            _ptrStartEvent = new cMessage("BGP Start", START_EVENT_KIND);
+            bgpRouter.getScheduleAt(simTime() + _StartEventTime, _ptrStartEvent);
+            _ptrStartEvent->setContextPointer(this);
+        }
     }
     else if (delayTab[3] != SIMTIME_ZERO) {
         _StartEventTime = delayTab[3];
         _ptrStartEvent = new cMessage("BGP Start", START_EVENT_KIND);
-        _bgpRouting.getScheduleAt(_bgpRouting.getSimTime() + _StartEventTime, _ptrStartEvent);
+        bgpRouter.getScheduleAt(simTime() + _StartEventTime, _ptrStartEvent);
         _ptrStartEvent->setContextPointer(this);
     }
     _ptrConnectRetryTimer = new cMessage("BGP Connect Retry", CONNECT_RETRY_KIND);
@@ -83,14 +84,14 @@ void BgpSession::setTimers(simtime_t *delayTab)
 
 void BgpSession::startConnection()
 {
-    if (_ptrStartEvent == nullptr) {
+    if (_ptrStartEvent == nullptr)
         _ptrStartEvent = new cMessage("BGP Start", START_EVENT_KIND);
-    }
+
     if (_info.sessionType == IGP) {
-        if (_bgpRouting.getSimTime() > _StartEventTime) {
-            _StartEventTime = _bgpRouting.getSimTime();
-        }
-        _bgpRouting.getScheduleAt(_StartEventTime, _ptrStartEvent);
+        if (simTime() > _StartEventTime)
+            _StartEventTime = simTime();
+        if(!_ptrStartEvent->isScheduled())
+            bgpRouter.getScheduleAt(_StartEventTime, _ptrStartEvent);
         _ptrStartEvent->setContextPointer(this);
     }
 }
@@ -98,42 +99,105 @@ void BgpSession::startConnection()
 void BgpSession::restartsHoldTimer()
 {
     if (_holdTime != 0) {
-        _bgpRouting.getCancelEvent(_ptrHoldTimer);
-        _bgpRouting.getScheduleAt(_bgpRouting.getSimTime() + _holdTime, _ptrHoldTimer);
+        bgpRouter.getCancelEvent(_ptrHoldTimer);
+        bgpRouter.getScheduleAt(simTime() + _holdTime, _ptrHoldTimer);
     }
 }
 
 void BgpSession::restartsKeepAliveTimer()
 {
-    _bgpRouting.getCancelEvent(_ptrKeepAliveTimer);
-    _bgpRouting.getScheduleAt(_bgpRouting.getSimTime() + _keepAliveTime, _ptrKeepAliveTimer);
+    bgpRouter.getCancelEvent(_ptrKeepAliveTimer);
+    bgpRouter.getScheduleAt(simTime() + _keepAliveTime, _ptrKeepAliveTimer);
 }
 
 void BgpSession::restartsConnectRetryTimer(bool start)
 {
-    _bgpRouting.getCancelEvent(_ptrConnectRetryTimer);
+    bgpRouter.getCancelEvent(_ptrConnectRetryTimer);
     if (!start) {
-        _bgpRouting.getScheduleAt(_bgpRouting.getSimTime() + _connectRetryTime, _ptrConnectRetryTimer);
+        bgpRouter.getScheduleAt(simTime() + _connectRetryTime, _ptrConnectRetryTimer);
     }
 }
 
 void BgpSession::sendOpenMessage()
 {
-    Packet *pk = new Packet("BgpOpen");
     const auto& openMsg = makeShared<BgpOpenMessage>();
     openMsg->setMyAS(_info.ASValue);
     openMsg->setHoldTime(_holdTime);
     openMsg->setBGPIdentifier(_info.socket->getLocalAddress().toIpv4());
+
+    EV_INFO << "Sending BGP Open message to " << _info.peerAddr.str(false) <<
+            " on interface " << _info.linkIntf->getInterfaceName() <<
+            "[" << _info.linkIntf->getInterfaceId() << "] with contents:\n";
+    bgpRouter.printOpenMessage(*openMsg);
+
+    Packet *pk = new Packet("BgpOpen");
     pk->insertAtFront(openMsg);
+
     _info.socket->send(pk);
     _openMsgSent++;
 }
 
+void BgpSession::sendUpdateMessage(std::vector<BgpUpdatePathAttributes*> &content, BgpUpdateNlri &NLRI)
+{
+    const auto& updateMsg = makeShared<BgpUpdateMessage>();
+
+    updateMsg->setWithDrawnRoutesLength(0);
+
+    size_t attrLength = 0;
+    updateMsg->setPathAttributesArraySize(content.size());
+    for (size_t i = 0; i < content.size(); i++) {
+        attrLength += computePathAttributeBytes(*content[i]);
+        updateMsg->setPathAttributes(i, content[i]);
+    }
+    updateMsg->setTotalPathAttributeLength(attrLength);
+    updateMsg->addChunkLength(B(attrLength));
+
+    updateMsg->setNLRIArraySize(1);
+    updateMsg->setNLRI(0, NLRI);
+    updateMsg->addChunkLength(B(1 + (NLRI.length +7)/8));
+    updateMsg->setTotalLength(B(updateMsg->getChunkLength()).get());
+
+    EV_INFO << "Sending BGP Update message to " << _info.peerAddr.str(false) <<
+            " on interface " << _info.linkIntf->getInterfaceName() <<
+            "[" << _info.linkIntf->getInterfaceId() << "] with contents:\n";
+    bgpRouter.printUpdateMessage(*updateMsg);
+
+    Packet *pk = new Packet("BgpUpdate");
+    pk->insertAtFront(updateMsg);
+
+    _info.socket->send(pk);
+    _updateMsgSent++;
+}
+
+void BgpSession::sendNotificationMessage()
+{
+    // TODO
+
+    // const auto& updateMsg = makeShared<BgpNotificationMessage>();
+
+//    EV_INFO << "Sending BGP Notification message to " << _info.peerAddr.str(false) <<
+//            " on interface " << _info.linkIntf->getInterfaceName() <<
+//            "[" << _info.linkIntf->getInterfaceId() << "] with contents:\n";
+
+    //Packet *pk = new Packet("BgpNotification");
+    //pk->insertAtFront(updateMsg);
+
+    //_info.socket->send(pk);
+    //_notificationMsgSent++;
+}
+
 void BgpSession::sendKeepAliveMessage()
 {
-    Packet *pk = new Packet("BgpKeepAlive");
     const auto &keepAliveMsg = makeShared<BgpKeepAliveMessage>();
+
+    EV_INFO << "Sending BGP Keep-alive message to " << _info.peerAddr.str(false) <<
+            " on interface " << _info.linkIntf->getInterfaceName() <<
+            "[" << _info.linkIntf->getInterfaceId() << "] \n";
+    bgpRouter.printKeepAliveMessage(*keepAliveMsg);
+
+    Packet *pk = new Packet("BgpKeepAlive");
     pk->insertAtFront(keepAliveMsg);
+
     _info.socket->send(pk);
     _keepAliveMsgSent++;
 }
@@ -148,7 +212,34 @@ void BgpSession::getStatistics(unsigned int *statTab)
     statTab[5] += _updateMsgRcv;
 }
 
-} // namespace bgp
+const std::string BgpSession::getTypeString(BgpSessionType sessionType)
+{
+    if(sessionType == IGP)
+        return "IGP";
+    else if(sessionType == EGP)
+        return "EGP";
+    else if(sessionType == INCOMPLETE)
+        return "INCOMPLETE";
 
+    return "Unknown";
+}
+
+std::ostream& operator<<(std::ostream& out, const BgpSession& entry)
+{
+    out << "sessionId: " << entry.getSessionID() << " "
+            << "sessionType: " << entry.getTypeString(entry.getType()) << " "
+            << "established: " << (entry.isEstablished() == true ? "true" : "false") << " "
+            << "state: " << entry.getFSM().currentState().name() << " "
+            << "peer: " << entry.getPeerAddr().str(false) << " "
+            << "nextHopSelf: " << (entry.getNextHopSelf() == true ? "true" : "false") << " "
+            << "startEventTime: " << entry.getStartEventTime() << " "
+            << "connectionRetryTime: " << entry.getConnectionRetryTime() << " "
+            << "holdTime: " << entry.getHoldTime() << " "
+            << "keepAliveTime: " << entry.getKeepAliveTime();
+
+    return out;
+}
+
+} // namespace bgp
 } // namespace inet
 

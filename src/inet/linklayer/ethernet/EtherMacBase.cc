@@ -17,19 +17,20 @@
 //
 
 #include <stdlib.h>
-#include "inet/linklayer/ethernet/EtherMacBase.h"
-#include "inet/common/ProtocolTag_m.h"
-//#include "inet/common/ProtocolGroup.h"
-#include "inet/common/packet/chunk/BytesChunk.h"
-#include "inet/common/serializer/EthernetCRC.h"
-#include "inet/linklayer/ethernet/EtherPhyFrame_m.h"
-#include "inet/linklayer/ethernet/EtherFrame_m.h"
-#include "inet/linklayer/ethernet/Ethernet.h"
-#include "inet/common/ModuleAccess.h"
-#include "inet/networklayer/common/InterfaceEntry.h"
-#include "inet/common/queue/IPassiveQueue.h"
-#include "inet/common/lifecycle/NodeOperations.h"
+
+#include "inet/common/checksum/EthernetCRC.h"
 #include "inet/common/INETUtils.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/ModuleAccess.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/StringFormat.h"
+#include "inet/linklayer/ethernet/EtherFrame_m.h"
+#include "inet/linklayer/ethernet/EtherMacBase.h"
+#include "inet/linklayer/ethernet/Ethernet.h"
+#include "inet/linklayer/ethernet/EtherPhyFrame_m.h"
+#include "inet/networklayer/common/InterfaceEntry.h"
+#include "inet/queueing/function/PacketComparatorFunction.h"
 
 namespace inet {
 
@@ -39,10 +40,9 @@ const EtherMacBase::EtherDescr EtherMacBase::nullEtherDescr = {
     0.0,
     0.0,
     0,
-    0,
-    0,
-    0,
-    0,
+    B(0),
+    B(0),
+    B(0),
     0.0,
     0.0
 };
@@ -51,9 +51,8 @@ const EtherMacBase::EtherDescr EtherMacBase::etherDescrs[NUM_OF_ETHERDESCRS] = {
     {
         ETHERNET_TXRATE,
         0.5 / ETHERNET_TXRATE,
-        MIN_ETHERNET_FRAME_BYTES,
         0,
-        0,
+        B(0),
         MIN_ETHERNET_FRAME_BYTES,
         MIN_ETHERNET_FRAME_BYTES,
         512 / ETHERNET_TXRATE,
@@ -62,9 +61,8 @@ const EtherMacBase::EtherDescr EtherMacBase::etherDescrs[NUM_OF_ETHERDESCRS] = {
     {
         FAST_ETHERNET_TXRATE,
         0.5 / FAST_ETHERNET_TXRATE,
-        MIN_ETHERNET_FRAME_BYTES,
         0,
-        0,
+        B(0),
         MIN_ETHERNET_FRAME_BYTES,
         MIN_ETHERNET_FRAME_BYTES,
         512 / FAST_ETHERNET_TXRATE,
@@ -73,7 +71,6 @@ const EtherMacBase::EtherDescr EtherMacBase::etherDescrs[NUM_OF_ETHERDESCRS] = {
     {
         GIGABIT_ETHERNET_TXRATE,
         0.5 / GIGABIT_ETHERNET_TXRATE,
-        MIN_ETHERNET_FRAME_BYTES,
         MAX_PACKETBURST,
         GIGABIT_MAX_BURST_BYTES,
         GIGABIT_MIN_FRAME_BYTES_WITH_EXT,
@@ -84,37 +81,75 @@ const EtherMacBase::EtherDescr EtherMacBase::etherDescrs[NUM_OF_ETHERDESCRS] = {
     {
         FAST_GIGABIT_ETHERNET_TXRATE,
         0.5 / FAST_GIGABIT_ETHERNET_TXRATE,
-        MIN_ETHERNET_FRAME_BYTES,
         0,
+        B(0),
+        B(-1),    // half-duplex is not supported
+        B(0),
+        0.0,
+        0.0
+    },
+    {
+        TWENTYFIVE_GIGABIT_ETHERNET_TXRATE,
+        0.5 / TWENTYFIVE_GIGABIT_ETHERNET_TXRATE,
         0,
-        -1,    // half-duplex is not supported
-        0,
+        B(0),
+        B(-1),    // half-duplex is not supported
+        B(0),
         0.0,
         0.0
     },
     {
         FOURTY_GIGABIT_ETHERNET_TXRATE,
         0.5 / FOURTY_GIGABIT_ETHERNET_TXRATE,
-        MIN_ETHERNET_FRAME_BYTES,
         0,
-        0,
-        -1,    // half-duplex is not supported
-        0,
+        B(0),
+        B(-1),    // half-duplex is not supported
+        B(0),
         0.0,
         0.0
     },
     {
         HUNDRED_GIGABIT_ETHERNET_TXRATE,
         0.5 / HUNDRED_GIGABIT_ETHERNET_TXRATE,
-        MIN_ETHERNET_FRAME_BYTES,
         0,
+        B(0),
+        B(-1),    // half-duplex is not supported
+        B(0),
+        0.0,
+        0.0
+    },
+    {
+        TWOHUNDRED_GIGABIT_ETHERNET_TXRATE,
+        0.5 / TWOHUNDRED_GIGABIT_ETHERNET_TXRATE,
         0,
-        -1,    // half-duplex is not supported
+        B(0),
+        B(-1),    // half-duplex is not supported
+        B(0),
+        0.0,
+        0.0
+    },
+    {
+        FOURHUNDRED_GIGABIT_ETHERNET_TXRATE,
+        0.5 / FOURHUNDRED_GIGABIT_ETHERNET_TXRATE,
         0,
+        B(0),
+        B(-1),    // half-duplex is not supported
+        B(0),
         0.0,
         0.0
     }
 };
+
+static int compareEthernetFrameType(Packet *a, Packet *b)
+{
+    const auto& ah = a->peekAtFront<EthernetMacHeader>();
+    const auto& bh = b->peekAtFront<EthernetMacHeader>();
+    int ac = (ah->getTypeOrLength() == ETHERTYPE_FLOW_CONTROL) ? 0 : 1;
+    int bc = (bh->getTypeOrLength() == ETHERTYPE_FLOW_CONTROL) ? 0 : 1;
+    return ac - bc;
+}
+
+Register_Packet_Comparator_Function(EthernetFrameTypeComparator, compareEthernetFrameType);
 
 simsignal_t EtherMacBase::rxPkOkSignal = registerSignal("rxPkOk");
 simsignal_t EtherMacBase::txPausePkUnitsSignal = registerSignal("txPausePkUnits");
@@ -131,8 +166,6 @@ EtherMacBase::EtherMacBase()
 
 EtherMacBase::~EtherMacBase()
 {
-    delete curTxFrame;
-
     cancelAndDelete(endTxMsg);
     cancelAndDelete(endIFGMsg);
     cancelAndDelete(endPauseMsg);
@@ -140,14 +173,14 @@ EtherMacBase::~EtherMacBase()
 
 void EtherMacBase::initialize(int stage)
 {
-    MacBase::initialize(stage);
-
+    MacProtocolBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         physInGate = gate("phys$i");
         physOutGate = gate("phys$o");
-        upperLayerInGate = gate("upperLayerIn");
+        lowerLayerInGateId = physInGate->getId();
+        lowerLayerOutGateId = physOutGate->getId();
         transmissionChannel = nullptr;
-        curTxFrame = nullptr;
+        currentTxFrame = nullptr;
 
         initializeFlags();
 
@@ -163,64 +196,30 @@ void EtherMacBase::initialize(int stage)
         // initialize states
         transmitState = TX_IDLE_STATE;
         receiveState = RX_IDLE_STATE;
-        WATCH(transmitState);
-        WATCH(receiveState);
 
         // initialize pause
         pauseUnitsRequested = 0;
-        WATCH(pauseUnitsRequested);
 
         subscribe(POST_MODEL_CHANGE, this);
-    }
-    else if (stage == INITSTAGE_LINK_LAYER) {
-        initializeMacAddress();
-        registerInterface();    // needs MAC address    //FIXME why not called in MacBase::initialize()?
-        initializeQueueModule();
-        readChannelParameters(true);
-    }
-}
 
-void EtherMacBase::initializeQueueModule()
-{
-    if (par("queueModule").stringValue()[0]) {
-        cModule *module = getModuleFromPar<cModule>(par("queueModule"), this);
-        IPassiveQueue *queueModule;
-        if (module->isSimple())
-            queueModule = check_and_cast<IPassiveQueue *>(module);
-        else {
-            cGate *queueOut = module->gate("out")->getPathStartGate();
-            queueModule = check_and_cast<IPassiveQueue *>(queueOut->getOwnerModule());
-        }
-
-        EV_DETAIL << "Requesting first frame from queue module\n";
-        txQueue.setExternalQueue(queueModule);
-
-        if (txQueue.extQueue->getNumPendingRequests() == 0)
-            txQueue.extQueue->requestPacket();
-    }
-    else {
-        txQueue.setInternalQueue("txQueue", par("txQueueLimit"));
+        WATCH(transmitState);
+        WATCH(receiveState);
+        WATCH(connected);
+        WATCH(disabled);
+        WATCH(frameBursting);
+        WATCH(promiscuous);
+        WATCH(pauseUnitsRequested);
     }
 }
 
-void EtherMacBase::initializeMacAddress()
+void EtherMacBase::initializeQueue()
 {
-    const char *addrstr = par("address");
-
-    if (!strcmp(addrstr, "auto")) {
-        // assign automatic address
-        address = MacAddress::generateAutoAddress();
-
-        // change module parameter from "auto" to concrete address
-        par("address").setStringValue(address.str().c_str());
-    }
-    else {
-        address.setAddress(addrstr);
-    }
+    txQueue = check_and_cast<queueing::IPacketQueue *>(getSubmodule("queue"));
 }
 
 void EtherMacBase::initializeFlags()
 {
+    displayStringTextFormat = par("displayStringTextFormat");
     sendRawBytes = par("sendRawBytes");
     duplexMode = true;
 
@@ -230,21 +229,16 @@ void EtherMacBase::initializeFlags()
     if (!connected)
         EV_WARN << "MAC not connected to a network.\n";
 
-    WATCH(connected);
-
     // TODO: this should be set from the GUI
     // initialize disabled flag
     // Note: it is currently not supported to enable a disabled MAC at runtime.
     // Difficulties: (1) autoconfig (2) how to pick up channel state (free, tx, collision etc)
     disabled = false;
-    WATCH(disabled);
 
     // initialize promiscuous flag
     promiscuous = par("promiscuous");
-    WATCH(promiscuous);
 
     frameBursting = false;
-    WATCH(frameBursting);
 }
 
 void EtherMacBase::initializeStatistics()
@@ -268,15 +262,8 @@ void EtherMacBase::initializeStatistics()
     WATCH(numPauseFramesSent);
 }
 
-InterfaceEntry *EtherMacBase::createInterfaceEntry()
+void EtherMacBase::configureInterfaceEntry()
 {
-    InterfaceEntry *interfaceEntry = getContainingNicModule(this);
-
-    // generate a link-layer address to be used as interface token for IPv6
-    interfaceEntry->setMacAddress(address);
-    interfaceEntry->setInterfaceToken(address.formInterfaceIdentifier());
-    //InterfaceToken token(0, getSimulation()->getUniqueNumber(), 64);
-    //interfaceEntry->setInterfaceToken(token);
 
     // MTU: typical values are 576 (Internet de facto), 1500 (Ethernet-friendly),
     // 4000 (on some point-to-point links), 4470 (Cisco routers default, FDDI compatible)
@@ -285,40 +272,58 @@ InterfaceEntry *EtherMacBase::createInterfaceEntry()
     // capabilities
     interfaceEntry->setMulticast(true);
     interfaceEntry->setBroadcast(true);
-
-    return interfaceEntry;
 }
 
-bool EtherMacBase::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void EtherMacBase::handleStartOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_LINK_LAYER) {
-            initializeFlags();
-            initializeMacAddress();
-            initializeQueueModule();
-        }
+    interfaceEntry->setState(InterfaceEntry::State::UP);
+    initializeFlags();
+    initializeQueue();
+    readChannelParameters(true);
+}
+
+void EtherMacBase::handleStopOperation(LifecycleOperation *operation)
+{
+    if (currentTxFrame != nullptr || !txQueue->isEmpty()) {
+        interfaceEntry->setState(InterfaceEntry::State::GOING_DOWN);
+        delayActiveOperationFinish(par("stopOperationTimeout"));
     }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_LINK_LAYER) {
+    else {
+        interfaceEntry->setCarrier(false);
+        interfaceEntry->setState(InterfaceEntry::State::DOWN);
+        startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
+    }
+}
+
+void EtherMacBase::handleCrashOperation(LifecycleOperation *operation)
+{
+//    clearQueue();
+    connected = false;
+    interfaceEntry->setCarrier(false);
+    processConnectDisconnect();
+    interfaceEntry->setState(InterfaceEntry::State::DOWN);
+}
+
+// TODO: this method should be renamed and called where processing is finished on the current frame (i.e. curTxFrame becomes nullptr)
+void EtherMacBase::processAtHandleMessageFinished()
+{
+    if (operationalState == State::STOPPING_OPERATION) {
+        if (currentTxFrame == nullptr && txQueue->isEmpty()) {
+            EV << "Ethernet Queue is empty, MAC stopped\n";
             connected = false;
+            interfaceEntry->setCarrier(false);
             processConnectDisconnect();
+            interfaceEntry->setState(InterfaceEntry::State::DOWN);
+            startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
         }
     }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
-            connected = false;
-            processConnectDisconnect();
-        }
-    }
-    return MacBase::handleOperationStage(operation, stage, doneCallback);
 }
 
 void EtherMacBase::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
 {
     Enter_Method_Silent();
 
-    MacBase::receiveSignal(source, signalID, obj, details);
+    MacProtocolBase::receiveSignal(source, signalID, obj, details);
 
     if (signalID != POST_MODEL_CHANGE)
         return;
@@ -345,33 +350,24 @@ void EtherMacBase::processConnectDisconnect()
         cancelEvent(endIFGMsg);
         cancelEvent(endPauseMsg);
 
-        if (curTxFrame) {
-            EV_DETAIL << "Interface is not connected, dropping packet " << curTxFrame << endl;
+        if (currentTxFrame) {
+            EV_DETAIL << "Interface is not connected, dropping packet " << currentTxFrame << endl;
             numDroppedPkFromHLIfaceDown++;
             PacketDropDetails details;
             details.setReason(INTERFACE_DOWN);
-            emit(packetDroppedSignal, curTxFrame, &details);
-            delete curTxFrame;
-            curTxFrame = nullptr;
+            dropCurrentTxFrame(details);
             lastTxFinishTime = -1.0;    // so that it never equals to the current simtime, used for Burst mode detection.
         }
 
-        if (txQueue.extQueue) {
-            // Clear external queue: send a request, and received packet will be deleted in handleMessage()
-            if (txQueue.extQueue->getNumPendingRequests() == 0)
-                txQueue.extQueue->requestPacket();
-        }
-        else {
-            // Clear inner queue
-            while (!txQueue.innerQueue->isEmpty()) {
-                cMessage *msg = check_and_cast<cMessage *>(txQueue.innerQueue->pop());
-                EV_DETAIL << "Interface is not connected, dropping packet " << msg << endl;
-                numDroppedPkFromHLIfaceDown++;
-                PacketDropDetails details;
-                details.setReason(INTERFACE_DOWN);
-                emit(packetDroppedSignal, msg, &details);
-                delete msg;
-            }
+        // Clear queue
+        while (!txQueue->isEmpty()) {
+            Packet *msg = txQueue->popPacket();
+            EV_DETAIL << "Interface is not connected, dropping packet " << msg << endl;
+            numDroppedPkFromHLIfaceDown++;
+            PacketDropDetails details;
+            details.setReason(INTERFACE_DOWN);
+            emit(packetDroppedSignal, msg, &details);
+            delete msg;
         }
 
         changeTransmissionState(TX_IDLE_STATE);         //FIXME replace status to OFF
@@ -383,7 +379,6 @@ void EtherMacBase::processConnectDisconnect()
 void EtherMacBase::encapsulate(Packet *frame)
 {
     auto phyHeader = makeShared<EthernetPhyHeader>();
-    phyHeader->setSrcMacFullDuplex(duplexMode);
     frame->insertAtFront(phyHeader);
     frame->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ethernetPhy);
 }
@@ -391,8 +386,7 @@ void EtherMacBase::encapsulate(Packet *frame)
 void EtherMacBase::decapsulate(Packet *packet)
 {
     auto phyHeader = packet->popAtFront<EthernetPhyHeader>();
-    if (phyHeader->getSrcMacFullDuplex() != duplexMode)
-        throw cRuntimeError("Ethernet misconfiguration: MACs on the same link must be all in full duplex mode, or all in half-duplex mode");
+    ASSERT(packet->getDataLength() >= MIN_ETHERNET_FRAME_BYTES);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ethernetMac);
 }
 
@@ -402,13 +396,13 @@ bool EtherMacBase::verifyCrcAndLength(Packet *packet)
     EV_STATICCONTEXT;
 
     auto ethHeader = packet->peekAtFront<EthernetMacHeader>();          //FIXME can I use any flags?
-    const auto& ethTrailer = packet->peekAtBack<EthernetFcs>(B(ETHER_FCS_BYTES));          //FIXME can I use any flags?
+    const auto& ethTrailer = packet->peekAtBack<EthernetFcs>(ETHER_FCS_BYTES);          //FIXME can I use any flags?
 
     switch(ethTrailer->getFcsMode()) {
         case FCS_DECLARED_CORRECT:
             break;
         case FCS_DECLARED_INCORRECT:
-            EV_ERROR << "incorrect fcs in ethernet frame\n";
+            EV_ERROR << "incorrect FCS in ethernet frame\n";
             return false;
         case FCS_COMPUTED: {
             bool isFcsBad = false;
@@ -419,7 +413,7 @@ bool EtherMacBase::verifyCrcAndLength(Packet *packet)
             // 1. fill in the data
             ethBytes->copyToBuffer(buffer, bufferLength);
             // 2. compute the FCS
-            auto computedFcs = inet::serializer::ethernetCRC(buffer, bufferLength);
+            auto computedFcs = ethernetCRC(buffer, bufferLength);
             delete [] buffer;
             isFcsBad = (computedFcs != ethTrailer->getFcs());      //FIXME how to check fcs?
             if (isFcsBad)
@@ -435,38 +429,6 @@ bool EtherMacBase::verifyCrcAndLength(Packet *packet)
         return (payloadLength <= packet->getDataLength() - (ethHeader->getChunkLength() + ethTrailer->getChunkLength()));
     }
     return true;
-}
-
-void EtherMacBase::flushQueue()
-{
-    // code would look slightly nicer with a pop() function that returns nullptr if empty
-    if (txQueue.innerQueue) {
-        while (!txQueue.innerQueue->isEmpty()) {
-            cMessage *msg = static_cast<cMessage *>(txQueue.innerQueue->pop());
-            PacketDropDetails details;
-            details.setReason(INTERFACE_DOWN);
-            emit(packetDroppedSignal, msg, &details);
-            delete msg;
-        }
-    }
-    else {
-        while (!txQueue.extQueue->isEmpty()) {
-            cMessage *msg = txQueue.extQueue->pop();
-            PacketDropDetails details;
-            details.setReason(INTERFACE_DOWN);
-            emit(packetDroppedSignal, msg, &details);
-            delete msg;
-        }
-        txQueue.extQueue->clear();    // clear request count
-    }
-}
-
-void EtherMacBase::clearQueue()
-{
-    if (txQueue.innerQueue)
-        txQueue.innerQueue->clear();
-    else
-        txQueue.extQueue->clear(); // clear request count
 }
 
 void EtherMacBase::refreshConnection()
@@ -496,7 +458,7 @@ bool EtherMacBase::dropFrameNotForUs(Packet *packet, const Ptr<const EthernetMac
     // All NON-PAUSE frames must be passed to the upper layer if the interface is
     // in promiscuous mode.
 
-    if (frame->getDest().equals(address))
+    if (frame->getDest().equals(getMacAddress()))
         return false;
 
     if (frame->getDest().isBroadcast())
@@ -590,7 +552,7 @@ void EtherMacBase::readChannelParameters(bool errorWhenAsymmetric)
 void EtherMacBase::printParameters()
 {
     // Dump parameters
-    EV_DETAIL << "MAC address: " << address << (promiscuous ? ", promiscuous mode" : "") << endl
+    EV_DETAIL << "MAC address: " << getMacAddress() << (promiscuous ? ", promiscuous mode" : "") << endl
               << "txrate: " << curEtherDescr->txrate << " bps, "
               << (duplexMode ? "full-duplex" : "half-duplex") << endl
               << "bitTime: " << 1e9 / curEtherDescr->txrate << " ns" << endl
@@ -598,28 +560,6 @@ void EtherMacBase::printParameters()
               << "slotTime: " << curEtherDescr->slotTime << endl
               << "interFrameGap: " << INTERFRAME_GAP_BITS / curEtherDescr->txrate << endl
               << endl;
-}
-
-void EtherMacBase::getNextFrameFromQueue()
-{
-    ASSERT(nullptr == curTxFrame);
-    if (txQueue.extQueue) {
-        if (txQueue.extQueue->getNumPendingRequests() == 0)
-            txQueue.extQueue->requestPacket();
-    }
-    else {
-        if (!txQueue.innerQueue->isEmpty())
-            curTxFrame = static_cast<Packet *>(txQueue.innerQueue->pop());
-    }
-}
-
-void EtherMacBase::requestNextFrameFromExtQueue()
-{
-    ASSERT(nullptr == curTxFrame);
-    if (txQueue.extQueue) {
-        if (txQueue.extQueue->getNumPendingRequests() == 0)
-            txQueue.extQueue->requestPacket();
-    }
 }
 
 void EtherMacBase::finish()
@@ -640,6 +580,8 @@ void EtherMacBase::finish()
 
 void EtherMacBase::refreshDisplay() const
 {
+    MacProtocolBase::refreshDisplay();
+
     // icon coloring
     const char *color;
 
@@ -662,17 +604,45 @@ void EtherMacBase::refreshDisplay() const
 
     if (!strcmp(getParentModule()->getNedTypeName(), "inet.linklayer.ethernet.EthernetInterface"))
         getParentModule()->getDisplayString().setTagArg("i", 1, color);
-}
 
-int EtherMacBase::InnerQueue::packetCompare(cObject *a, cObject *b)
-{
-    Packet *ap = static_cast<Packet *>(a);
-    Packet *bp = static_cast<Packet *>(b);
-    const auto& ah = ap->peekAtFront<EthernetMacHeader>();
-    const auto& bh = bp->peekAtFront<EthernetMacHeader>();
-    int ac = (ah->getTypeOrLength() == ETHERTYPE_FLOW_CONTROL) ? 0 : 1;
-    int bc = (bh->getTypeOrLength() == ETHERTYPE_FLOW_CONTROL) ? 0 : 1;
-    return ac - bc;
+    auto text = StringFormat::formatString(displayStringTextFormat, [&] (char directive) {
+        static std::string result;
+        switch (directive) {
+            case 's':
+                result = std::to_string(numFramesSent);
+                break;
+            case 'r':
+                result = std::to_string(numFramesReceivedOK);
+                break;
+            case 'd':
+                result = std::to_string(numDroppedPkFromHLIfaceDown + numDroppedIfaceDown + numDroppedBitError + numDroppedNotForUs);
+                break;
+            case 'q':
+                result = std::to_string(txQueue->getNumPackets());
+                break;
+            case 'b':
+                if (transmissionChannel == nullptr)
+                    result = "not connected";
+                else {
+                    char datarateText[40];
+                    double datarate = transmissionChannel->getNominalDatarate();
+                    if (datarate >= 1e9)
+                        sprintf(datarateText, "%gGbps", datarate / 1e9);
+                    else if (datarate >= 1e6)
+                        sprintf(datarateText, "%gMbps", datarate / 1e6);
+                    else if (datarate >= 1e3)
+                        sprintf(datarateText, "%gkbps", datarate / 1e3);
+                    else
+                        sprintf(datarateText, "%gbps", datarate);
+                    result = datarateText;
+                }
+                break;
+            default:
+                throw cRuntimeError("Unknown directive: %c", directive);
+        }
+        return result.c_str();
+    });
+    getDisplayString().setTagArg("t", 0, text);
 }
 
 void EtherMacBase::changeTransmissionState(MacTransmitState newState)
@@ -685,6 +655,44 @@ void EtherMacBase::changeReceptionState(MacReceiveState newState)
 {
     receiveState = newState;
     emit(receptionStateChangedSignal, newState);
+}
+
+void EtherMacBase::addPaddingAndSetFcs(Packet *packet, B requiredMinBytes) const
+{
+    auto ethFcs = packet->removeAtBack<EthernetFcs>(ETHER_FCS_BYTES);
+
+    B paddingLength = requiredMinBytes - ETHER_FCS_BYTES - B(packet->getByteLength());
+    if (paddingLength > B(0)) {
+        const auto& ethPadding = makeShared<EthernetPadding>();
+        ethPadding->setChunkLength(paddingLength);
+        packet->insertAtBack(ethPadding);
+    }
+
+    switch(ethFcs->getFcsMode()) {
+        case FCS_DECLARED_CORRECT:
+            ethFcs->setFcs(0xC00DC00DL);
+            break;
+        case FCS_DECLARED_INCORRECT:
+            ethFcs->setFcs(0xBAADBAADL);
+            break;
+        case FCS_COMPUTED:
+            { // calculate FCS
+                auto ethBytes = packet->peekDataAsBytes();
+                auto bufferLength = B(ethBytes->getChunkLength()).get();
+                auto buffer = new uint8_t[bufferLength];
+                // 1. fill in the data
+                ethBytes->copyToBuffer(buffer, bufferLength);
+                // 2. compute the FCS
+                auto computedFcs = ethernetCRC(buffer, bufferLength);
+                delete [] buffer;
+                ethFcs->setFcs(computedFcs);
+            }
+            break;
+        default:
+            throw cRuntimeError("Unknown FCS mode: %d", (int)(ethFcs->getFcsMode()));
+    }
+
+    packet->insertAtBack(ethFcs);
 }
 
 } // namespace inet

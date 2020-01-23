@@ -18,7 +18,7 @@
 #ifndef __INET_SIMPLECCBATTERY_H
 #define __INET_SIMPLECCBATTERY_H
 
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/power/base/CcEnergyStorageBase.h"
 
 namespace inet {
@@ -43,6 +43,8 @@ class INET_API SimpleCcBattery : public CcEnergyStorageBase
 
   protected:
     virtual void initialize(int stage) override;
+    virtual void refreshDisplay() const override;
+    virtual void updateDisplayString() const;
 
     virtual void updateTotalCurrentConsumption() override;
     virtual void updateTotalCurrentGeneration() override;

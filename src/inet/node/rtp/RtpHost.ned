@@ -8,10 +8,6 @@ import inet.transportlayer.rtp.Rtcp;
 import inet.transportlayer.rtp.Rtp;
 import ned.IdealChannel;
 
-
-//
-// TODO document!
-//
 module RtpHost extends StandardHost
 {
     parameters:
@@ -33,15 +29,15 @@ module RtpHost extends StandardHost
                 bandwidth = bandwidth;
                 fileName = fileName;
                 payloadType = payloadType;
-                @display("p=736,60");
+                @display("p=825,76");
         }
         rtp: Rtp {
             parameters:
-                @display("p=637,132");
+                @display("p=975,76");
         }
         rtcp: Rtcp {
             parameters:
-                @display("p=838,132");
+                @display("p=1125,76");
         }
 
     connections allowunconnected:

@@ -15,11 +15,10 @@
 // License along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-
 package inet.networklayer.icmpv6;
 
 //
-// Implements Ipv6 Neighbour Discovery.
+// Implements IPv6 Neighbour Discovery.
 //
 // An overview of the Ipv6 implementation in the INET Framework is
 // provided <a href="ipv6overview.html">here</a>.
@@ -43,3 +42,4 @@ simple Ipv6NeighbourDiscovery
         input ipv6In;
         output ipv6Out;
 }
+

@@ -11,16 +11,14 @@
 // See the GNU Lesser General Public License for more details.
 //
 
-#include "inet/transportlayer/tcp_common/TcpSpoof.h"
-
 #include "inet/common/ProtocolTag_m.h"
-#include "inet/networklayer/contract/IL3AddressType.h"
 #include "inet/networklayer/common/IpProtocolId_m.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
+#include "inet/networklayer/contract/IL3AddressType.h"
 #include "inet/transportlayer/common/L4Tools.h"
+#include "inet/transportlayer/tcp_common/TcpSpoof.h"
 
 namespace inet {
-
 namespace tcp {
 
 Define_Module(TcpSpoof);
@@ -55,7 +53,7 @@ void TcpSpoof::sendSpoofPacket()
     // one can customize the following according to concrete needs
     tcpseg->setSrcPort(srcPort);
     tcpseg->setDestPort(destPort);
-    tcpseg->setChunkLength(B(TCP_HEADER_OCTETS));
+    tcpseg->setChunkLength(TCP_MIN_HEADER_LENGTH);
     tcpseg->setSequenceNo(seq);
     //tcpseg->setAckNo(...);
     tcpseg->setSynBit(isSYN);
@@ -89,6 +87,5 @@ unsigned long TcpSpoof::chooseInitialSeqNum()
 }
 
 } // namespace tcp
-
 } // namespace inet
 

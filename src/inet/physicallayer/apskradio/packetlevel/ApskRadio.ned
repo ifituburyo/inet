@@ -24,11 +24,14 @@ import inet.physicallayer.base.packetlevel.FlatRadioBase;
 // well-known modulations without utilizing other techiques such as forward
 // error correction, interleaving, spreading, etc.
 //
-// See also ~ApskScalarRadio, and ~ApskScalarRadioMedium.
+// @see ~ApskScalarRadio, ~ApskScalarRadioMedium.
 //
 module ApskRadio extends FlatRadioBase
 {
     parameters:
-        antennaType = default("IsotropicAntenna");
+        string signalAnalogRepresentation @enum("scalar", "dimensional") = default("scalar");
+        transmitter.typename = default(signalAnalogRepresentation == "scalar" ? "ApskScalarTransmitter" : signalAnalogRepresentation == "dimensional" ? "ApskDimensionalTransmitter" : "");
+        receiver.typename = default(signalAnalogRepresentation == "scalar" ? "ApskScalarReceiver" : signalAnalogRepresentation == "dimensional" ? "ApskDimensionalReceiver" : "");
         @class(ApskRadio);
 }
+

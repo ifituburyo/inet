@@ -1,5 +1,145 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-12-09  Levente Mészáros
+
+	Removed DomainLimitedFunction in release mode.
+
+2019-12-08  Levente Mészáros
+
+	Fixed memory leak and added TODO items.
+	Added optional caching of signal gain functions in DimensionTransmitterBase.
+	Added gainFunctionCacheLimit parameter to control behavior.
+
+2019-09-24  Levente Mészáros
+
+	Moved the storage of radios and transmissions from the medium into the communication cache.
+
+	There was some duplication between the medium and the communication
+	cache. This change also allows having different ways of storing the
+	radios. For example, a dynamic network may require a different storage
+	than a static one.
+
+2019-09-23  Levente Mészáros
+
+	Renamed carrierFrequency to centerFrequency.
+
+	This confusion was spread all around the code. In most places we don't
+	know what kind of modulation is used (e.g. OFDM has several subcarriers),
+	so it doesn't really make sense.
+
+2019-09-16  Levente Mészáros
+
+	Added assert to avoid NaN values in dimensional signals.
+
+2019-09-11  Levente Mészáros
+
+	Extended parsing time/frequency gains with simply quantities.
+	Added ASSERTs for SER and BER values fall into [0, 1].
+
+2019-08-27  Levente Mészáros
+
+	Wrapped transmitted signal and background noise to limit the function domain.
+	The function domains should not extend into negative time and frequency.
+	Replaced simtime_t type with simsec in multidimensional analog domain signal
+	representations.
+
+2019-07-26  Levente Mészáros
+
+	Extracted SnirReceiverBase module type.
+	Changed log level for multidimensional values to EV_TRACE.
+
+2019-06-17  Levente Mészáros
+
+	Adapted DimensionalAnalogModelBase to the new mathematical function API.
+	Implemented new syntax and added expressions to timeGains and frequencyGains parameters.
+	Fixed calling base class method computeIsReceptionPossible().
+
+2019-06-07  Levente Mészáros
+
+	Replaced old multidimensional mappings (MiXiM) with new multidimensional functions.
+	This patch affects member variables, arguments and returns values.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-12-21  Levente Mészáros
+
+	Changed default bandwidth parameters.
+	Changed analogue model bandwidth checks to allow receiving signals with narrower bandwidth.
+
+	The problem is that Wifi has many different physical layers which often
+	use different bandwidths depending on the bitrate. So simply comparing
+	the listening and signal bandwidth is too restrictive. The listener is
+	conceptually using the widest signal bandwidth that it is capable of
+	receiving.
+
+2018-12-21  Levente Mészáros
+
+	Added ignorePartialInterference parameter to scalar analogue models.
+
+	This parameter allows ignoring interfering signals which have partially
+	overlapping frequency domain analog representation. For example, a Wifi
+	signal using adjacent channels. This parameter is disabled by default.
+
+2018-12-17  Levente Mészáros
+
+	Added end time to SignalTimeInd.
+
+2018-11-20  Timofei Istomin
+
+	Add signal arrival time to the incoming packets
+
+2018-09-27  Levente Mészáros
+
+	Fixed and simplified dimensional signal power creation.
+
+2018-09-20  Levente Mészáros
+
+	Fixed interpolation mode for dimensional noise calculation.
+
+2018-07-19  Levente Mészáros
+
+	Changed antenna gain computation to use normalized EulerAngles.
+
+2018-06-28  Levente Mészáros
+
+	Optimized antenna gain computation for the simple cases where min gain equals max gain.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-27  Levente Mészáros
+
+	Fixed antenna directional selectivity computation in radio medium analog models.
+
+2018-06-05  Levente Mészáros
+
+	Replaced fooType NED parameters with foo.typename parameters.
+
+2018-05-17  Levente Mészáros
+
+	Added clearTags() and copied PacketProtocolTag to all received packet computations.
+
+2018-05-15  Levente Mészáros
+
+	Added conditional mobility submodule to AntennaBase.
+
+2018-05-04  Levente Mészáros
+
+	Extended error models with corruption mode parameter.
+
+	Available corruption modes: packet, chunk, byte, or bit level. 802.11
+	error models support packet corruption mode only but could be extended
+	with the others to do real MPDU aggregation.
+
+2018-05-04  Levente Mészáros
+
+	Extended receiver model with computeReceivedPacket.
+
+	This change allows using different packet corruption modes.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-01-26  Levente Mészáros
 
 	Replaced headerBitLength with headerLength where the unit is already present.

@@ -27,8 +27,11 @@ namespace inet {
 
 class INET_API Ieee80211MacProtocolDissector : public ProtocolDissector
 {
+  protected:
+    virtual const Protocol *computeLlcProtocol(Packet *packet) const;
+
   public:
-    virtual void dissect(Packet *packet, ICallback& callback) const override;
+    virtual void dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const override;
 };
 
 } // namespace inet

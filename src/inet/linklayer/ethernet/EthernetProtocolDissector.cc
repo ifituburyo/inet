@@ -17,20 +17,19 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/linklayer/ethernet/EthernetProtocolDissector.h"
-
-#include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/common/ProtocolGroup.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/linklayer/ethernet/EtherFrame_m.h"
 #include "inet/linklayer/ethernet/EtherPhyFrame_m.h"
+#include "inet/linklayer/ethernet/EthernetProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::ethernetMac, EthernetMacDissector);
 Register_Protocol_Dissector(&Protocol::ethernetPhy, EthernetPhyDissector);
 
-void EthernetPhyDissector::dissect(Packet *packet, ICallback& callback) const
+void EthernetPhyDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     const auto& header = packet->popAtFront<EthernetPhyHeader>();
     callback.startProtocolDataUnit(&Protocol::ethernetPhy);
@@ -39,14 +38,14 @@ void EthernetPhyDissector::dissect(Packet *packet, ICallback& callback) const
     callback.endProtocolDataUnit(&Protocol::ethernetPhy);
 }
 
-void EthernetMacDissector::dissect(Packet *packet, ICallback& callback) const
+void EthernetMacDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     const auto& header = packet->popAtFront<EthernetMacHeader>();
     callback.startProtocolDataUnit(&Protocol::ethernetMac);
     callback.visitChunk(header, &Protocol::ethernetMac);
-    const auto& fcs = packet->popAtBack<EthernetFcs>(B(4));
+    const auto& fcs = packet->popAtBack<EthernetFcs>(ETHER_FCS_BYTES);
     if (isEth2Header(*header)) {
-        auto payloadProtocol = ProtocolGroup::ethertype.getProtocol(header->getTypeOrLength());
+        auto payloadProtocol = ProtocolGroup::ethertype.findProtocol(header->getTypeOrLength());
         callback.dissectPacket(packet, payloadProtocol);
     }
     else {

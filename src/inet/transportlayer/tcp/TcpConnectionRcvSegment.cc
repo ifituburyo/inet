@@ -17,17 +17,17 @@
 //
 
 #include <string.h>
-#include "inet/transportlayer/tcp/Tcp.h"
-#include "inet/transportlayer/tcp/TcpConnection.h"
-#include "inet/transportlayer/tcp_common/TcpHeader.h"
+
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
-#include "inet/transportlayer/tcp/TcpSendQueue.h"
-#include "inet/transportlayer/tcp/TcpSackRexmitQueue.h"
-#include "inet/transportlayer/tcp/TcpReceiveQueue.h"
+#include "inet/transportlayer/tcp/Tcp.h"
 #include "inet/transportlayer/tcp/TcpAlgorithm.h"
+#include "inet/transportlayer/tcp/TcpConnection.h"
+#include "inet/transportlayer/tcp/TcpReceiveQueue.h"
+#include "inet/transportlayer/tcp/TcpSackRexmitQueue.h"
+#include "inet/transportlayer/tcp/TcpSendQueue.h"
+#include "inet/transportlayer/tcp_common/TcpHeader.h"
 
 namespace inet {
-
 namespace tcp {
 
 bool TcpConnection::tryFastRoute(const Ptr<const TcpHeader>& tcpseg)
@@ -77,7 +77,7 @@ void TcpConnection::segmentArrivalWhileClosed(Packet *packet, const Ptr<const Tc
 
     if (!tcpseg->getAckBit()) {
         EV_DETAIL << "ACK bit not set: sending RST+ACK\n";
-        uint32 ackNo = tcpseg->getSequenceNo() + packet->getByteLength() - tcpseg->getHeaderLength() + tcpseg->getSynFinLen();
+        uint32 ackNo = tcpseg->getSequenceNo() + packet->getByteLength() - B(tcpseg->getHeaderLength()).get() + tcpseg->getSynFinLen();
         sendRstAck(0, ackNo, destAddr, srcAddr, tcpseg->getDestPort(), tcpseg->getSrcPort());
     }
     else {
@@ -92,11 +92,8 @@ TcpEventCode TcpConnection::process_RCV_SEGMENT(Packet *packet, const Ptr<const 
     printSegmentBrief(packet, tcpseg);
     EV_DETAIL << "TCB: " << state->str() << "\n";
 
-    if (rcvSeqVector)
-        rcvSeqVector->record(tcpseg->getSequenceNo());
-
-    if (rcvAckVector)
-        rcvAckVector->record(tcpseg->getAckNo());
+    emit(rcvSeqSignal, tcpseg->getSequenceNo());
+    emit(rcvAckSignal, tcpseg->getAckNo());
 
     //
     // Note: this code is organized exactly as RFC 793, section "3.9 Event
@@ -124,7 +121,7 @@ bool TcpConnection::hasEnoughSpaceForSegmentInReceiveQueue(Packet *packet, const
     //TODO must rewrite it
     //return (state->freeRcvBuffer >= tcpseg->getPayloadLength()); // enough freeRcvBuffer in rcvQueue for new segment?
 
-    long int payloadLength = packet->getByteLength() - tcpseg->getHeaderLength();
+    long int payloadLength = packet->getByteLength() - B(tcpseg->getHeaderLength()).get();
     uint32_t payloadSeq = tcpseg->getSequenceNo();
     uint32 firstSeq = receiveQueue->getFirstSeqNo();
     if (seqLess(payloadSeq, firstSeq)) {
@@ -143,7 +140,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
 
     bool acceptable = true;
 
-    if (tcpseg->getHeaderLength() > TCP_HEADER_OCTETS) {    // Header options present? TCP_HEADER_OCTETS = 20
+    if (tcpseg->getHeaderLength() > TCP_MIN_HEADER_LENGTH) {    // Header options present? TCP_HEADER_OCTETS = 20
         // PAWS
         if (state->ts_enabled) {
             uint32 tsval = getTSval(tcpseg);
@@ -162,7 +159,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
     if (acceptable)
         acceptable = isSegmentAcceptable(packet, tcpseg);
 
-    int payloadLength = packet->getByteLength() - tcpseg->getHeaderLength();
+    int payloadLength = packet->getByteLength() - B(tcpseg->getHeaderLength()).get();
 
     if (!acceptable) {
         //"
@@ -198,10 +195,15 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
 
         state->rcv_naseg++;
 
-        if (rcvNASegVector)
-            rcvNASegVector->record(state->rcv_naseg);
+        emit(rcvNASegSignal, state->rcv_naseg);
 
         return TCP_E_IGNORE;
+    }
+
+    // ECN
+    if (tcpseg->getCwrBit() == true) {
+        EV_INFO << "Received CWR... Leaving ecnEcho State\n";
+        state->ecnEchoState = false;
     }
 
     //
@@ -395,7 +397,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
         if (state->fin_ack_rcvd) {
             EV_INFO << "Our FIN acked -- can go to TIME_WAIT now\n";
             event = TCP_E_RCV_ACK;    // will trigger transition to TIME-WAIT
-            scheduleTimeout(the2MSLTimer, TCP_TIMEOUT_2MSL);    // start timer
+            scheduleTimeout(the2MSLTimer, 2*tcpMain->getMsl());    // start timer
 
             // we're entering TIME_WAIT, so we can signal CLOSED the user
             // (the only thing left to do is wait until the 2MSL timer expires)
@@ -424,7 +426,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
         //
         sendAck();
         cancelEvent(the2MSLTimer);
-        scheduleTimeout(the2MSLTimer, TCP_TIMEOUT_2MSL);
+        scheduleTimeout(the2MSLTimer, 2*tcpMain->getMsl());
     }
 
     //
@@ -481,7 +483,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
 
         if (payloadLength > 0) {
             // check for full sized segment
-            if (payloadLength == state->snd_mss || payloadLength + tcpseg->getHeaderLength() - TCP_HEADER_OCTETS == state->snd_mss)
+            if ((uint32_t)payloadLength == state->snd_mss || (uint32_t)payloadLength + B(tcpseg->getHeaderLength() - TCP_MIN_HEADER_LENGTH).get() == state->snd_mss)
                 state->full_sized_segment_counter++;
 
             // check for persist probe
@@ -509,16 +511,14 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
                     // in the receivedDataAck we need the old value
                     state->dupacks = 0;
 
-                    if (dupAcksVector)
-                        dupAcksVector->record(state->dupacks);
+                    emit(dupAcksSignal, state->dupacks);
                 }
 
                 // out-of-order segment?
                 if (old_rcv_nxt == state->rcv_nxt) {
                     state->rcv_oooseg++;
 
-                    if (rcvOooSegVector)
-                        rcvOooSegVector->record(state->rcv_oooseg);
+                    emit(rcvOooSegSignal, state->rcv_oooseg);
 
                     // RFC 2018, page 4:
                     // "The receiver SHOULD send an ACK for every valid segment that arrives
@@ -570,7 +570,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
                                     event = TCP_E_RCV_FIN_ACK;
                                     // start the time-wait timer, turn off the other timers
                                     cancelEvent(finWait2Timer);
-                                    scheduleTimeout(the2MSLTimer, TCP_TIMEOUT_2MSL);
+                                    scheduleTimeout(the2MSLTimer, 2*tcpMain->getMsl());
 
                                     // we're entering TIME_WAIT, so we can signal CLOSED the user
                                     // (the only thing left to do is wait until the 2MSL timer expires)
@@ -580,7 +580,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
                             case TCP_S_FIN_WAIT_2:
                                 // Start the time-wait timer, turn off the other timers.
                                 cancelEvent(finWait2Timer);
-                                scheduleTimeout(the2MSLTimer, TCP_TIMEOUT_2MSL);
+                                scheduleTimeout(the2MSLTimer, 2*tcpMain->getMsl());
 
                                 // we're entering TIME_WAIT, so we can signal CLOSED the user
                                 // (the only thing left to do is wait until the 2MSL timer expires)
@@ -589,7 +589,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
                             case TCP_S_TIME_WAIT:
                                 // Restart the 2 MSL time-wait timeout.
                                 cancelEvent(the2MSLTimer);
-                                scheduleTimeout(the2MSLTimer, TCP_TIMEOUT_2MSL);
+                                scheduleTimeout(the2MSLTimer, 2*tcpMain->getMsl());
                                 break;
 
                             default:
@@ -601,8 +601,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
             else {    // not enough freeRcvBuffer in rcvQueue for new segment
                 state->tcpRcvQueueDrops++;    // update current number of tcp receive queue drops
 
-                if (tcpRcvQueueDropsVector)
-                    tcpRcvQueueDropsVector->record(state->tcpRcvQueueDrops);
+                emit(tcpRcvQueueDropsSignal, state->tcpRcvQueueDrops);
 
                 // if the ACK bit is off drop the segment and return
                 EV_WARN << "RcvQueueBuffer has run out, dropping segment\n";
@@ -645,7 +644,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
                         event = TCP_E_RCV_FIN_ACK;
                         // start the time-wait timer, turn off the other timers
                         cancelEvent(finWait2Timer);
-                        scheduleTimeout(the2MSLTimer, TCP_TIMEOUT_2MSL);
+                        scheduleTimeout(the2MSLTimer, 2*tcpMain->getMsl());
 
                         // we're entering TIME_WAIT, so we can signal CLOSED the user
                         // (the only thing left to do is wait until the 2MSL timer expires)
@@ -655,7 +654,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
                 case TCP_S_FIN_WAIT_2:
                     // Start the time-wait timer, turn off the other timers.
                     cancelEvent(finWait2Timer);
-                    scheduleTimeout(the2MSLTimer, TCP_TIMEOUT_2MSL);
+                    scheduleTimeout(the2MSLTimer, 2*tcpMain->getMsl());
 
                     // we're entering TIME_WAIT, so we can signal CLOSED the user
                     // (the only thing left to do is wait until the 2MSL timer expires)
@@ -664,7 +663,7 @@ TcpEventCode TcpConnection::processSegment1stThru8th(Packet *packet, const Ptr<c
                 case TCP_S_TIME_WAIT:
                     // Restart the 2 MSL time-wait timeout.
                     cancelEvent(the2MSLTimer);
-                    scheduleTimeout(the2MSLTimer, TCP_TIMEOUT_2MSL);
+                    scheduleTimeout(the2MSLTimer, 2*tcpMain->getMsl());
                     break;
 
                 default:
@@ -781,79 +780,19 @@ TcpEventCode TcpConnection::processSegmentInListen(Packet *packet, const Ptr<con
         // LISTENing on the port. Note: forking will change our socketId.
         //
         if (state->fork) {
-            TcpConnection *conn = cloneListeningConnection();    // "conn" is the clone which will stay LISTENing, while "this" gets updated with the remote address
+            TcpConnection *conn = cloneListeningConnection();    // "conn" is the clone which will handle the new connection, while "this" stay LISTENing
             tcpMain->addForkedConnection(this, conn, destAddr, srcAddr, tcpseg->getDestPort(), tcpseg->getSrcPort());
-            EV_DETAIL << "Connection forked: this connection got new socketId=" << socketId << ", "
-                                                                                           "spinoff keeps LISTENing with socketId=" << conn->socketId << "\n";
+            EV_DETAIL << "Connection forked: new connection got new socketId=" << conn->socketId << ", "
+                                                                                           "old connection keeps LISTENing with socketId=" << socketId << "\n";
+            TcpEventCode forkEvent = conn->processSynInListen(packet, tcpseg, srcAddr, destAddr);
+            conn->performStateTransition(forkEvent);
+
+            return TCP_E_IGNORE;
         }
         else {
             tcpMain->updateSockPair(this, destAddr, srcAddr, tcpseg->getDestPort(), tcpseg->getSrcPort());
+            return processSynInListen(packet, tcpseg, srcAddr, destAddr);
         }
-
-        //"
-        //  Set RCV.NXT to SEG.SEQ+1, IRS is set to SEG.SEQ and any other
-        //  control or text should be queued for processing later.  ISS
-        //  should be selected and a SYN segment sent of the form:
-        //
-        //    <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
-        //
-        //  SND.NXT is set to ISS+1 and SND.UNA to ISS.  The connection
-        //  state should be changed to SYN-RECEIVED.
-        //"
-        state->rcv_nxt = tcpseg->getSequenceNo() + 1;
-        state->rcv_adv = state->rcv_nxt + state->rcv_wnd;
-
-        if (rcvAdvVector)
-            rcvAdvVector->record(state->rcv_adv);
-
-        state->irs = tcpseg->getSequenceNo();
-        receiveQueue->init(state->rcv_nxt);    // FIXME may init twice...
-        selectInitialSeqNum();
-
-        // although not mentioned in RFC 793, seems like we have to pick up
-        // initial snd_wnd from the segment here.
-        updateWndInfo(tcpseg, true);
-
-        if (tcpseg->getHeaderLength() > TCP_HEADER_OCTETS) // Header options present? TCP_HEADER_OCTETS = 20
-            readHeaderOptions(tcpseg);
-
-        state->ack_now = true;
-        sendSynAck();
-        startSynRexmitTimer();
-
-        if (!connEstabTimer->isScheduled())
-            scheduleTimeout(connEstabTimer, TCP_TIMEOUT_CONN_ESTAB);
-
-        //"
-        // Note that any other incoming control or data (combined with SYN)
-        // will be processed in the SYN-RECEIVED state, but processing of SYN
-        // and ACK should not be repeated.
-        //"
-        // We don't send text in SYN or SYN+ACK, but accept it. Otherwise
-        // there isn't much left to do: RST, SYN, ACK, FIN got processed already,
-        // so there's only URG and PSH left to handle.
-        //
-        if (packet->getByteLength() > tcpseg->getHeaderLength()) {
-            updateRcvQueueVars();
-
-            if (hasEnoughSpaceForSegmentInReceiveQueue(packet, tcpseg)) {    // enough freeRcvBuffer in rcvQueue for new segment?
-                receiveQueue->insertBytesFromSegment(packet, tcpseg);
-            }
-            else {    // not enough freeRcvBuffer in rcvQueue for new segment
-                state->tcpRcvQueueDrops++;    // update current number of tcp receive queue drops
-
-                if (tcpRcvQueueDropsVector)
-                    tcpRcvQueueDropsVector->record(state->tcpRcvQueueDrops);
-
-                EV_WARN << "RcvQueueBuffer has run out, dropping segment\n";
-                return TCP_E_IGNORE;
-            }
-        }
-
-        if (tcpseg->getUrgBit() || tcpseg->getPshBit())
-            EV_DETAIL << "Ignoring URG and PSH bits in SYN\n"; // TBD
-
-        return TCP_E_RCV_SYN;    // this will take us to SYN_RCVD
     }
 
     //"
@@ -862,6 +801,79 @@ TcpEventCode TcpConnection::processSegmentInListen(Packet *packet, const Ptr<con
     //"
     EV_WARN << "Unexpected segment: dropping it\n";
     return TCP_E_IGNORE;
+}
+
+TcpEventCode TcpConnection::processSynInListen(Packet *packet, const Ptr<const TcpHeader>& tcpseg, L3Address srcAddr, L3Address destAddr)
+{
+    //"
+    //  Set RCV.NXT to SEG.SEQ+1, IRS is set to SEG.SEQ and any other
+    //  control or text should be queued for processing later.  ISS
+    //  should be selected and a SYN segment sent of the form:
+    //
+    //    <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
+    //
+    //  SND.NXT is set to ISS+1 and SND.UNA to ISS.  The connection
+    //  state should be changed to SYN-RECEIVED.
+    //"
+    state->rcv_nxt = tcpseg->getSequenceNo() + 1;
+    state->rcv_adv = state->rcv_nxt + state->rcv_wnd;
+
+    emit(rcvAdvSignal, state->rcv_adv);
+
+    state->irs = tcpseg->getSequenceNo();
+    receiveQueue->init(state->rcv_nxt);    // FIXME may init twice...
+    selectInitialSeqNum();
+
+    // although not mentioned in RFC 793, seems like we have to pick up
+    // initial snd_wnd from the segment here.
+    updateWndInfo(tcpseg, true);
+
+    if (tcpseg->getHeaderLength() > TCP_MIN_HEADER_LENGTH) // Header options present?
+        readHeaderOptions(tcpseg);
+
+    state->ack_now = true;
+
+        // ECN
+        if (tcpseg->getEceBit() == true && tcpseg->getCwrBit() == true) {
+            state->endPointIsWillingECN = true;
+            EV << "ECN-setup SYN packet received\n";
+        }
+
+    sendSynAck();
+    startSynRexmitTimer();
+
+    if (!connEstabTimer->isScheduled())
+        scheduleTimeout(connEstabTimer, TCP_TIMEOUT_CONN_ESTAB);
+
+    //"
+    // Note that any other incoming control or data (combined with SYN)
+    // will be processed in the SYN-RECEIVED state, but processing of SYN
+    // and ACK should not be repeated.
+    //"
+    // We don't send text in SYN or SYN+ACK, but accept it. Otherwise
+    // there isn't much left to do: RST, SYN, ACK, FIN got processed already,
+    // so there's only URG and PSH left to handle.
+    //
+    if (B(packet->getByteLength()) > tcpseg->getHeaderLength()) {
+        updateRcvQueueVars();
+
+        if (hasEnoughSpaceForSegmentInReceiveQueue(packet, tcpseg)) {    // enough freeRcvBuffer in rcvQueue for new segment?
+            receiveQueue->insertBytesFromSegment(packet, tcpseg);
+        }
+        else {    // not enough freeRcvBuffer in rcvQueue for new segment
+            state->tcpRcvQueueDrops++;    // update current number of tcp receive queue drops
+
+            emit(tcpRcvQueueDropsSignal, state->tcpRcvQueueDrops);
+
+            EV_WARN << "RcvQueueBuffer has run out, dropping segment\n";
+            return TCP_E_IGNORE;
+        }
+    }
+
+    if (tcpseg->getUrgBit() || tcpseg->getPshBit())
+        EV_DETAIL << "Ignoring URG and PSH bits in SYN\n"; // TBD
+
+    return TCP_E_RCV_SYN;    // this will take us to SYN_RCVD
 }
 
 TcpEventCode TcpConnection::processSegmentInSynSent(Packet *packet, const Ptr<const TcpHeader>& tcpseg, L3Address srcAddr, L3Address destAddr)
@@ -941,8 +953,7 @@ TcpEventCode TcpConnection::processSegmentInSynSent(Packet *packet, const Ptr<co
         state->rcv_nxt = tcpseg->getSequenceNo() + 1;
         state->rcv_adv = state->rcv_nxt + state->rcv_wnd;
 
-        if (rcvAdvVector)
-            rcvAdvVector->record(state->rcv_adv);
+        emit(rcvAdvSignal, state->rcv_adv);
 
         state->irs = tcpseg->getSequenceNo();
         receiveQueue->init(state->rcv_nxt);
@@ -986,7 +997,7 @@ TcpEventCode TcpConnection::processSegmentInSynSent(Packet *packet, const Ptr<co
             if (tcpseg->getFinBit())
                 EV_DETAIL << "SYN+ACK+FIN received: ignoring FIN\n";
 
-            if (packet->getByteLength() > tcpseg->getHeaderLength()) {
+            if (B(packet->getByteLength()) > tcpseg->getHeaderLength()) {
                 updateRcvQueueVars();
 
                 if (hasEnoughSpaceForSegmentInReceiveQueue(packet, tcpseg)) {    // enough freeRcvBuffer in rcvQueue for new segment?
@@ -995,8 +1006,7 @@ TcpEventCode TcpConnection::processSegmentInSynSent(Packet *packet, const Ptr<co
                 else {    // not enough freeRcvBuffer in rcvQueue for new segment
                     state->tcpRcvQueueDrops++;    // update current number of tcp receive queue drops
 
-                    if (tcpRcvQueueDropsVector)
-                        tcpRcvQueueDropsVector->record(state->tcpRcvQueueDrops);
+                    emit(tcpRcvQueueDropsSignal, state->tcpRcvQueueDrops);
 
                     EV_WARN << "RcvQueueBuffer has run out, dropping segment\n";
                     return TCP_E_IGNORE;
@@ -1006,7 +1016,7 @@ TcpEventCode TcpConnection::processSegmentInSynSent(Packet *packet, const Ptr<co
             if (tcpseg->getUrgBit() || tcpseg->getPshBit())
                 EV_DETAIL << "Ignoring URG and PSH bits in SYN+ACK\n"; // TBD
 
-            if (tcpseg->getHeaderLength() > TCP_HEADER_OCTETS) // Header options present? TCP_HEADER_OCTETS = 20
+            if (tcpseg->getHeaderLength() > TCP_MIN_HEADER_LENGTH) // Header options present?
                 readHeaderOptions(tcpseg);
 
             // notify tcpAlgorithm (it has to send ACK of SYN) and app layer
@@ -1014,6 +1024,22 @@ TcpEventCode TcpConnection::processSegmentInSynSent(Packet *packet, const Ptr<co
             tcpAlgorithm->established(true);
             tcpMain->emit(Tcp::tcpConnectionAddedSignal, this);
             sendEstabIndicationToApp();
+
+            //ECN
+            if (state->ecnSynSent) {
+                if (tcpseg->getEceBit() && !tcpseg->getCwrBit()) {
+                    state->ect = true;
+                    EV << "ECN-setup SYN-ACK packet was received... ECN is enabled.\n";
+                } else {
+                    state->ect = false;
+                    EV << "non-ECN-setup SYN-ACK packet was received... ECN is disabled.\n";
+                }
+                state->ecnSynSent = false;
+            } else {
+                state->ect = false;
+                if (tcpseg->getEceBit() && !tcpseg->getCwrBit())
+                    EV << "ECN-setup SYN-ACK packet was received... ECN is disabled.\n";
+            }
 
             // This will trigger transition to ESTABLISHED. Timers and notifying
             // app will be taken care of in stateEntered().
@@ -1043,7 +1069,7 @@ TcpEventCode TcpConnection::processSegmentInSynSent(Packet *packet, const Ptr<co
         // We don't send text in SYN or SYN+ACK, but accept it. Otherwise
         // there isn't much left to do: RST, SYN, ACK, FIN got processed already,
         // so there's only URG and PSH left to handle.
-        if (packet->getByteLength() > tcpseg->getHeaderLength()) {
+        if (B(packet->getByteLength()) > tcpseg->getHeaderLength()) {
             updateRcvQueueVars();
 
             if (hasEnoughSpaceForSegmentInReceiveQueue(packet, tcpseg)) {    // enough freeRcvBuffer in rcvQueue for new segment?
@@ -1052,8 +1078,7 @@ TcpEventCode TcpConnection::processSegmentInSynSent(Packet *packet, const Ptr<co
             else {    // not enough freeRcvBuffer in rcvQueue for new segment
                 state->tcpRcvQueueDrops++;    // update current number of tcp receive queue drops
 
-                if (tcpRcvQueueDropsVector)
-                    tcpRcvQueueDropsVector->record(state->tcpRcvQueueDrops);
+                emit(tcpRcvQueueDropsSignal, state->tcpRcvQueueDrops);
 
                 EV_WARN << "RcvQueueBuffer has run out, dropping segment\n";
                 return TCP_E_IGNORE;
@@ -1108,7 +1133,16 @@ bool TcpConnection::processAckInEstabEtc(Packet *packet, const Ptr<const TcpHead
 {
     EV_DETAIL << "Processing ACK in a data transfer state\n";
 
-    int payloadLength = packet->getByteLength() - tcpseg->getHeaderLength();
+    int payloadLength = packet->getByteLength() - B(tcpseg->getHeaderLength()).get();
+
+    //ECN
+    TcpStateVariables* state = getState();
+    if (state && state->ect) {
+        if (tcpseg->getEceBit() == true) {
+            EV_INFO << "Received packet with ECE\n";
+            state->gotEce = true;
+        }
+    }
 
     //
     //"
@@ -1150,8 +1184,7 @@ bool TcpConnection::processAckInEstabEtc(Packet *packet, const Ptr<const TcpHead
         if (state->snd_una == tcpseg->getAckNo() && payloadLength == 0 && state->snd_una != state->snd_max) {
             state->dupacks++;
 
-            if (dupAcksVector)
-                dupAcksVector->record(state->dupacks);
+            emit(dupAcksSignal, state->dupacks);
 
             // we need to update send window even if the ACK is a dupACK, because rcv win
             // could have been changed if faulty data receiver is not respecting the "do not shrink window" rule
@@ -1171,8 +1204,7 @@ bool TcpConnection::processAckInEstabEtc(Packet *packet, const Ptr<const TcpHead
             // reset counter
             state->dupacks = 0;
 
-            if (dupAcksVector)
-                dupAcksVector->record(state->dupacks);
+            emit(dupAcksSignal, state->dupacks);
         }
     }
     else if (seqLE(tcpseg->getAckNo(), state->snd_max)) {
@@ -1180,8 +1212,7 @@ bool TcpConnection::processAckInEstabEtc(Packet *packet, const Ptr<const TcpHead
         uint32 old_snd_una = state->snd_una;
         state->snd_una = tcpseg->getAckNo();
 
-        if (unackedVector)
-            unackedVector->record(state->snd_max - state->snd_una);
+        emit(unackedSignal, state->snd_max - state->snd_una);
 
         // after retransmitting a lost segment, we may get an ack well ahead of snd_nxt
         if (seqLess(state->snd_nxt, state->snd_una))
@@ -1226,8 +1257,7 @@ bool TcpConnection::processAckInEstabEtc(Packet *packet, const Ptr<const TcpHead
             // in the receivedDataAck we need the old value
             state->dupacks = 0;
 
-            if (dupAcksVector)
-                dupAcksVector->record(state->dupacks);
+            emit(dupAcksSignal, state->dupacks);
         }
     }
     else {
@@ -1237,8 +1267,7 @@ bool TcpConnection::processAckInEstabEtc(Packet *packet, const Ptr<const TcpHead
         tcpAlgorithm->receivedAckForDataNotYetSent(tcpseg->getAckNo());
         state->dupacks = 0;
 
-        if (dupAcksVector)
-            dupAcksVector->record(state->dupacks);
+        emit(dupAcksSignal, state->dupacks);
 
         return false;    // means "drop"
     }
@@ -1363,6 +1392,5 @@ void TcpConnection::process_TIMEOUT_SYN_REXMIT(TcpEventCode& event)
 //"
 
 } // namespace tcp
-
 } // namespace inet
 

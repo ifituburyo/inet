@@ -38,15 +38,15 @@ module TC1 like ITrafficConditioner
         output out;
     submodules:
         classifier: MultiFieldClassifier {
-            @display("p=61,110");
+            @display("p=100,100");
         }
         marker: DscpMarker {
-            @display("p=192,110");
+            @display("p=250,100");
         }
     connections:
         in --> classifier.in;
         for i=1..numClasses {
-            classifier.outs++ --> marker.in++;
+            classifier.out++ --> marker.in++;
         }
         classifier.defaultOut --> marker.in++;
         marker.out --> out;

@@ -16,12 +16,13 @@
 //
 
 #include "inet/common/ModuleAccess.h"
-#include "inet/networklayer/common/L3AddressResolver.h"
-#include "inet/visualizer/linklayer/Ieee80211CanvasVisualizer.h"
 
 #ifdef WITH_IEEE80211
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtSta.h"
 #endif
+
+#include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/visualizer/linklayer/Ieee80211CanvasVisualizer.h"
 
 namespace inet {
 
@@ -39,6 +40,12 @@ Ieee80211CanvasVisualizer::Ieee80211CanvasVisualization::Ieee80211CanvasVisualiz
     networkNodeVisualization(networkNodeVisualization),
     figure(figure)
 {
+}
+
+Ieee80211CanvasVisualizer::~Ieee80211CanvasVisualizer()
+{
+    if (displayAssociations)
+        removeAllIeee80211Visualizations();
 }
 
 void Ieee80211CanvasVisualizer::initialize(int stage)
@@ -96,6 +103,8 @@ Ieee80211VisualizerBase::Ieee80211Visualization *Ieee80211CanvasVisualizer::crea
     labelFigure->setText(ssid.c_str());
     labelFigure->setPosition(iconFigure->getBounds().getSize() / 2);
     auto networkNodeVisualization = networkNodeVisualizer->getNetworkNodeVisualization(networkNode);
+    if (networkNodeVisualization == nullptr)
+        throw cRuntimeError("Cannot create IEEE 802.11 visualization for '%s', because network node visualization is not found for '%s'", interfaceEntry->getInterfaceName(), networkNode->getFullPath().c_str());
     return new Ieee80211CanvasVisualization(networkNodeVisualization, labeledIconFigure, networkNode->getId(), interfaceEntry->getInterfaceId());
 }
 

@@ -20,14 +20,15 @@
 #define __INET_ARP_H
 
 #include <map>
+#include <vector>
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/networklayer/contract/IArp.h"
 #include "inet/common/ModuleAccess.h"
-#include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/common/lifecycle/OperationalBase.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/common/MacAddress.h"
+#include "inet/networklayer/arp/ipv4/ArpPacket_m.h"
+#include "inet/networklayer/contract/IArp.h"
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 
 namespace inet {
@@ -41,7 +42,7 @@ class IIpv4RoutingTable;
 /**
  * ARP implementation.
  */
-class INET_API Arp : public cSimpleModule, public IArp, public ILifecycle
+class INET_API Arp : public OperationalBase, public IArp
 {
   public:
     class ArpCacheEntry;
@@ -67,14 +68,13 @@ class INET_API Arp : public cSimpleModule, public IArp, public ILifecycle
     simtime_t retryTimeout;
     int retryCount = 0;
     simtime_t cacheTimeout;
-    bool respondToProxyARP = false;
-
-    bool isUp = false;
-
+    std::string proxyArpInterfaces = "";
     long numResolutions = 0;
     long numFailedResolutions = 0;
     long numRequestsSent = 0;
     long numRepliesSent = 0;
+
+    cPatternMatcher proxyArpInterfacesMatcher;
 
     static simsignal_t arpRequestSentSignal;
     static simsignal_t arpReplySentSignal;
@@ -98,26 +98,33 @@ class INET_API Arp : public cSimpleModule, public IArp, public ILifecycle
     virtual L3Address getL3AddressFor(const MacAddress& addr) const override;
     /// @}
 
+    void sendArpGratuitous(const InterfaceEntry *ie, MacAddress srcAddr, Ipv4Address ipAddr, ArpOpcode opCode = ARP_REQUEST);
+    void sendArpProbe(const InterfaceEntry *ie, MacAddress srcAddr, Ipv4Address probedAddr);
+
   protected:
     virtual void initialize(int stage) override;
-    virtual void handleMessage(cMessage *msg) override;
-    virtual void handleMessageWhenDown(cMessage *msg);
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleMessageWhenUp(cMessage *msg) override;
     virtual void finish() override;
 
-    virtual bool isNodeUp();
-    virtual void stop();
-    virtual void start();
+    // Lifecycle methods
+    virtual bool isInitializeStage(int stage) override { return stage == INITSTAGE_NETWORK_LAYER; }
+    virtual bool isModuleStartStage(int stage) override { return stage == ModuleStartOperation::STAGE_NETWORK_LAYER; }
+    virtual bool isModuleStopStage(int stage) override { return stage == ModuleStopOperation::STAGE_NETWORK_LAYER; }
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
     virtual void flush();
 
-    virtual void initiateARPResolution(ArpCacheEntry *entry);
-    virtual void sendARPRequest(const InterfaceEntry *ie, Ipv4Address ipAddress);
+    virtual void initiateArpResolution(ArpCacheEntry *entry);
+    virtual void sendArpRequest(const InterfaceEntry *ie, Ipv4Address ipAddress);
     virtual void requestTimedOut(cMessage *selfmsg);
     virtual bool addressRecognized(Ipv4Address destAddr, InterfaceEntry *ie);
-    virtual void processARPPacket(Packet *packet);
-    virtual void updateARPCache(ArpCacheEntry *entry, const MacAddress& macAddress);
+    virtual void processArpPacket(Packet *packet);
+    virtual void updateArpCache(ArpCacheEntry *entry, const MacAddress& macAddress);
 
-    virtual void dumpARPPacket(const ArpPacket *arp);
+    virtual MacAddress resolveMacAddressForArpReply(const InterfaceEntry *ie, const ArpPacket *arp);
+
+    virtual void dumpArpPacket(const ArpPacket *arp);
     virtual void refreshDisplay() const override;
 };
 

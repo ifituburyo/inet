@@ -21,6 +21,8 @@ namespace inet {
 
 namespace physicallayer {
 
+const DsssOqpsk16Modulation DsssOqpsk16Modulation::singleton;
+
 DsssOqpsk16Modulation::DsssOqpsk16Modulation() :
     ApskModulationBase(new std::vector<ApskSymbol>())
 {
@@ -44,7 +46,7 @@ double DsssOqpsk16Modulation::calculateBER(double snir, Hz bandwidth, bps bitrat
 
     const double dSNRFct = 20.0 * snir;
     double dSumK = 0;
-    register int k = 2;
+    int k = 2;
 
     /* following loop was optimized by using n_choose_k symmetries
        for (k=2; k <= 16; ++k) {
@@ -73,7 +75,9 @@ double DsssOqpsk16Modulation::calculateBER(double snir, Hz bandwidth, bps bitrat
     // for k = 16 (because of missing k=0 value)
     k = 16;
     dSumK += math::n_choose_k(16, k) * exp(dSNRFct * (1.0 / k - 1.0));
-    return (8.0 / 15) * (1.0 / 16) * dSumK;
+    double ber = (8.0 / 15) * (1.0 / 16) * dSumK;
+    ASSERT(0.0 <= ber && ber <= 1.0);
+    return ber;
 }
 
 double DsssOqpsk16Modulation::calculateSER(double snir, Hz bandwidth, bps bitrate) const

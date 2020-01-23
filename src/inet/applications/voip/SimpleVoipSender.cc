@@ -17,11 +17,11 @@
 //
 
 #include <cmath>
-#include "inet/applications/voip/SimpleVoipSender.h"
 
+#include "inet/applications/voip/SimpleVoipPacket_m.h"
+#include "inet/applications/voip/SimpleVoipSender.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/applications/voip/SimpleVoipPacket_m.h"
 
 namespace inet {
 
@@ -59,9 +59,9 @@ void SimpleVoipSender::initialize(int stage)
         destPort = par("destPort");
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
 
@@ -89,6 +89,8 @@ void SimpleVoipSender::handleMessage(cMessage *msg)
         else
             selectTalkOrSilenceInterval();
     }
+    else
+        throw cRuntimeError("Unknown incoming message: '%s' on gate '%s'", msg->getClassName(), msg->getArrivalGate()->getFullName());
 }
 
 void SimpleVoipSender::talkspurt(simtime_t dur)
@@ -152,6 +154,7 @@ void SimpleVoipSender::sendVoIPPacket()
     voice->setPacketID(packetID);
     voice->setVoipTimestamp(simTime() - packetizationInterval);    // start time of voice in this packet
     voice->setVoiceDuration(packetizationInterval);
+    voice->setTotalLengthField(talkPacketSize);
     voice->setChunkLength(B(talkPacketSize));
     packet->insertAtBack(voice);
 

@@ -15,9 +15,9 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/common/lifecycle/LifecycleController.h"
-#include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/power/management/SimpleEpEnergyManagement.h"
 
 namespace inet {
@@ -58,19 +58,35 @@ void SimpleEpEnergyManagement::handleMessage(cMessage *message)
         throw cRuntimeError("Unknown message");
 }
 
+void SimpleEpEnergyManagement::refreshDisplay() const
+{
+    std::string text;
+    if (std::isnan(targetCapacity.get()))
+        text = "";
+    else if (targetCapacity == nodeShutdownCapacity)
+        text = "shutdown";
+    else if (targetCapacity == nodeStartCapacity)
+        text = "start";
+    else
+        throw cRuntimeError("Invalid state");
+    if (text.length() != 0)
+        text += " in " + (lifecycleOperationTimer->getArrivalTime() - simTime()).str() + " s";
+    getDisplayString().setTagArg("t", 0, text.c_str());
+}
+
 void SimpleEpEnergyManagement::executeNodeOperation(J estimatedEnergyCapacity)
 {
     if (!std::isnan(nodeShutdownCapacity.get()) && estimatedEnergyCapacity <= nodeShutdownCapacity && nodeStatus->getState() == NodeStatus::UP) {
         EV_WARN << "Capacity reached node shutdown threshold" << endl;
         LifecycleOperation::StringMap params;
-        NodeShutdownOperation *operation = new NodeShutdownOperation();
+        ModuleStopOperation *operation = new ModuleStopOperation();
         operation->initialize(networkNode, params);
         lifecycleController.initiateOperation(operation);
     }
     else if (!std::isnan(nodeStartCapacity.get()) && estimatedEnergyCapacity >= nodeStartCapacity && nodeStatus->getState() == NodeStatus::DOWN) {
         EV_INFO << "Capacity reached node start threshold" << endl;
         LifecycleOperation::StringMap params;
-        NodeStartOperation *operation = new NodeStartOperation();
+        ModuleStartOperation *operation = new ModuleStartOperation();
         operation->initialize(networkNode, params);
         lifecycleController.initiateOperation(operation);
     }
@@ -78,7 +94,7 @@ void SimpleEpEnergyManagement::executeNodeOperation(J estimatedEnergyCapacity)
 
 void SimpleEpEnergyManagement::scheduleLifecycleOperationTimer()
 {
-    J targetCapacity = J(NaN);
+    targetCapacity = J(NaN);
     J estimatedResidualCapacity = getEstimatedEnergyCapacity();
     W totalPower = energyStorage->getTotalPowerGeneration() - energyStorage->getTotalPowerConsumption();
     if (totalPower > W(0)) {
@@ -110,7 +126,7 @@ J SimpleEpEnergyManagement::getEstimatedEnergyCapacity() const
 
 void SimpleEpEnergyManagement::receiveSignal(cComponent *source, simsignal_t signal, double value, cObject *details)
 {
-    Enter_Method("receiveSignal");
+    Enter_Method_Silent("receiveSignal");
     if (signal == IEpEnergySource::powerConsumptionChangedSignal || signal == IEpEnergySink::powerGenerationChangedSignal) {
         executeNodeOperation(getEstimatedEnergyCapacity());
         scheduleLifecycleOperationTimer();

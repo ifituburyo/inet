@@ -15,8 +15,8 @@
 // along with this program; if not, see http://www.gnu.org/licenses/.
 //
 
-#include "CtsPolicy.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/linklayer/ieee80211/mac/recipient/CtsPolicy.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -44,7 +44,7 @@ simtime_t CtsPolicy::computeCtsDuration(Packet *rtsPacket, const Ptr<const Ieee8
 //
 simtime_t CtsPolicy::computeCtsDurationField(Packet *rtsPacket, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const
 {
-    simtime_t duration = rtsFrame->getDuration() - modeSet->getSifsTime() - computeCtsDuration(rtsPacket, rtsFrame);
+    simtime_t duration = rtsFrame->getDurationField() - modeSet->getSifsTime() - computeCtsDuration(rtsPacket, rtsFrame);
     return duration < 0 ? 0 : duration;
 }
 

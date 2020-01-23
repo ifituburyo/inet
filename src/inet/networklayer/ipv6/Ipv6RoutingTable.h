@@ -21,11 +21,10 @@
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/networklayer/contract/IRoutingTable.h"
-#include "inet/networklayer/ipv6/Ipv6Route.h"
-#include "inet/networklayer/contract/ipv6/Ipv6Address.h"
 #include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/networklayer/contract/IRoutingTable.h"
+#include "inet/networklayer/contract/ipv6/Ipv6Address.h"
+#include "inet/networklayer/ipv6/Ipv6Route.h"
 
 namespace inet {
 
@@ -85,9 +84,11 @@ class INET_API Ipv6RoutingTable : public cSimpleModule, public IRoutingTable, pr
     // creates a new empty route, factory method overriden in subclasses that use custom routes
     virtual Ipv6Route *createNewRoute(Ipv6Address destPrefix, int prefixLength, IRoute::SourceType src);
 
+  public:
     // internal: routes of different type can only be added via well-defined functions
     virtual void addRoute(Ipv6Route *route);
 
+  protected:
     // helper for addRoute()
     class RouteLessThan
     {
@@ -380,9 +381,10 @@ class INET_API Ipv6RoutingTable : public cSimpleModule, public IRoutingTable, pr
     /**
      * ILifecycle method
      */
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual bool handleOperationStage(LifecycleOperation *operation, IDoneCallback *doneCallback) override;
 
     // IRoutingTable methods:
+    virtual bool isAdminDistEnabled() const override { return useAdminDist; }
     virtual bool isForwardingEnabled() const override { return isRouter(); }    //XXX inconsistent names
     virtual bool isMulticastForwardingEnabled() const override { return true;    /*TODO isMulticastForwardingEnabled();*/ }
     virtual L3Address getRouterIdAsGeneric() const override { return L3Address(Ipv6Address());    /*TODO getRouterId();*/ }

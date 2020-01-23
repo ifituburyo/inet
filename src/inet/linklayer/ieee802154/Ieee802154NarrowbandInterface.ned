@@ -19,15 +19,15 @@
 package inet.linklayer.ieee802154;
 
 import inet.linklayer.contract.IWirelessInterface;
+import inet.networklayer.common.InterfaceEntry;
 import inet.physicallayer.contract.packetlevel.IRadio;
 
-module Ieee802154NarrowbandInterface like IWirelessInterface
+module Ieee802154NarrowbandInterface extends InterfaceEntry like IWirelessInterface
 {
     parameters:
         @class(InterfaceEntry);
         string interfaceTableModule;
         string energySourceModule = default("");
-        string radioType = default("Ieee802154NarrowbandScalarRadio");
         *.interfaceTableModule = default(absPath(interfaceTableModule));
         *.energySourceModule = default(absPath(energySourceModule));
         @display("i=block/ifcard");
@@ -38,11 +38,11 @@ module Ieee802154NarrowbandInterface like IWirelessInterface
     submodules:
         mac: Ieee802154NarrowbandMac {
             parameters:
-                @display("p=100,150");
+                @display("p=100,100");
         }
-        radio: <radioType> like IRadio {
+        radio: <default("Ieee802154NarrowbandScalarRadio")> like IRadio {
             parameters:
-                @display("p=100,250");
+                @display("p=100,200");
         }
     connections:
         upperLayerIn --> mac.upperLayerIn;
@@ -51,3 +51,4 @@ module Ieee802154NarrowbandInterface like IWirelessInterface
         radioIn --> { @display("m=s"); } --> radio.radioIn;
         radio.upperLayerOut --> mac.lowerLayerIn;
 }
+

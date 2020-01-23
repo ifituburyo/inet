@@ -20,7 +20,7 @@
 
 #include "inet/common/INETDefs.h"
 #include "inet/common/INETMath.h"
-#include "IIndicatorFigure.h"
+#include "inet/common/figures/IIndicatorFigure.h"
 
 namespace inet {
 
@@ -66,6 +66,7 @@ class INET_API GaugeFigure : public cGroupFigure, public inet::IIndicatorFigure
     GaugeFigure(const char *name = nullptr);
     virtual ~GaugeFigure();
 
+    virtual const Point getSize() const override { return getBounds().getSize(); }
     virtual void setValue(int series, simtime_t timestamp, double value) override;
 
     const Rectangle& getBounds() const;
@@ -80,7 +81,7 @@ class INET_API GaugeFigure : public cGroupFigure, public inet::IIndicatorFigure
     const char *getLabel() const;
     void setLabel(const char *text);
 
-    const int getLabelOffset() const;
+    int getLabelOffset() const;
     void setLabelOffset(int offset);
 
     const Font& getLabelFont() const;

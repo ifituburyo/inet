@@ -19,7 +19,6 @@ package inet.routing.rip;
 
 import inet.applications.contract.IApp;
 
-
 //
 // Routing Information Protocol.
 //
@@ -61,7 +60,7 @@ import inet.applications.contract.IApp;
 //     - 'NoSplitHorizon': no split horizon filtering; send all routes to
 //                         neighbors.
 //     - 'SplitHorizon':   do not sent routes whose next hop is the neighbor
-//     - 'SplitHorizonPoisenedReverse': if the next hop is the neighbor, then
+//     - 'SplitHorizonPoisonedReverse': if the next hop is the neighbor, then
 //                         set the metric of the route to infinity.
 simple Rip like IApp
 {
@@ -70,16 +69,27 @@ simple Rip like IApp
 
         string interfaceTableModule;   // The path to the InterfaceTable module
         string routingTableModule;
-        string mode @enum("RIPv2", "RIPng") = default("RIPv2");
-        xml ripConfig = default(xml("<config><interface metric='1'/></config>"));
 
+        xml ripConfig = default(xml("<config><interface metric='1'/></config>"));
+        string mode @enum("RIPv2", "RIPng") = default("RIPv2");
         int udpPort = (mode == "RIPng" ? 521 : 520);
-        double updateInterval @unit(s) = default(30s);
-        volatile double startupTime @unit(s) = default(uniform(0s,5s));
+
+        volatile double startupTime @unit(s) = default(uniform(0s,5s)); // delay before starting RIP
+        double shutdownTime @unit(s) = default(1s); // delay before shutting down RIP
+
+        // RIP timers
+        double updateInterval @unit(s) = default(30s);   // 30s timer or update timer
+        double routeExpiryTime @unit(s) = default(180s); // invalid timer
+        double routePurgeTime @unit(s) = default(120s);  // garbage collection timer or flush timer
+        double holdDownTime @unit(s) = default(0s);      // hold-down timer (not defined in RFC). 0s means not active
+
+        bool triggeredUpdate = default(true);  // sending triggered updates on route changes
         volatile double triggeredUpdateDelay @unit(s) = default(uniform(1s,5s));
-        double routeExpiryTime @unit(s) = default(180s);
-        double routePurgeTime @unit(s) = default(120s);
-        double shutdownTime @unit(s) = default(1s);
+
+        @lifecycleSupport;
+        double stopOperationExtraTime @unit(s) = default(-1s);    // extra time after lifecycle stop operation finished
+        double stopOperationTimeout @unit(s) = default(2s);    // timeout value for lifecycle stop operation
+
         @signal[sentRequest](type=cPacket);
         @signal[sentUpdate](type=cPacket);
         @signal[rcvdResponse](type=cPacket);
@@ -94,3 +104,4 @@ simple Rip like IApp
         input socketIn @labels(UdpControlInfo/up);
         output socketOut @labels(UdpControlInfo/down);
 }
+

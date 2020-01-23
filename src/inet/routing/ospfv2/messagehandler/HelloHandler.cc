@@ -15,26 +15,24 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/routing/ospfv2/messagehandler/HelloHandler.h"
-
 #include "inet/networklayer/common/L3AddressTag_m.h"
-#include "inet/routing/ospfv2/router/OspfArea.h"
-#include "inet/routing/ospfv2/interface/OspfInterface.h"
-#include "inet/routing/ospfv2/neighbor/OspfNeighbor.h"
-#include "inet/routing/ospfv2/router/OspfRouter.h"
+#include "inet/routing/ospfv2/interface/Ospfv2Interface.h"
+#include "inet/routing/ospfv2/messagehandler/HelloHandler.h"
+#include "inet/routing/ospfv2/neighbor/Ospfv2Neighbor.h"
+#include "inet/routing/ospfv2/router/Ospfv2Area.h"
+#include "inet/routing/ospfv2/router/Ospfv2Router.h"
 
 namespace inet {
-
-namespace ospf {
+namespace ospfv2 {
 
 HelloHandler::HelloHandler(Router *containingRouter) :
     IMessageHandler(containingRouter)
 {
 }
 
-void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unused)
+void HelloHandler::processPacket(Packet *packet, Ospfv2Interface *intf, Neighbor *unused)
 {
-    const auto& helloPacket = packet->peekAtFront<OspfHelloPacket>();
+    const auto& helloPacket = packet->peekAtFront<Ospfv2HelloPacket>();
     bool shouldRebuildRoutingTable = false;
 
     /* The values of the Network Mask, HelloInterval,
@@ -46,13 +44,13 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
     if ((intf->getHelloInterval() == helloPacket->getHelloInterval()) &&
         (intf->getRouterDeadInterval() == helloPacket->getRouterDeadInterval()))
     {
-        Interface::OspfInterfaceType interfaceType = intf->getType();
+        Ospfv2Interface::Ospfv2InterfaceType interfaceType = intf->getType();
         /* There is one exception to the above rule: on point-to-point
            networks and on virtual links, the Network Mask in the received
            Hello Packet should be ignored.
          */
-        if (!((interfaceType != Interface::POINTTOPOINT) &&
-              (interfaceType != Interface::VIRTUAL) &&
+        if (!((interfaceType != Ospfv2Interface::POINTTOPOINT) &&
+              (interfaceType != Ospfv2Interface::VIRTUAL) &&
               (intf->getAddressRange().mask != helloPacket->getNetworkMask())
               )
             )
@@ -72,9 +70,9 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
                    MultiPoint or NBMA network the source is identified by the IP
                    source address found in the Hello's IP header.
                  */
-                if ((interfaceType == Interface::BROADCAST) ||
-                    (interfaceType == Interface::POINTTOMULTIPOINT) ||
-                    (interfaceType == Interface::NBMA))
+                if ((interfaceType == Ospfv2Interface::BROADCAST) ||
+                    (interfaceType == Ospfv2Interface::POINTTOMULTIPOINT) ||
+                    (interfaceType == Ospfv2Interface::NBMA))
                 {
                     neighbor = intf->getNeighborByAddress(srcAddress);
                 }
@@ -96,7 +94,7 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
                     Ipv4Address newBackupRouter = helloPacket->getBackupDesignatedRouter();
                     DesignatedRouterId dRouterID;
 
-                    if ((interfaceType == Interface::VIRTUAL) &&
+                    if ((interfaceType == Ospfv2Interface::VIRTUAL) &&
                         (neighbor->getState() == Neighbor::DOWN_STATE))
                     {
                         neighbor->setPriority(helloPacket->getRouterPriority());
@@ -120,7 +118,7 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
                      */
                     if ((newDesignatedRouter == source) &&
                         (newBackupRouter == NULL_IPV4ADDRESS) &&
-                        (intf->getState() == Interface::WAITING_STATE))
+                        (intf->getState() == Ospfv2Interface::WAITING_STATE))
                     {
                         backupSeen = true;
                     }
@@ -148,7 +146,7 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
                        scheduled with the event BACKUP_SEEN.
                      */
                     if ((newBackupRouter == source) &&
-                        (intf->getState() == Interface::WAITING_STATE))
+                        (intf->getState() == Ospfv2Interface::WAITING_STATE))
                     {
                         backupSeen = true;
                     }
@@ -258,7 +256,7 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
                 }
 
                 neighbor->processEvent(Neighbor::HELLO_RECEIVED);
-                if ((interfaceType == Interface::NBMA) &&
+                if ((interfaceType == Ospfv2Interface::NBMA) &&
                     (intf->getRouterPriority() == 0) &&
                     (neighbor->getState() >= Neighbor::INIT_STATE))
                 {
@@ -287,7 +285,7 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
                 }
 
                 if (neighborChanged) {
-                    intf->processEvent(Interface::NEIGHBOR_CHANGE);
+                    intf->processEvent(Ospfv2Interface::NEIGHBOR_CHANGE);
                     /* In some cases neighbors get stuck in TwoWay state after a DR
                        or Backup change. (calculateDesignatedRouter runs before the
                        neighbors' signal of DR change + this router does not become
@@ -330,7 +328,7 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
                 }
 
                 if (backupSeen) {
-                    intf->processEvent(Interface::BACKUP_SEEN);
+                    intf->processEvent(Ospfv2Interface::BACKUP_SEEN);
                 }
             }
         }
@@ -341,7 +339,6 @@ void HelloHandler::processPacket(Packet *packet, Interface *intf, Neighbor *unus
     }
 }
 
-} // namespace ospf
-
+} // namespace ospfv2
 } // namespace inet
 

@@ -19,6 +19,9 @@
 
 namespace inet {
 
+Quaternion Quaternion::IDENTITY = Quaternion();
+Quaternion Quaternion::NIL = Quaternion(NaN, NaN, NaN, NaN);
+
 Quaternion::Quaternion(const Coord &axis, double angle) : Quaternion(std::cos(angle/2), axis*std::sin(angle/2))
 {
     // nothing
@@ -115,7 +118,7 @@ Quaternion Quaternion::slerp(const Quaternion &q1, const Quaternion &q2, double 
         return lerp(q1, q3, t);
 }
 
-void Quaternion::toAxisAngle(Coord &axis, double &angle) const
+void Quaternion::getRotationAxisAndAngle(Coord &axis, double &angle) const
 {
     angle = std::acos(s);
 
@@ -130,7 +133,7 @@ void Quaternion::toAxisAngle(Coord &axis, double &angle) const
     angle *= 2;
 }
 
-Coord Quaternion::rotate(const Coord &v)
+Coord Quaternion::rotate(const Coord &v) const
 {
     Quaternion V(0, v);
     Quaternion conjugate(*this);
@@ -140,6 +143,7 @@ Coord Quaternion::rotate(const Coord &v)
 
 EulerAngles Quaternion::toEulerAngles(bool homogenous) const
 {
+    // NOTE: this algorithm is prone to gimbal lock when beta is close to +-90
     double sqw = s*s;
     double sqx = v.x*v.x;
     double sqy = v.y*v.y;
@@ -148,14 +152,15 @@ EulerAngles Quaternion::toEulerAngles(bool homogenous) const
     EulerAngles euler;
     if (homogenous) {
         euler.gamma = rad(std::atan2(2.0 * (v.x*v.y + v.z*s), sqx - sqy - sqz + sqw));
-        euler.beta = rad(std::asin(-2.0 * (v.x*v.z - v.y*s)));
+        euler.beta = rad(std::asin(std::min(1.0, std::max(-1.0, -2.0 * (v.x*v.z - v.y*s)))));
         euler.alpha = rad(std::atan2(2.0 * (v.y*v.z + v.x*s), -sqx - sqy + sqz + sqw));
     }
     else {
         euler.gamma = rad(std::atan2(2.0 * (v.z*v.y + v.x*s), 1 - 2*(sqx + sqy)));
-        euler.beta = rad(std::asin(-2.0 * (v.x*v.z - v.y*s)));
+        euler.beta = rad(std::asin(std::min(1.0, std::max(-1.0, -2.0 * (v.x*v.z - v.y*s)))));
         euler.alpha = rad(std::atan2(2.0 * (v.x*v.y + v.z*s), 1 - 2*(sqy + sqz)));
     }
+    euler.normalize();
     return euler;
 }
 
@@ -188,6 +193,14 @@ Quaternion Quaternion::rotationFromTo(const Coord& from, const Coord& to)
     Coord c = (v0 % v1) / s;
 
     return Quaternion(s * 0.5, c.x, c.y, c.z).normalized();
+}
+
+void Quaternion::getSwingAndTwist(const Coord& direction, Quaternion& swing, Quaternion& twist) const
+{
+    Coord p = direction * (v * direction); // return projection v1 on to v2  (parallel component)
+    twist = Quaternion(s, p);
+    twist.normalize();
+    swing = *this * twist.conjugated();
 }
 
 } /* namespace inet */

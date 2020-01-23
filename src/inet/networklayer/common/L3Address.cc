@@ -15,12 +15,13 @@
 // License along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/networklayer/common/L3Address.h"
-#include "inet/networklayer/contract/ipv4/Ipv4AddressType.h"
-#include "inet/networklayer/contract/ipv6/Ipv6AddressType.h"
 #include "inet/linklayer/common/MacAddressType.h"
+#include "inet/networklayer/common/L3Address.h"
 #include "inet/networklayer/common/ModuleIdAddressType.h"
 #include "inet/networklayer/common/ModulePathAddressType.h"
+#include "inet/networklayer/contract/clns/ClnsAddressType.h"
+#include "inet/networklayer/contract/ipv4/Ipv4AddressType.h"
+#include "inet/networklayer/contract/ipv6/Ipv6AddressType.h"
 
 namespace inet {
 
@@ -47,6 +48,13 @@ void L3Address::set(const Ipv6Address& addr)
     lo = ((uint64) * (words + 2) << 32) + *(words + 3);
     if (getType() != IPv6)
         throw cRuntimeError("Cannot set Ipv6 address");
+}
+
+void L3Address::set(const ClnsAddress& addr)
+{
+
+    hi = ((uint64)RESERVED_IPV6_ADDRESS_RANGE << 48) | ((addr.getAreaId() & 0xFFFFFFFFL) << 16) | (uint64)addr.getNsel() << 8 | (uint64)L3Address::CLNS;
+    lo = addr.getSystemId();
 }
 
 L3Address::AddressType L3Address::getType() const
@@ -78,6 +86,9 @@ IL3AddressType *L3Address::getAddressType() const
         case L3Address::MODULEPATH:
             return &ModulePathAddressType::INSTANCE;
 
+        case L3Address::CLNS:
+                    return &CLNSAddressType::INSTANCE;
+
         default:
             throw cRuntimeError("Unknown type");
     }
@@ -103,6 +114,9 @@ std::string L3Address::str() const
 
         case L3Address::MODULEPATH:
             return toModulePath().str();
+
+        case L3Address::CLNS:
+            return toClns().str();
 
         default:
             throw cRuntimeError("Unknown type");
@@ -397,6 +411,20 @@ const char *L3Address::getTypeName(AddressType t)
             return "Unknown type";
     }
 #undef CASE
+}
+
+ClnsAddress L3Address::toClns() const
+{
+    switch (getType()) {
+        case L3Address::NONE:
+            return ClnsAddress();
+
+        case L3Address::CLNS:
+            return ClnsAddress((hi & 0x0000FFFFFFFF0000L) >> 16, lo, (hi & 0xFF00L) >> 8);
+
+        default:
+            throw cRuntimeError("Address is not of the given type");
+    }
 }
 
 } // namespace inet

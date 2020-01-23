@@ -50,12 +50,15 @@ void MsduAggregation::setSubframeAddress(const Ptr<Ieee80211MsduSubframeHeader>&
         da = header->getAddress3();
         sa = header->getAddress4();
     }
+    ASSERT(!da.isUnspecified());
+    ASSERT(!sa.isUnspecified());
     subframeHeader->setDa(da);
     subframeHeader->setSa(sa);
 }
 
 Packet *MsduAggregation::aggregateFrames(std::vector<Packet *> *frames)
 {
+    EV_DEBUG << "Aggregating " << frames->size() << " packets into A-MSDU.\n";
     auto firstFrame = frames->at(0);
     auto firstHeader = firstFrame->peekAtFront<Ieee80211DataHeader>();
     auto tid = firstHeader->getTid();
@@ -69,7 +72,7 @@ Packet *MsduAggregation::aggregateFrames(std::vector<Packet *> *frames)
         auto msduSubframeHeader = makeShared<Ieee80211MsduSubframeHeader>();
         auto frame = frames->at(i);
         const auto& header = frame->popAtFront<Ieee80211DataHeader>();
-        frame->popAtBack<Ieee80211MacTrailer>();
+        frame->popAtBack<Ieee80211MacTrailer>(B(4));
         auto msdu = frame->peekData();
         msduSubframeHeader->setLength(B(msdu->getChunkLength()).get());
         setSubframeAddress(msduSubframeHeader, header);
@@ -95,11 +98,12 @@ Packet *MsduAggregation::aggregateFrames(std::vector<Packet *> *frames)
     amsduHeader->setAMsduPresent(true);
     amsduHeader->setReceiverAddress(ra);
     amsduHeader->setTid(tid);
-    amsduHeader->setChunkLength(amsduHeader->getChunkLength() + QOSCONTROL_PART_LENGTH);
+    amsduHeader->addChunkLength(QOSCONTROL_PART_LENGTH);
     // TODO: set addr3 and addr4 according to fromDS and toDS.
     aggregatedFrame->insertAtFront(amsduHeader);
     aggregatedFrame->insertAtBack(makeShared<Ieee80211MacTrailer>());
     aggregatedFrame->setName(aggregatedName.c_str());
+    EV_TRACE << "Created A-MSDU " << *aggregatedFrame << ".\n";
     return aggregatedFrame;
 }
 

@@ -34,7 +34,7 @@ This scenario checks the following trajectories:
 NO MEMBERS PRESENT --> report received --> MEMBERS PRESENT --> report received -> MEMBERS PRESENT -->
   --> g-s query received -> CHECKING MEMBERSHIP --> report received -> MEMBERS PRESENT -->
   --> g-s query received -> CHECKING MEMBERSHIP --> g-s query received --> CHECKING MEMBERSHIP -->
-  --> timer expired --> NO MEMBERS PRESENT 
+  --> timer expired --> NO MEMBERS PRESENT
 
 NO MEMBERS PRESENT --> report received --> MEMBERS PRESENT --> report received --> MEMBERS PRESENT -->
   --> timer expired --> NO MEMBERS PRESENT
@@ -51,8 +51,8 @@ output-scalar-file = "${resultdir}/${configname}-${runnumber}.sca"
 output-vector-file = "${resultdir}/${configname}-${runnumber}.vec"
 snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 
-network=IGMPTestNetwork
-**.igmpType = "TestIGMP"
+network = inet.test.moduletest.lib.IGMPTestNetwork
+**.igmp.typename = "TestIGMP"
 
 **.scenarioManager.script = xmldoc("scenario.xml")
 **.nqrouter.ipv4.igmp.outputFile = "nqrouter-output.txt"

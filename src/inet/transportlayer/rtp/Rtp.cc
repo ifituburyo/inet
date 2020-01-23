@@ -15,21 +15,19 @@
 *                                                                         *
 ***************************************************************************/
 
-#include "inet/transportlayer/rtp/Rtp.h"
-
-#include "inet/networklayer/common/InterfaceEntry.h"
-#include "inet/networklayer/contract/ipv4/Ipv4Address.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/networklayer/common/InterfaceEntry.h"
+#include "inet/networklayer/contract/ipv4/Ipv4Address.h"
+#include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
+#include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
+#include "inet/transportlayer/contract/udp/UdpSocket.h"
+#include "inet/transportlayer/rtp/Rtp.h"
 #include "inet/transportlayer/rtp/RtpInnerPacket_m.h"
 #include "inet/transportlayer/rtp/RtpInterfacePacket_m.h"
 #include "inet/transportlayer/rtp/RtpProfile.h"
 #include "inet/transportlayer/rtp/RtpSenderControlMessage_m.h"
 #include "inet/transportlayer/rtp/RtpSenderStatusMessage_m.h"
-#include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
-#include "inet/transportlayer/contract/udp/UdpSocket.h"
-#include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
 
 namespace inet {
 
@@ -55,9 +53,9 @@ void Rtp::initialize(int stage)
         _udpSocket.setOutputGate(gate("udpOut"));
     }
     else if (stage == INITSTAGE_TRANSPORT_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
     }
@@ -411,14 +409,6 @@ void Rtp::initializeRTCP()
     int rtcpPort = _port + 1;
     rinp->setInitializeRTCPPkt(_commonName.c_str(), _mtu, _bandwidth, _rtcpPercentage, _destinationAddress, rtcpPort);
     send(rinp, "rtcpOut");
-}
-
-bool Rtp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
-{
-    Enter_Method_Silent();
-
-    throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
 }
 
 } // namespace rtp

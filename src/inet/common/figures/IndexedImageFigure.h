@@ -20,7 +20,7 @@
 
 #include "inet/common/INETDefs.h"
 #include "inet/common/INETMath.h"
-#include "IIndicatorFigure.h"
+#include "inet/common/figures/IIndicatorFigure.h"
 
 namespace inet {
 
@@ -72,7 +72,7 @@ class INET_API IndexedImageFigure : public cGroupFigure, public inet::IIndicator
     const Point getLabelOffset() const;
     void setLabelOffset(const Point& offset);
 
-    const Point getSize() const;
+    virtual const Point getSize() const override;
     void setSize(const Point& bounds);
 
     const Point& getPos() const;

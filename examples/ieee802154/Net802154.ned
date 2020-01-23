@@ -25,15 +25,17 @@ network Net802154
 {
     parameters:
         int numHosts;
-        
-    submodules:        
+
+    submodules:
         host[numHosts]: IEEE802154ExampleHost {
             parameters:
                 @display("r=,,#707070;p=250,58;is=vs");
         }
-        
+
         radioMedium: Ieee802154NarrowbandScalarRadioMedium {
             parameters:
                 @display("p=60,50");
         }
+        configurator: GenericNetworkConfigurator {
+    	}
 }

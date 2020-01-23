@@ -16,26 +16,20 @@
 //
 
 #include "inet/common/LayeredProtocolBase.h"
-#include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/physicallayer/common/packetlevel/Radio.h"
 #include "inet/physicallayer/common/packetlevel/RadioMedium.h"
-#include "inet/physicallayer/common/packetlevel/SignalTag_m.h"
+#include "inet/physicallayer/contract/packetlevel/SignalTag_m.h"
 
 #ifdef NS3_VALIDATION
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #endif
 
 namespace inet {
-
 namespace physicallayer {
 
 Define_Module(Radio);
-
-simsignal_t Radio::minSnirSignal = cComponent::registerSignal("minSnir");
-simsignal_t Radio::packetErrorRateSignal = cComponent::registerSignal("packetErrorRate");
-simsignal_t Radio::bitErrorRateSignal = cComponent::registerSignal("bitErrorRate");
-simsignal_t Radio::symbolErrorRateSignal = cComponent::registerSignal("symbolErrorRate");
 
 Radio::~Radio()
 {
@@ -73,11 +67,28 @@ void Radio::initialize(int stage)
     }
     else if (stage == INITSTAGE_PHYSICAL_LAYER) {
         medium->addRadio(this);
+        initializeRadioMode();
         parseRadioModeSwitchingTimes();
     }
     else if (stage == INITSTAGE_LAST) {
         EV_INFO << "Initialized " << getCompleteStringRepresentation() << endl;
     }
+}
+
+void Radio::initializeRadioMode() {
+    const char *initialRadioMode = par("initialRadioMode");
+    if(!strcmp(initialRadioMode, "off"))
+        completeRadioModeSwitch(IRadio::RADIO_MODE_OFF);
+    else if(!strcmp(initialRadioMode, "sleep"))
+        completeRadioModeSwitch(IRadio::RADIO_MODE_SLEEP);
+    else if(!strcmp(initialRadioMode, "receiver"))
+        completeRadioModeSwitch(IRadio::RADIO_MODE_RECEIVER);
+    else if(!strcmp(initialRadioMode, "transmitter"))
+        completeRadioModeSwitch(IRadio::RADIO_MODE_TRANSMITTER);
+    else if(!strcmp(initialRadioMode, "transceiver"))
+        completeRadioModeSwitch(IRadio::RADIO_MODE_TRANSCEIVER);
+    else
+        throw cRuntimeError("Unknown initialRadioMode");
 }
 
 std::ostream& Radio::printToStream(std::ostream& stream, int level) const
@@ -284,30 +295,27 @@ void Radio::handleSignal(Signal *signal)
         startReception(receptionTimer, IRadioSignal::SIGNAL_PART_WHOLE);
 }
 
-bool Radio::handleNodeStart(IDoneCallback *doneCallback)
+void Radio::handleStartOperation(LifecycleOperation *operation)
 {
     // NOTE: we ignore radio mode switching during start
-    completeRadioModeSwitch(RADIO_MODE_OFF);
-    return PhysicalLayerBase::handleNodeStart(doneCallback);
+    initializeRadioMode();
 }
 
-bool Radio::handleNodeShutdown(IDoneCallback *doneCallback)
+void Radio::handleStopOperation(LifecycleOperation *operation)
 {
     // NOTE: we ignore radio mode switching and ongoing transmission during shutdown
     cancelEvent(switchTimer);
     if (transmissionTimer->isScheduled())
         abortTransmission();
     completeRadioModeSwitch(RADIO_MODE_OFF);
-    return PhysicalLayerBase::handleNodeShutdown(doneCallback);
 }
 
-void Radio::handleNodeCrash()
+void Radio::handleCrashOperation(LifecycleOperation *operation)
 {
     cancelEvent(switchTimer);
     if (transmissionTimer->isScheduled())
         abortTransmission();
     completeRadioModeSwitch(RADIO_MODE_OFF);
-    PhysicalLayerBase::handleNodeCrash();
 }
 
 void Radio::startTransmission(Packet *macFrame, IRadioSignal::SignalPart part)
@@ -391,6 +399,7 @@ Signal *Radio::createSignal(Packet *packet) const
 {
     encapsulate(packet);
     if (sendRawBytes) {
+        // TODO: this doesn't always work, because the packet length may not be divisible by 8
         auto rawPacket = new Packet(packet->getName(), packet->peekAllAsBytes());
         rawPacket->copyTags(*packet);
         delete packet;
@@ -443,6 +452,7 @@ void Radio::continueReception(cMessage *timer)
         EV_INFO << "Reception started: " << (isReceptionAttempted ? "\x1b[1mattempting\x1b[0m" : "\x1b[1mnot attempting\x1b[0m") << " " << (ISignal *)signal << " " << IRadioSignal::getSignalPartName(nextPart) << " as " << reception << endl;
         if (!isReceptionAttempted)
             receptionTimer = nullptr;
+        // TODO: FIXME: see handling packets with incorrect PHY headers in the TODO file
     }
     else {
         EV_INFO << "Reception ended: \x1b[1mignoring\x1b[0m " << (ISignal *)signal << " " << IRadioSignal::getSignalPartName(previousPart) << " as " << reception << endl;
@@ -466,6 +476,7 @@ void Radio::endReception(cMessage *timer)
         auto isReceptionSuccessful = medium->getReceptionDecision(this, signal->getListening(), transmission, part)->isReceptionSuccessful();
         EV_INFO << "Reception ended: " << (isReceptionSuccessful ? "\x1b[1msuccessfully\x1b[0m" : "\x1b[1munsuccessfully\x1b[0m") << " for " << (ISignal *)signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
         auto macFrame = medium->receivePacket(this, signal);
+        // TODO: FIXME: see handling packets with incorrect PHY headers in the TODO file
         decapsulate(macFrame);
         sendUp(macFrame);
         receptionTimer = nullptr;
@@ -589,6 +600,5 @@ void Radio::updateTransceiverPart()
 }
 
 } // namespace physicallayer
-
 } // namespace inet
 

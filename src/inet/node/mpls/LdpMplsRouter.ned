@@ -25,7 +25,6 @@ import inet.networklayer.ted.Ted;
 import inet.transportlayer.contract.ITcp;
 import inet.transportlayer.contract.IUdp;
 
-
 //
 // An LDP-capable router.
 //
@@ -43,7 +42,6 @@ module LdpMplsRouter
         int numLoInterfaces = default(1);
         string peers;
         string routerId = default("auto");
-        string tcpType = default(firstAvailable("Tcp","TcpLwip","TcpNsc"));  // tcp implementation (e.g. ~Tcp, ~TcpLwip, ~TcpNsc) or ~TcpSpoof
         *.forwarding = true;
         *.routingTable.routerId = routerId;
         *.interfaceTableModule = default(absPath(".interfaceTable"));
@@ -54,78 +52,85 @@ module LdpMplsRouter
         inout pppg[] @labels(PppFrame-conn);
     submodules:
         status: NodeStatus if hasStatus {
-            @display("p=73,45;is=s");
+            @display("p=100,300;is=s");
         }
         interfaceTable: InterfaceTable {
             parameters:
-                @display("p=73,301;is=s");
+                @display("p=100,100;is=s");
         }
         ldp: Ldp {
             parameters:
                 holdTime = holdTime;
                 helloInterval = helloInterval;
-                @display("p=222,67");
+                @display("p=450,80");
+        }
+        at: MessageDispatcher {
+            parameters:
+                @display("p=450,160;b=153,5,,,,1");
         }
         ted: Ted {
             parameters:
-                @display("p=73,114;is=s");
+                @display("p=100,400;is=s");
         }
         linkStateRouting: LinkStateRouting {
             parameters:
                 peers = peers;
-                @display("p=544,106");
+                @display("p=900,80");
         }
-        tcp: <tcpType> like ITcp {
+        tcp: <default(firstAvailable("Tcp","TcpLwip","TcpNsc"))> like ITcp {
             parameters:
-                @display("p=177,145");
+                @display("p=300,200");
         }
         udp: <default(firstAvailable("Udp"))> like IUdp {
             parameters:
-                @display("p=267,145");
+                @display("p=600,200");
         }
         tn: MessageDispatcher {
             parameters:
-                @display("p=409,185;b=580,5,,,,1");
+                @display("p=700,240;b=1000,5,,,,1");
         }
         ipv4: Ipv4NetworkLayer {
             parameters:
-                @display("p=409,223");
+                @display("p=500,320");
         }
         nm: MessageDispatcher {
             parameters:
-                @display("p=409,271;b=580,5,,,,1");
+                @display("p=700,400;b=1000,5,,,,1");
         }
         lo[numLoInterfaces]: <default("LoopbackInterface")> like ILoopbackInterface {
-            @display("p=147,396");
+            @display("p=250,640");
         }
         ppp[sizeof(pppg)]: <default("PppInterface")> like IPppInterface {
             parameters:
-                @display("p=267,396,row,90;q=l2queue");
+                @display("p=400,640,row,150;q=l2queue");
         }
         mpls: Mpls {
             parameters:
                 //peers = peers,
                 classifierModule = "^.ldp";
-                @display("p=401,309");
+                @display("p=500,480");
         }
         libTable: LibTable {
             parameters:
-                @display("p=73,186;is=s");
+                @display("p=100,200;is=s");
         }
 
         ml: MessageDispatcher {
             parameters:
-                @display("p=409,350;b=580,5,,,,1");
+                @display("p=700,560;b=1000,5,,,,1");
         }
     connections allowunconnected:
         linkStateRouting.ipOut --> tn.in++;
         tn.out++ --> linkStateRouting.ipIn;
 
-        ldp.tcpIn <-- tcp.appOut;
-        ldp.tcpOut --> tcp.appIn;
+        ldp.socketIn <-- at.out++;
+        ldp.socketOut --> at.in++;
 
-        ldp.udpOut --> udp.appIn;
-        ldp.udpIn <-- udp.appOut;
+        at.out++ --> udp.appIn;
+        at.in++ <-- udp.appOut;
+
+        at.out++ --> tcp.appIn;
+        at.in++ <-- tcp.appOut;
 
         udp.ipOut --> tn.in++;
         tn.out++ --> udp.ipIn;
@@ -154,3 +159,4 @@ module LdpMplsRouter
         mpls.ifOut --> ml.in++;
         ml.out++ --> mpls.ifIn;
 }
+

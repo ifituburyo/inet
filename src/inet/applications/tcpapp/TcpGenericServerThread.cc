@@ -17,7 +17,8 @@
 
 #include "inet/applications/tcpapp/TcpGenericServerThread.h"
 
-#include "GenericAppMsg_m.h"
+#include "inet/applications/tcpapp/GenericAppMsg_m.h"
+#include "inet/common/TimeTag_m.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 
 namespace inet {
@@ -31,7 +32,7 @@ void TcpGenericServerThread::established()
 
 void TcpGenericServerThread::dataArrived(Packet *msg, bool)
 {
-    const auto& appmsg = msg->peekDataAt<GenericAppMsg>(B(0), B(msg->getByteLength()));
+    const auto& appmsg = msg->peekData<GenericAppMsg>();
 
     if (!appmsg)
         throw cRuntimeError("Message (%s)%s is not a GenericAppMsg -- probably wrong client app",
@@ -44,19 +45,20 @@ void TcpGenericServerThread::dataArrived(Packet *msg, bool)
 
     // process message: send back requested number of bytes, then close
     // connection if that was requested too
-    long requestedBytes = appmsg->getExpectedReplyLength();
+    B requestedBytes = appmsg->getExpectedReplyLength();
     bool doClose = appmsg->getServerClose();
-    delete msg;
 
-    if (requestedBytes > 0) {
+    if (requestedBytes > B(0)) {
         Packet *outPacket = new Packet(msg->getName());
-        const auto& payload = makeShared<ByteCountChunk>(B(requestedBytes));
+        const auto& payload = makeShared<ByteCountChunk>(requestedBytes);
+        payload->addTag<CreationTimeTag>()->setCreationTime(simTime());
         outPacket->insertAtBack(payload);
         getSocket()->send(outPacket);
     }
 
     if (doClose)
         getSocket()->close();
+    delete msg;
 }
 
 void TcpGenericServerThread::timerExpired(cMessage *timer)

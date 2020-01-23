@@ -19,7 +19,7 @@
 #define __INET_ETHERENCAP_H
 
 #include "inet/common/packet/Packet.h"
-#include "inet/linklayer/common/EthernetFcsMode_m.h"
+#include "inet/linklayer/common/FcsMode_m.h"
 #include "inet/linklayer/ethernet/EtherFrame_m.h"
 #include "inet/linklayer/ethernet/Ethernet.h"
 #include "inet/linklayer/ieee8022/Ieee8022Llc.h"
@@ -32,7 +32,7 @@ namespace inet {
 class INET_API EtherEncap : public Ieee8022Llc
 {
   protected:
-    EthernetFcsMode fcsMode = static_cast<EthernetFcsMode>(-1);
+    FcsMode fcsMode = FCS_MODE_UNDEFINED;
     int seqNum;
 
     // statistics
@@ -44,24 +44,36 @@ class INET_API EtherEncap : public Ieee8022Llc
     static simsignal_t pauseSentSignal;
     bool useSNAP;    // true: generate EtherFrameWithSNAP, false: generate EthernetIIFrame
 
+    struct Socket
+    {
+        int socketId = -1;
+        MacAddress sourceAddress;
+        MacAddress destinationAddress;
+        const Protocol *protocol = nullptr;
+        int vlanId = -1;
+
+        Socket(int socketId) : socketId(socketId) {}
+        bool matches(Packet *packet, const Ptr<const EthernetMacHeader>& ethernetMacHeader);
+    };
+
+    std::map<int, Socket *> socketIdToSocketMap;
+
   protected:
+    virtual ~EtherEncap();
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
-    virtual void handleMessage(cMessage *msg) override;
 
-    virtual void processCommandFromHigherLayer(cMessage *msg);
-    virtual void processPacketFromHigherLayer(Packet *msg);
-    virtual void processFrameFromMAC(Packet *packet);
+    virtual void processCommandFromHigherLayer(Request *msg) override;
+    virtual void processPacketFromHigherLayer(Packet *msg) override;
+    virtual void processPacketFromMac(Packet *packet) override;
     virtual void handleSendPause(cMessage *msg);
 
     virtual void refreshDisplay() const override;
 
-    virtual const Ptr<const EthernetMacHeader> decapsulateMacLlcSnap(Packet *packet);
-
   public:
-    static void addPaddingAndFcs(Packet *packet, EthernetFcsMode fcsMode, int64_t requiredMinByteLength = MIN_ETHERNET_FRAME_BYTES);
-    static void addFcs(Packet *packet, EthernetFcsMode fcsMode);
-
+    /**
+     * Inserts the FCS chunk to end of packet. Fill the fcsMode and set fcs to 0.
+     */
     static const Ptr<const EthernetMacHeader> decapsulateMacHeader(Packet *packet);
 };
 

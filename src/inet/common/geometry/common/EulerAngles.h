@@ -13,8 +13,8 @@ using namespace inet::units::values;
  * called EulerAngles. The angles are in Z, Y', X" order that is often called
  * intrinsic rotations, they are measured in radians. The default (unrotated)
  * orientation is along the X axis. Conceptually, the Z axis rotation is heading,
- * the Y' axis rotation is descending, the X" axis rotation is bank. For example,
- * positive rotation along the Z axis rotates X into Y (turns left), positive
+ * the Y' axis rotation is descending (negative elevation), the X" axis rotation is bank.
+ * For example, positive rotation along the Z axis rotates X into Y (turns left), positive
  * rotation along the Y axis rotates Z into X (leans forward), positive rotation
  * along the X axis rotates Y into Z (leans right).
  */
@@ -62,6 +62,14 @@ class INET_API EulerAngles
         return std::isnan(alpha.get()) && std::isnan(beta.get()) && std::isnan(gamma.get());
     }
 
+    EulerAngles& normalize()
+    {
+        alpha = rad(math::modulo(alpha.get(), 2 * M_PI));
+        beta = rad(math::modulo(beta.get(), 2 * M_PI));
+        gamma = rad(math::modulo(gamma.get(), 2 * M_PI));
+        return *this;
+    }
+
     EulerAngles operator+(const EulerAngles a) const { return EulerAngles(alpha + a.alpha, beta + a.beta, gamma + a.gamma); }
 
     EulerAngles operator-(const EulerAngles a) const { return EulerAngles(alpha - a.alpha, beta - a.beta, gamma - a.gamma); }
@@ -71,7 +79,7 @@ class INET_API EulerAngles
 
 inline std::ostream& operator<<(std::ostream& os, const EulerAngles& a)
 {
-    return os << "(" << a.alpha << ", " << a.beta << ", " << a.gamma << ")";
+    return os << "(" << a.alpha.get() << ", " << a.beta.get() << ", " << a.gamma.get() << ") rad";
 }
 
 inline std::string EulerAngles::str() const

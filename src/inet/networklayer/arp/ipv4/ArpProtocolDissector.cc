@@ -17,17 +17,15 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/networklayer/arp/ipv4/ArpProtocolDissector.h"
-
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/networklayer/arp/ipv4/ArpPacket_m.h"
-
+#include "inet/networklayer/arp/ipv4/ArpProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::arp, ArpProtocolDissector);
 
-void ArpProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void ArpProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     const auto& arpPacket = packet->popAtFront<ArpPacket>();
     callback.startProtocolDataUnit(&Protocol::arp);

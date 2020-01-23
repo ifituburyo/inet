@@ -15,13 +15,13 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/common/geometry/common/Rotation.h"
+#include "inet/common/ModuleAccess.h"
+#include "inet/common/geometry/common/RotationMatrix.h"
 #include "inet/common/geometry/object/Box.h"
 #include "inet/common/geometry/shape/Cuboid.h"
 #include "inet/common/geometry/shape/polyhedron/Polyhedron.h"
 #include "inet/common/geometry/shape/Prism.h"
 #include "inet/common/geometry/shape/Sphere.h"
-#include "inet/common/ModuleAccess.h"
 #include "inet/environment/common/PhysicalEnvironment.h"
 
 namespace inet {
@@ -80,7 +80,7 @@ void PhysicalEnvironment::convertPoints(std::vector<Coord>& points)
     for (auto & point : points) {
         point -= center;
         if (coordinateSystem != nullptr)
-            point = coordinateSystem->computePlaygroundCoordinate(GeoCoord(deg(point.x) + originPosition.latitude, deg(point.y) + originPosition.longitude, m(0)));
+            point = coordinateSystem->computeSceneCoordinate(GeoCoord(deg(point.x) + originPosition.latitude, deg(point.y) + originPosition.longitude, m(0)));
     }
 }
 
@@ -97,6 +97,8 @@ void PhysicalEnvironment::parseShapes(cXMLElement *xml)
         int id = -1;
         if (idAttribute)
             id = atoi(idAttribute);
+        if (idToShapeMap.find(id) != idToShapeMap.end())
+            throw cRuntimeError("Shape already exists with the same id: '%d'", id);
         // type
         const char *typeAttribute = element->getAttribute("type");
         if (!typeAttribute)
@@ -182,8 +184,6 @@ void PhysicalEnvironment::parseShapes(cXMLElement *xml)
         else
             throw cRuntimeError("Unknown shape type '%s'", typeAttribute);
         // insert
-        if (idToShapeMap.find(id) != idToShapeMap.end())
-            throw cRuntimeError("Shape already exists with the same id: '%d'", id);
         idToShapeMap.insert(std::pair<int, const ShapeBase *>(id, shape));
     }
 }
@@ -246,20 +246,22 @@ void PhysicalEnvironment::parseObjects(cXMLElement *xml)
         // name
         const char *name = element->getAttribute("name");
         // orientation
-        EulerAngles orientation;
+        // TODO: what about geographic orientation? what about taking GeographicCoordinateSystem into account?
+        Quaternion orientation;
         const char *orientationAttribute = element->getAttribute("orientation");
         if (orientationAttribute)
         {
             cStringTokenizer tokenizer(orientationAttribute);
             if ((tok = tokenizer.nextToken()) == nullptr)
                 throw cRuntimeError("Missing orientation alpha at %s", element->getSourceLocation());
-            orientation.alpha = deg(atof(tok));
+            auto alpha = deg(atof(tok));
             if ((tok = tokenizer.nextToken()) == nullptr)
                 throw cRuntimeError("Missing orientation beta at %s", element->getSourceLocation());
-            orientation.beta = deg(atof(tok));
+            auto beta = deg(atof(tok));
             if ((tok = tokenizer.nextToken()) == nullptr)
                 throw cRuntimeError("Missing orientation gamma at %s", element->getSourceLocation());
-            orientation.gamma = deg(atof(tok));
+            auto gamma = deg(atof(tok));
+            orientation = Quaternion(EulerAngles(alpha, beta, gamma));
         }
         // shape
         Coord size = Coord::NIL;
@@ -371,7 +373,7 @@ void PhysicalEnvironment::parseObjects(cXMLElement *xml)
             else
                 throw cRuntimeError("Unknown position kind");
             if (coordinateSystem != nullptr) {
-                auto convertedPosition = coordinateSystem->computePlaygroundCoordinate(GeoCoord(deg(position.x), deg(position.y), m(0)));
+                auto convertedPosition = coordinateSystem->computeSceneCoordinate(GeoCoord(deg(position.x), deg(position.y), m(0)));
                 position.x = convertedPosition.x;
                 position.y = convertedPosition.y;
             }

@@ -19,7 +19,6 @@
 #define __INET_ETHERMAC_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ethernet/EtherMacBase.h"
 
@@ -27,7 +26,6 @@ namespace inet {
 
 class EthernetJamSignal;
 class EtherPauseFrame;
-class IPassiveQueue;
 
 /**
  * Ethernet MAC module which supports both half-duplex (CSMA/CD) and full-duplex
@@ -47,7 +45,7 @@ class INET_API EtherMac : public EtherMacBase
     virtual void initialize(int stage) override;
     virtual void initializeFlags() override;
     virtual void initializeStatistics() override;
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void handleMessageWhenUp(cMessage *msg) override;
     virtual void finish() override;
 
   protected:
@@ -79,15 +77,15 @@ class INET_API EtherMac : public EtherMacBase
     simtime_t channelBusySince;    // needed for computing totalCollisionTime/totalSuccessfulRxTxTime
     unsigned long numCollisions = 0;    // collisions (NOT number of collided frames!) sensed
     unsigned long numBackoffs = 0;    // number of retransmissions
-    unsigned int framesSentInBurst = 0;    // Number of frames send out in current frame burst
-    long bytesSentInBurst = 0;    // Number of bytes transmitted in current frame burst
+    int framesSentInBurst = 0;    // Number of frames send out in current frame burst
+    B bytesSentInBurst = B(0);    // Number of bytes transmitted in current frame burst
 
     static simsignal_t collisionSignal;
     static simsignal_t backoffSlotsGeneratedSignal;
 
   protected:
     // event handlers
-    virtual void handleSelfMessage(cMessage *msg);
+    virtual void handleSelfMessage(cMessage *msg) override;
     virtual void handleEndIFGPeriod();
     virtual void handleEndPausePeriod();
     virtual void handleEndTxPeriod();
@@ -98,12 +96,12 @@ class INET_API EtherMac : public EtherMacBase
 
     // helpers
     virtual void readChannelParameters(bool errorWhenAsymmetric) override;
-    virtual void processFrameFromUpperLayer(Packet *msg);
+    virtual void handleUpperPacket(Packet *msg) override;
     virtual void processJamSignalFromNetwork(EthernetSignal *msg);
     virtual void processMsgFromNetwork(EthernetSignal *msg);
     virtual void scheduleEndIFGPeriod();
     virtual void fillIFGIfInBurst();
-    virtual void scheduleEndTxPeriod(int64_t sentFrameByteLength);
+    virtual void scheduleEndTxPeriod(B sentFrameByteLength);
     virtual void scheduleEndRxPeriod(EthernetSignal *);
     virtual void scheduleEndPausePeriod(int pauseUnits);
     virtual void beginSendFrames();
@@ -117,6 +115,9 @@ class INET_API EtherMac : public EtherMacBase
     virtual void addReception(simtime_t endRxTime);
     virtual void addReceptionInReconnectState(long id, simtime_t endRxTime);
     virtual void processDetectedCollision();
+
+    B calculateMinFrameLength();
+    B calculatePaddedFrameLength(Packet *frame);
 
     virtual void printState();
 };

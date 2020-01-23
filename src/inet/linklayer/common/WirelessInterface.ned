@@ -19,41 +19,40 @@ package inet.linklayer.common;
 
 import inet.linklayer.contract.IMacProtocol;
 import inet.linklayer.contract.IWirelessInterface;
+import inet.networklayer.common.InterfaceEntry;
 import inet.physicallayer.contract.packetlevel.IRadio;
 
-module WirelessInterface like IWirelessInterface
+module WirelessInterface extends InterfaceEntry like IWirelessInterface
 {
     parameters:
         @class(InterfaceEntry);
-        string classifierType = default("");
-        string macType;
-        string radioType;
         string interfaceTableModule;
         string energySourceModule;
         *.interfaceTableModule = default(absPath(interfaceTableModule));
         *.energySourceModule = default(absPath(energySourceModule));
-        @display("i=block/ifcard;bgb=250,300");
+        @display("i=block/ifcard");
     gates:
         input upperLayerIn;
         output upperLayerOut;
         input radioIn @labels(ISignal);
     submodules:
-        classifier: <classifierType> like IIeee8021dQosClassifier if classifierType != "" {
-                @display("p=80,70");
+        classifier: <default("")> like IIeee8021dQosClassifier if typename != "" {
+            @display("p=250,100");
         }
-        mac: <macType> like IMacProtocol {
-                @display("p=150,100");
+        mac: <> like IMacProtocol {
+            @display("p=100,200");
         }
-        radio: <radioType> like IRadio if radioType != "" {
-                @display("p=150,200");
+        radio: <> like IRadio if typename != "" {
+            @display("p=100,350");
         }
     connections allowunconnected:
-        radioIn --> { @display("m=s"); } --> radio.radioIn if radioType != "";
-        radio.upperLayerIn <-- mac.lowerLayerOut if radioType != "";
-        radio.upperLayerOut --> mac.lowerLayerIn if radioType != "";
+        radioIn --> { @display("m=s"); } --> radio.radioIn if exists(radio);
+        radio.upperLayerIn <-- mac.lowerLayerOut if exists(radio);
+        radio.upperLayerOut --> mac.lowerLayerIn if exists(radio);
 
         mac.upperLayerOut --> { @display("m=n"); } --> upperLayerOut;
-        mac.upperLayerIn <-- { @display("m=n"); } <-- upperLayerIn if classifierType == "";
-        mac.upperLayerIn <-- { @display("m=n"); } <-- classifier.out if classifierType != "";
-        classifier.in <-- { @display("m=n"); } <-- upperLayerIn if classifierType != "";
+        mac.upperLayerIn <-- { @display("m=n"); } <-- upperLayerIn if !exists(classifier);
+        mac.upperLayerIn <-- { @display("m=n"); } <-- classifier.out if exists(classifier);
+        classifier.in <-- { @display("m=n"); } <-- upperLayerIn if exists(classifier);
 }
+

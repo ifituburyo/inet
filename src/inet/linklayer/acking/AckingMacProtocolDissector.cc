@@ -17,23 +17,21 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/linklayer/acking/AckingMacProtocolDissector.h"
-
 #include "inet/common/ProtocolGroup.h"
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/linklayer/acking/AckingMacHeader_m.h"
-
+#include "inet/linklayer/acking/AckingMacProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::ackingMac, AckingMacProtocolDissector);
 
-void AckingMacProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void AckingMacProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     auto header = packet->popAtFront<AckingMacHeader>();
     callback.startProtocolDataUnit(&Protocol::ackingMac);
     callback.visitChunk(header, &Protocol::ackingMac);
-    auto payloadProtocol = ProtocolGroup::ethertype.getProtocol(header->getNetworkProtocol());
+    auto payloadProtocol = ProtocolGroup::ethertype.findProtocol(header->getNetworkProtocol());
     callback.dissectPacket(packet, payloadProtocol);
     ASSERT(packet->getDataLength() == B(0));
     callback.endProtocolDataUnit(&Protocol::ackingMac);

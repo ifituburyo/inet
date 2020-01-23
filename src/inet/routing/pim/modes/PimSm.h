@@ -21,7 +21,6 @@
 #define __INET_PIMSM_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/networklayer/ipv4/Ipv4Route.h"
 #include "inet/routing/pim/modes/PimBase.h"
@@ -53,8 +52,6 @@ class INET_API PimSm : public PimBase, protected cListener
 {
   private:
     struct Route;
-    friend std::ostream& operator<<(std::ostream& out, const SourceAndGroup& sourceGroup);
-    friend std::ostream& operator<<(std::ostream& out, const Route& sourceGroup);
 
     struct PimsmInterface : public Interface
     {
@@ -201,6 +198,8 @@ class INET_API PimSm : public PimBase, protected cListener
         void startJoinTimer(double joinPrunePeriod);
     };
 
+    friend std::ostream& operator<<(std::ostream& out, const PimSm::Route& sourceGroup);
+
     typedef std::map<SourceAndGroup, Route *> RoutingTable;
 
     // parameters
@@ -236,9 +235,9 @@ class INET_API PimSm : public PimBase, protected cListener
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
-    virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
-    virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
-    virtual void handleNodeCrash() override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
     virtual void stopPIMRouting();
     virtual void handleMessageWhenUp(cMessage *msg) override;
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;

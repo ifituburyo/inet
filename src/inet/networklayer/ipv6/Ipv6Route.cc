@@ -19,26 +19,57 @@
 #include "inet/networklayer/ipv6/Ipv6Route.h"
 #include "inet/networklayer/ipv6/Ipv6RoutingTable.h"
 
-#include "Ipv6RoutingTable.h"
-
 namespace inet {
 
 Register_Abstract_Class(Ipv6Route);
 
+const char* inet::Ipv6Route::getSourceTypeAbbreviation() const {
+    switch (_sourceType) {
+        case IFACENETMASK:
+            return "C";
+        case MANUAL:
+            return (getDestPrefix().isUnspecified() ? "S*": "S");
+        case ROUTER_ADVERTISEMENT:
+            return "ra";
+        case RIP:
+            return "R";
+        case OSPF:
+            return "O";
+        case BGP:
+            return "B";
+        case EIGRP:
+            return getAdminDist() < Ipv6Route::dEIGRPExternal ? "D" : "D EX";
+        case LISP:
+            return "l";
+        case BABEL:
+            return "ba";
+        case ODR:
+            return "o";
+        default:
+            return "???";
+    }
+}
+
 std::string Ipv6Route::str() const
 {
     std::stringstream out;
-    out << getDestPrefix() << "/" << getPrefixLength() << " --> ";
-    out << "if:" << (_interfacePtr ? _interfacePtr->getInterfaceName() : "*  ");
-    out << " next hop:" << getNextHop();
-    out << " " << IRoute::sourceTypeName(getSourceType());
-    if (getExpiryTime() > 0)
-        out << " exp:" << getExpiryTime();
-    out << "  ";
-    out << (_nextHop.isUnspecified() ? "DIRECT" : "REMOTE");
-    out << " " << IRoute::sourceTypeName(_sourceType);
-    if (_protocolData)
-        out << " " << _protocolData->str();
+    out << getSourceTypeAbbreviation();
+    if (getDestPrefix().isUnspecified())
+        out << " ::";
+    else
+        out << " " << getDestPrefix();
+    out << "/" << getPrefixLength();
+    if (getNextHop().isUnspecified())
+    {
+        out << " is directly connected";
+    }
+    else
+    {
+        out << " [" << getAdminDist() << "/" << getMetric() << "]";
+        out << " via ";
+        out << getNextHop();
+    }
+    out << ", " << getInterface()->getInterfaceName();
     return out.str();
 }
 

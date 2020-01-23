@@ -19,49 +19,33 @@ package inet.routing.bgpv4;
 
 import inet.routing.contract.IBgp;
 
-
 //
-// Implements BGP Version 4.
-// TODO config file!
+// Implements BGP Version 4 routing protocol.
+// 
+// The bgpConfig parameter can specify an XML file describing the
+// configuration of all BGP routers and their interfaces in the network.
 //
-// The model implements RFC 4271, with the following limitations:
-//   - NOTIFICATION message is not implemented
-//   - MinASOriginationIntervalTimer and MinRouteAdvertisementIntervalTimer
-//     are not implemented
-//   - Optional UPDATE message Path Attributes are not implemented
-//   - Optional Final State Machine events are not implemented
-//
-// Implemented features by RFC 4271 chapters:
-// - 3. Summary of Operation (Routes & routing Information Base) -- implemented
-// - 4. Message Formats:
-//     - Header, OPEN, UPDATE & KEEPALIVE -- implemented
-//     - NOTIFICATION -- not implemented
-// - 5. Path Attributes:
-//     - ORIGIN, AS_PATH, NEXT_HOP -- implemented
-//     - MULTI_EXIT_DISC, LOCAL_PREF, ATOMIC_AGGRGATE, AGGREGATOR -- not implemented
-// - 6. BGP Error Handling -- not implemented
-// - 7. BGP Version Negotiation -- not implemented
-// - 8. Event for the BGP FSM -- implemented except optional ones
-// - 9. UPDATE Message Handling:
-//     - Decision Process -- implemented
-//     - Update-Send Process -- implemented except Controlling Routing Traffic Overhead
-// - 10. BGP timers:
-//     - ConnectRetryTimer, Holdtimer, KeepAliveTimer -- implemented
-//     - MinASOriginationIntervalTimer and MinRouteAdvertisementIntervalTimer -- not implemented
-//
-// @author Helene Lageber
+//# TODO config file!
 //
 simple Bgp like IBgp
 {
     parameters:
-        string interfaceTableModule;   // The path to the InterfaceTable module
+        string interfaceTableModule;
         string routingTableModule;
         string ospfRoutingModule;
-        @display("i=block/network2");
+        volatile double startupTime @unit(s) = default(0s); // delay before starting BGP
         xml bgpConfig;
+        double ExternalPeerStartDelayOffset @unit(s) = default(0.5s);
+        bool redistributeRip = default(false);        // redistribute routes learned by RIP into BGP
+        string redistributeOspf = default("");        // redistribute routes learned by OSPF into BGP (O IA E1 E2)
+        bool redistributeInternal = default(false);   // redistribute BGP routes into OSPF (as external routes)
+        bool nextHopSelf = default(false);
+        int localPreference = default(100);
+        bool connectedCheck = default(true);
+        int ebgpMultihop = default(1);
+        @display("i=block/network2");
     gates:
         input socketIn;
         output socketOut;
 }
-
 

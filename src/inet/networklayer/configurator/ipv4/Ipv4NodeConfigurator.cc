@@ -18,10 +18,10 @@
 // Authors: Levente Meszaros
 //
 
-#include "inet/networklayer/configurator/ipv4/Ipv4NodeConfigurator.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/networklayer/configurator/ipv4/Ipv4NodeConfigurator.h"
 
 namespace inet {
 
@@ -41,8 +41,6 @@ void Ipv4NodeConfigurator::initialize(int stage)
 
     if (stage == INITSTAGE_LOCAL) {
         cModule *node = getContainingNode(this);
-        if (!node)
-            throw cRuntimeError("The container @networkNode module not found");
         const char *networkConfiguratorPath = par("networkConfiguratorModule");
         nodeStatus = dynamic_cast<NodeStatus *>(node->getSubmodule("status"));
         interfaceTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
@@ -57,43 +55,64 @@ void Ipv4NodeConfigurator::initialize(int stage)
             networkConfigurator = check_and_cast<Ipv4NetworkConfigurator *>(module);
         }
     }
-    else if (stage == INITSTAGE_NETWORK_LAYER) {
+    else if (stage == INITSTAGE_NETWORK_CONFIGURATION) {
         if (!nodeStatus || nodeStatus->getState() == NodeStatus::UP)
-            prepareNode();
+            prepareAllInterfaces();
     }
-    else if (stage == INITSTAGE_NETWORK_LAYER_2) {
+    else if (stage == INITSTAGE_NETWORK_ADDRESS_ASSIGNMENT) {
         if ((!nodeStatus || nodeStatus->getState() == NodeStatus::UP) && networkConfigurator)
-            configureInterface();
+            configureAllInterfaces();
     }
-    else if (stage == INITSTAGE_NETWORK_LAYER_3) {
-        if ((!nodeStatus || nodeStatus->getState() == NodeStatus::UP) && networkConfigurator)
+    else if (stage == INITSTAGE_STATIC_ROUTING) {
+        if ((!nodeStatus || nodeStatus->getState() == NodeStatus::UP) && networkConfigurator) {
             configureRoutingTable();
+            cModule *node = getContainingNode(this);
+            // get a pointer to the host module and IInterfaceTable
+            node->subscribe(interfaceCreatedSignal, this);
+            node->subscribe(interfaceDeletedSignal, this);
+            node->subscribe(interfaceStateChangedSignal, this);
+        }
     }
 }
 
-bool Ipv4NodeConfigurator::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+bool Ipv4NodeConfigurator::handleOperationStage(LifecycleOperation *operation, IDoneCallback *doneCallback)
 {
     Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_LINK_LAYER)
-            prepareNode();
-        else if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_NETWORK_LAYER && networkConfigurator) {
-            configureInterface();
-            configureRoutingTable();
+    int stage = operation->getCurrentStage();
+    if (dynamic_cast<ModuleStartOperation *>(operation)) {
+        if (static_cast<ModuleStartOperation::Stage>(stage) == ModuleStartOperation::STAGE_LINK_LAYER)
+            prepareAllInterfaces();
+        else if (static_cast<ModuleStartOperation::Stage>(stage) == ModuleStartOperation::STAGE_NETWORK_LAYER) {
+            if (networkConfigurator != nullptr) {
+                configureAllInterfaces();
+                configureRoutingTable();
+            }
+            cModule *node = getContainingNode(this);
+            node->subscribe(interfaceCreatedSignal, this);
+            node->subscribe(interfaceDeletedSignal, this);
+            node->subscribe(interfaceStateChangedSignal, this);
         }
     }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {    /*nothing to do*/
-        ;
+    else if (dynamic_cast<ModuleStopOperation *>(operation)) {
+        if (static_cast<ModuleStopOperation::Stage>(stage) == ModuleStopOperation::STAGE_LOCAL) {
+            cModule *node = getContainingNode(this);
+            node->unsubscribe(interfaceCreatedSignal, this);
+            node->unsubscribe(interfaceDeletedSignal, this);
+            node->unsubscribe(interfaceStateChangedSignal, this);
+        }
     }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {    /*nothing to do*/
-        ;
+    else if (dynamic_cast<ModuleCrashOperation *>(operation)) {
+        cModule *node = getContainingNode(this);
+        node->unsubscribe(interfaceCreatedSignal, this);
+        node->unsubscribe(interfaceDeletedSignal, this);
+        node->unsubscribe(interfaceStateChangedSignal, this);
     }
     else
         throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
     return true;
 }
 
-void Ipv4NodeConfigurator::prepareNode()
+void Ipv4NodeConfigurator::prepareAllInterfaces()
 {
     for (int i = 0; i < interfaceTable->getNumInterfaces(); i++)
         prepareInterface(interfaceTable->getInterface(i));
@@ -101,9 +120,8 @@ void Ipv4NodeConfigurator::prepareNode()
 
 void Ipv4NodeConfigurator::prepareInterface(InterfaceEntry *interfaceEntry)
 {
-    ASSERT(!interfaceEntry->ipv4Data());
-    Ipv4InterfaceData *interfaceData = new Ipv4InterfaceData();
-    interfaceEntry->setIpv4Data(interfaceData);
+    // ASSERT(!interfaceEntry->getProtocolData<Ipv4InterfaceData>());
+    Ipv4InterfaceData *interfaceData = interfaceEntry->addProtocolData<Ipv4InterfaceData>();
     if (interfaceEntry->isLoopback()) {
         // we may reconfigure later it to be the routerId
         interfaceData->setIPAddress(Ipv4Address::LOOPBACK_ADDRESS);
@@ -126,7 +144,7 @@ void Ipv4NodeConfigurator::prepareInterface(InterfaceEntry *interfaceEntry)
     }
 }
 
-void Ipv4NodeConfigurator::configureInterface()
+void Ipv4NodeConfigurator::configureAllInterfaces()
 {
     ASSERT(networkConfigurator);
     for (int i = 0; i < interfaceTable->getNumInterfaces(); i++)
@@ -138,6 +156,37 @@ void Ipv4NodeConfigurator::configureRoutingTable()
     ASSERT(networkConfigurator);
     if (par("configureRoutingTable"))
         networkConfigurator->configureRoutingTable(routingTable);
+}
+
+void Ipv4NodeConfigurator::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
+{
+    if (getSimulation()->getContextType() == CTX_INITIALIZE)
+        return; // ignore notifications during initialize
+
+    Enter_Method_Silent();
+    printSignalBanner(signalID, obj, details);
+
+    if (signalID == interfaceCreatedSignal) {
+        auto *entry = check_and_cast<InterfaceEntry *>(obj);
+        prepareInterface(entry);
+        // TODO
+    }
+    else if (signalID == interfaceDeletedSignal) {
+        // The RoutingTable deletes routing entries of interface
+    }
+    else if (signalID == interfaceStateChangedSignal) {
+        const auto *ieChangeDetails = check_and_cast<const InterfaceEntryChangeDetails *>(obj);
+        auto fieldId = ieChangeDetails->getFieldId();
+        if (fieldId == InterfaceEntry::F_STATE || fieldId == InterfaceEntry::F_CARRIER) {
+            auto *entry = ieChangeDetails->getInterfaceEntry();
+            if (entry->isUp() && networkConfigurator) {
+                networkConfigurator->configureInterface(entry);
+                if (par("configureRoutingTable"))
+                    networkConfigurator->configureRoutingTable(routingTable, entry);
+            }
+            // otherwise the RoutingTable deletes routing entries of interface entry
+        }
+    }
 }
 
 } // namespace inet

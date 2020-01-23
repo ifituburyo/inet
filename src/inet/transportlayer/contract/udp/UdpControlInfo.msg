@@ -35,8 +35,26 @@ enum UdpCommandCode
     UDP_C_CONNECT = 2;   // connect(); see ~UdpConnectCommand
     UDP_C_SETOPTION = 3; // setsockopt(); see ~UdpSetTimeToLiveCommand,...
     UDP_C_CLOSE = 4;     // close(); see ~UdpCloseCommand
+    UDP_C_DESTROY = 5;   // destroy(); see ~UdpDestroyCommand
 }
 
+enum UdpSetOptionSubcode
+{
+    UDP_C_SETOPTION_TTL = 1;
+    UDP_C_SETOPTION_DSCP = 2;
+    UDP_C_SETOPTION_TOS = 3;
+    UDP_C_SETOPTION_BROADCAST = 4;
+    UDP_C_SETOPTION_MCAST_IFACE = 5;
+    UDP_C_SETOPTION_MCAST_LOOP = 6;
+    UDP_C_SETOPTION_REUSEADDR = 7;
+    UDP_C_SETOPTION_JOIN_MCAST_GRP = 8;
+    UDP_C_SETOPTION_LEAVE_MCAST_GRP = 9;
+    UDP_C_SETOPTION_JOIN_MCAST_SRC = 10;
+    UDP_C_SETOPTION_BLOCK_MCAST_SRC = 11;
+    UDP_C_SETOPTION_UNBLOCK_MCAST_SRC = 12;
+    UDP_C_SETOPTION_LEAVE_MCAST_SRC = 13;
+    UDP_C_SETOPTION_SET_MCAST_SRC_FILTER = 14;
+}
 
 //
 // Udp indications, sent by ~Udp to the application. ~Udp will set these
@@ -47,7 +65,8 @@ enum UdpCommandCode
 enum UdpStatusInd
 {
     UDP_I_DATA = 0;  // ~Udp attaches ~UDPIndication to received data packet
-    UDP_I_ERROR = 1; // ~Udp attaches ~UDPIndication to received data packet
+    UDP_I_ERROR = 1;
+    UDP_I_SOCKET_CLOSED = 2;
 }
 
 
@@ -109,6 +128,7 @@ class UdpConnectCommand extends UdpControlInfo
 //
 // Control info for closing an UDP socket. To close a socket, send a message
 // to the ~Udp module with kind=UDP_C_CLOSE and an ~UdpCloseCommand attached.
+// The Udp module will send an ~UdpSocketClosedIndication answer.
 //
 // @see ~UdpCommandCode
 //
@@ -116,6 +136,25 @@ class UdpCloseCommand extends UdpControlInfo
 {
 }
 
+//
+// Control info for inform app about an UDP socket closed.
+// This is answer to an ~UdpCloseCommand.
+//
+// @see ~UdpCommandCode
+//
+class UdpSocketClosedIndication extends UdpControlInfo
+{
+}
+
+//
+// Control info for destroying an UDP socket. To destroy a socket, send a message
+// to the ~Udp module with kind=UDP_C_DESTROY and an ~UdpDestroyCommand attached.
+//
+// @see ~UdpCommandCode
+//
+class UdpDestroyCommand extends UdpControlInfo
+{
+}
 
 //
 // Control info that is attached to received data packets, sent up from the
@@ -140,6 +179,7 @@ class UdpErrorIndication extends UdpControlInfo
 //
 class UdpSetOptionCommand extends UdpControlInfo
 {
+    UdpSetOptionSubcode optionCode = static_cast<UdpSetOptionSubcode>(-1);
 }
 
 //
@@ -152,22 +192,38 @@ class UdpSetOptionCommand extends UdpControlInfo
 //
 class UdpSetTimeToLiveCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_TTL;
     int ttl;
 }
 
 //
-// Control info for setting the Type of Service (Ipv4) or Traffic Class (Ipv6)
+// Control info for setting the DSCP (DiffServ Code Point)
 // header field on outgoing Ipv4/Ipv6 packets sent from an Udp socket.
-// This is an 8-bit field, the lowest 6 bits are the Dscp (DiffServ Code Point)
-// and the highest 2 bits are the ECN (Explicit Congestion Notification).
+// This is a 6-bit field.
 // To set the option, send a message to  the ~Udp module with kind=UDP_C_SETOPTION
 // and an and instance of this control info class attached.
 //
 // @see ~UdpCommandCode
 //
-class UdpSetTypeOfServiceCommand extends UdpSetOptionCommand
+class UdpSetDscpCommand extends UdpSetOptionCommand
 {
-    char tos;  // ToS byte for Ipv4/Ipv6
+    optionCode = UDP_C_SETOPTION_DSCP;
+    short dscp;  // diffserv code point for Ipv4/Ipv6
+}
+
+//
+// Control info for setting the TOS (Type Of Service) / Traffic Class 
+// header field on outgoing Ipv4/Ipv6 packets sent from an Udp socket.
+// This is a 8-bit field.
+// To set the option, send a message to  the ~Udp module with kind=UDP_C_SETOPTION
+// and an and instance of this control info class attached.
+//
+// @see ~UdpCommandCode
+//
+class UdpSetTosCommand extends UdpSetOptionCommand
+{
+    optionCode = UDP_C_SETOPTION_TOS;
+    short tos;  // type of service for Ipv4 / Traffic class for Ipv6
 }
 
 //
@@ -179,6 +235,7 @@ class UdpSetTypeOfServiceCommand extends UdpSetOptionCommand
 //
 class UdpSetBroadcastCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_BROADCAST;
     bool broadcast;
 }
 
@@ -191,6 +248,7 @@ class UdpSetBroadcastCommand extends UdpSetOptionCommand
 //
 class UdpSetMulticastInterfaceCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_MCAST_IFACE;
     int interfaceId;
 }
 
@@ -205,6 +263,7 @@ class UdpSetMulticastInterfaceCommand extends UdpSetOptionCommand
 //
 class UdpSetMulticastLoopCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_MCAST_LOOP;
     bool loop;
 }
 
@@ -219,6 +278,7 @@ class UdpSetMulticastLoopCommand extends UdpSetOptionCommand
 //
 class UdpSetReuseAddressCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_REUSEADDR;
     bool reuseAddress;
 }
 
@@ -235,6 +295,7 @@ class UdpSetReuseAddressCommand extends UdpSetOptionCommand
 //
 class UdpJoinMulticastGroupsCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_JOIN_MCAST_GRP;
     L3Address multicastAddr[];
     int interfaceId[];
 }
@@ -248,6 +309,7 @@ class UdpJoinMulticastGroupsCommand extends UdpSetOptionCommand
 //
 class UdpLeaveMulticastGroupsCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_LEAVE_MCAST_GRP;
     L3Address multicastAddr[];
 }
 
@@ -258,6 +320,7 @@ class UdpLeaveMulticastGroupsCommand extends UdpSetOptionCommand
 // see IP_BLOCK_SOURCE socket option
 class UdpBlockMulticastSourcesCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_BLOCK_MCAST_SRC;
     int interfaceId;
     L3Address multicastAddr;
     L3Address sourceList[];
@@ -270,6 +333,7 @@ class UdpBlockMulticastSourcesCommand extends UdpSetOptionCommand
 // see IP_UNBLOCK_SOURCE socket option
 class UdpUnblockMulticastSourcesCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_UNBLOCK_MCAST_SRC;
     int interfaceId;
     L3Address multicastAddr;
     L3Address sourceList[];
@@ -282,6 +346,7 @@ class UdpUnblockMulticastSourcesCommand extends UdpSetOptionCommand
 // see IP_ADD_SOURCE_MEMBERSHIP socket option
 class UdpJoinMulticastSourcesCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_JOIN_MCAST_SRC;
     int interfaceId;
     L3Address multicastAddr;
     L3Address sourceList[];
@@ -294,6 +359,7 @@ class UdpJoinMulticastSourcesCommand extends UdpSetOptionCommand
 // see IP_DROP_SOURCE_MEMBERSHIP socket option
 class UdpLeaveMulticastSourcesCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_LEAVE_MCAST_SRC;
     int interfaceId;
     L3Address multicastAddr;
     L3Address sourceList[];
@@ -310,6 +376,7 @@ enum UdpSourceFilterMode { UDP_INCLUDE_MCAST_SOURCES = 1; UDP_EXCLUDE_MCAST_SOUR
 //
 class UdpSetMulticastSourceFilterCommand extends UdpSetOptionCommand
 {
+    optionCode = UDP_C_SETOPTION_SET_MCAST_SRC_FILTER;
     int interfaceId;
     L3Address multicastAddr;
     UdpSourceFilterMode filterMode;

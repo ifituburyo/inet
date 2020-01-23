@@ -1,5 +1,39 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-09-02  Zoltan Bojthe
+
+	Optimized Tag usage.
+
+2019-03-19  Levente Mészáros
+
+	Added code to set UdpHeader CRC mode field to disabled.
+	The default value is intentionally undefined and must be changed.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-10-05  Zoltan Bojthe
+
+	Changed base class of Dymo to RoutingProtocolBase.
+
+2018-10-04  Zoltan Bojthe
+
+	Fixed lifecycle stages.
+
+2018-09-27  Levente Mészáros
+
+	Merged INITSTAGE_NETWORK_LAYER and INITSTAGE_NETWORK_LAYER_3.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-04-09  Zoltan Bojthe
+
+	Added DymoRouteData::str().
+	Removed "inet::" from packet name.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-02-01  Zoltan Bojthe
 
 	Renamed message classes: Rreq, Rrep, Rerr.
@@ -102,7 +136,7 @@
 
 2015-08-04  Zoltan Bojthe
 
-	dymo: code style changes    
+	dymo: code style changes
 
 2016-10-20  Rudolf Hornig
 

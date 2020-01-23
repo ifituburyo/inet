@@ -7,7 +7,6 @@ Test startup operation on AccessPoint that is initially down.
 
 [General]
 network = Test
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 cmdenv-express-mode = false
 record-eventlog = true
@@ -24,7 +23,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 **.scenarioManager.script = xmldoc("scenario.xml")
 *.host.numWlanInterfaces=2
 
-*.host.mobilityType = "StationaryMobility"
+*.host.mobility.typename = "StationaryMobility"
 **.mobility.constraintAreaMinX = 0m
 **.mobility.constraintAreaMinY = 0m
 **.mobility.constraintAreaMinZ = 0m
@@ -41,7 +40,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 *.host.wlan[*].bitrate = 54Mbps
 *.host*.wlan[*].mac.headerLength = 10B
 *.host*.wlan[*].mac.fullDuplex = false
-*.host*.wlan[*].radioType = "UnitDiskRadio"
+*.host*.wlan[*].radio.typename = "UnitDiskRadio"
 *.host*.wlan[*].radio.transmitter.bitrate = 2Mbps
 *.host*.wlan[*].radio.transmitter.communicationRange = 1km
 *.host*.wlan[*].radio.transmitter.interferenceRange = 5km
@@ -50,6 +49,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 
 %file: test.ned
 
+import inet.test.moduletest.lib.*;
 import inet.node.wireless.AccessPoint;
 import inet.physicallayer.unitdisk.UnitDiskRadioMedium;
 import inet.common.scenario.ScenarioManager;

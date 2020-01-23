@@ -1,4 +1,4 @@
-<features cppSourceRoots="src" definesFile="src/inet/features.h">
+    <features cppSourceRoots="src" definesFile="src/inet/features.h">
     <feature
         id="TCP_common"
         name="TCP Common"
@@ -9,8 +9,6 @@
         nedPackages = "
                        inet.transportlayer.tcp_common
                        inet.applications.tcpapp
-                       inet.common.serializer.tcp
-                       inet.common.serializer.application.tcpapp
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_TCP_COMMON"
@@ -73,8 +71,6 @@
                        inet.networklayer.ipv4
                        inet.networklayer.configurator.ipv4
                        inet.networklayer.arp.ipv4
-                       inet.common.serializer.ipv4
-                       inet.common.serializer.arp
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_IPv4"
@@ -85,7 +81,7 @@
         name="INET examples"
         description = "Examples for basic internet protocols (IPv4, TCP, UDP)"
         initiallyEnabled = "true"
-        requires = "IPv4 TCP_INET UDP Ethernet PPP Ieee80211"
+        requires = "IPv4 TCP_INET UDP Ethernet PPP"
         labels = "protocols examples"
         nedPackages = "
                        inet.examples.inet
@@ -107,7 +103,6 @@
                        inet.networklayer.icmpv6
                        inet.networklayer.ipv6tunneling
                        inet.node.ipv6
-                       inet.common.serializer.ipv6
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_IPv6"
@@ -157,18 +152,18 @@
         linkerFlags = ""
         />
     <feature
-        id="Generic"
-        name="Generic network layer protocol"
-        description = "Basic Generic network layer support"
+        id="Nexthop"
+        name="Next hop forwarding protocol"
+        description = "Conceptual next hop forwarding protocol"
         initiallyEnabled = "true"
         requires = ""
         labels = ""
         nedPackages = "
-                       inet.networklayer.generic
-                       inet.networklayer.configurator.generic
+                       inet.networklayer.nexthop
+                       inet.networklayer.configurator.nexthop
                       "
         extraSourceFolders = ""
-        compileFlags = "-DWITH_GENERIC"
+        compileFlags = "-DWITH_NEXTHOP"
         linkerFlags = ""
         />
     <feature
@@ -176,7 +171,7 @@
         name="WiseRoute"
         description = "Wiseroute is a simple loop-free routing algorithm that builds a routing tree from a central network point, designed for sensor networks and convergecast traffic."
         initiallyEnabled = "true"
-        requires = "Generic"
+        requires = ""
         labels = ""
         nedPackages = "
                        inet.networklayer.wiseroute
@@ -210,7 +205,6 @@
         nedPackages = "
                        inet.transportlayer.udp
                        inet.applications.udpapp
-                       inet.common.serializer.udp
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_UDP"
@@ -257,7 +251,6 @@
                        inet.applications.sctpapp
                        inet.applications.sctpapp
                        inet.transportlayer.sctp
-                       inet.common.serializer.sctp
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_SCTP"
@@ -318,13 +311,15 @@
         nedPackages = "
                        inet.applications.ethernet
                        inet.linklayer.ethernet
+                       inet.linklayer.ieee8021q
+                       inet.linklayer.vlan
                        inet.node.ethernet
-                       inet.common.serializer.ethernet
+                       inet.physicallayer.ethernet
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_ETHERNET"
         linkerFlags = ""
-        />
+        /><!-- TODO: move inet.linklayer.ieee8021q and inet.linklayer.vlan to a new feature -->
     <feature
         id="Ethernet_examples"
         name="Ethernet examples"
@@ -347,7 +342,6 @@
         labels = "protocols"
         nedPackages = "
                        inet.linklayer.ppp
-                       inet.common.serializer.ppp
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_PPP"
@@ -357,18 +351,16 @@
         id="ExternalInterface"
         name="Network emulation support"
         description = "Support for connecting the simulation to a real network.
-                       The ExternalInterface module is responsible for sending/receiving
-                       packets on the network. This feature requires at least version 1.5.3
-                       of the libpcap-dev package."
+                       This feature currently works on Linux systems only."
         initiallyEnabled = "false"
-        requires = "IPv4"
+        requires = "Ethernet IPv4"
         labels = "nic"
         nedPackages = "
-                       inet.linklayer.ext
+                       inet.emulation
                       "
         extraSourceFolders = ""
         compileFlags = "-DWITH_EXT_IF"
-        linkerFlags = "-lpcap"
+        linkerFlags = ""
         />
     <feature
         id="ExternalInterface_examples"
@@ -438,6 +430,35 @@
         labels = "routing examples"
         nedPackages = "
                        inet.examples.ospfv2
+                      "
+        extraSourceFolders = ""
+        compileFlags = ""
+        linkerFlags = ""
+        />
+    <feature
+        id="OSPFv3"
+        name="OSPFv3"
+        description = "OSPFv3 support"
+        initiallyEnabled = "true"
+        requires = "IPv4 IPv6"
+        labels = "routing"
+        nedPackages = "
+                       inet.routing.ospfv3
+                       inet.node.ospfv3
+                      "
+        extraSourceFolders = ""
+        compileFlags = "-DWITH_OSPFv3"
+        linkerFlags = ""
+        />
+    <feature
+        id="OSPFv3_examples"
+        name="OSPFv3 examples"
+        description = "Examples for OSPFv3"
+        initiallyEnabled = "true"
+        requires = "OSPFv3 UDP IPv4 IPv6 PPP Ethernet"
+        labels = "routing examples"
+        nedPackages = "
+                       inet.examples.ospfv3
                       "
         extraSourceFolders = ""
         compileFlags = ""
@@ -697,7 +718,7 @@
         id="radio"
         name="Radio"
         description = "Radio support for wireless simulations"
-        requires = "power"
+        requires = ""
         labels = ""
         nedPackages = "
                        inet.physicallayer.analogmodel
@@ -728,7 +749,6 @@
         nedPackages = "
                        inet.linklayer.ieee80211
                        inet.physicallayer.ieee80211
-                       inet.common.serializer.ieee80211
                        inet.node.wireless
                       "
         extraSourceFolders = ""
@@ -843,7 +863,7 @@
     <feature
         id="VoIPStream"
         name="VoIPStream"
-        description = "Voice over IP tool. Required external libraries: libavcodec libavformat libavresample libavutil"
+        description = "Voice-over-IP application. Required external libraries: libavcodec-dev libavformat-dev libavresample-dev libavutil-dev"
         initiallyEnabled = "false"
         requires = "UDP"
         labels = ""
@@ -1107,7 +1127,6 @@
         requires = ""
         labels = ""
         nedPackages = "
-                       inet.common.serializer.csmaca
                        inet.linklayer.csmaca
                       "
         extraSourceFolders = ""
@@ -1127,18 +1146,6 @@
         linkerFlags = ""
         />
     <feature
-        id="visualizationtutorial"
-        name="Visualization tutorial"
-        description = "A step-by-step tutorial starting from the basics, and introducing new features and concepts related to visualizing state and behavior of communication networks."
-        initiallyEnabled = "true"
-        requires = "visualization physicalenvironment Ieee80211 IPv4 AODV"
-        labels = "tutorial visualization"
-        nedPackages = "inet.tutorials.visualization"
-        extraSourceFolders = ""
-        compileFlags = ""
-        linkerFlags = ""
-        />
-    <feature
         id="configuratortutorial"
         name="Configurator tutorial"
         description = "A step-by-step tutorial starting from the basics, and introducing new features and concepts related to automatic IP address and routing table configuartion."
@@ -1151,11 +1158,19 @@
         linkerFlags = ""
         />
     <feature
-        id="generalshowcases"
+        id="general_showcases"
         name="General showcases"
-        description = "Simple showcases demonstrating general features."
+        description = "Showcases that demonstrate features which are independent of any specific network technology."
         initiallyEnabled = "true"
-        requires = ""
+        requires = "visualization
+                    physicalenvironment
+                    apskradio
+                    Ethernet PPP Ieee80211 Ieee802154 BMAC CsmaCaMac LMAC XMAC
+                    IPv4
+                    TCP_INET UDP
+                    AODV DSDV GPSR RIP
+                    DiffServ
+                    DHCP"
         labels = "showcase general"
         nedPackages = "inet.showcases.general"
         extraSourceFolders = ""
@@ -1163,9 +1178,45 @@
         linkerFlags = ""
         />
     <feature
-        id="visualizershowcases"
+        id="mobility_showcases"
+        name="Mobility showcases"
+        description = "Showcases that demonstrate node mobility."
+        initiallyEnabled = "true"
+        requires = "mobility visualization physicalenvironment Ieee80211 IPv4"
+        labels = "showcase mobility"
+        nedPackages = "inet.showcases.mobility"
+        extraSourceFolders = ""
+        compileFlags = ""
+        linkerFlags = ""
+        />
+    <feature
+        id="routing_showcases"
+        name="Routing showcases"
+        description = "Showcases that demonstrate routing protocols."
+        initiallyEnabled = "true"
+        requires = "visualization physicalenvironment Ieee80211 IPv4 GPSR"
+        labels = "showcase routing"
+        nedPackages = "inet.showcases.routing"
+        extraSourceFolders = ""
+        compileFlags = ""
+        linkerFlags = ""
+        />
+    <feature
+        id="emulation_showcases"
+        name="Emulation showcases"
+        description = "Showcases that demonstrate communication with external systems/components."
+        initiallyEnabled = "false"
+        requires = "VoIPStream Ethernet Ieee80211 ExternalInterface"
+        labels = "showcase emulation"
+        nedPackages = "inet.showcases.emulation"
+        extraSourceFolders = ""
+        compileFlags = ""
+        linkerFlags = ""
+        />
+    <feature
+        id="visualizer_showcases"
         name="Visualization showcases"
-        description = "Simple showcases demonstrating features and concepts related to visualizing state and behavior of communication networks."
+        description = "Showcases that demonstrate the visualization of state and behavior of communication networks."
         initiallyEnabled = "true"
         requires = "visualization physicalenvironment Ethernet Ieee80211 IPv4 AODV"
         labels = "showcase visualization"
@@ -1175,9 +1226,9 @@
         linkerFlags = ""
         />
     <feature
-        id="wirelessshowcases"
+        id="wireless_showcases"
         name="Wireless showcases"
-        description = "Simple showcases demonstrating wireless features."
+        description = "Showcases that demonstrate the simulation of wireless networks."
         initiallyEnabled = "true"
         requires = "visualization physicalenvironment apskradio Ieee80211 IPv4 AODV"
         labels = "showcase visualization"

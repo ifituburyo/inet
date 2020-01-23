@@ -16,11 +16,10 @@
 //
 //
 
-#include "LinearGaugeFigure.h"
 #include "inet/common/INETUtils.h"
+#include "inet/common/figures/LinearGaugeFigure.h"
 
-//TODO namespace inet { -- for the moment commented out, as OMNeT++ 5.0 cannot instantiate a figure from a namespace
-using namespace inet;
+namespace inet {
 
 Register_Figure("linearGauge", LinearGaugeFigure);
 
@@ -107,7 +106,7 @@ void LinearGaugeFigure::setLabel(const char *text)
     labelFigure->setText(text);
 }
 
-const int LinearGaugeFigure::getLabelOffset() const
+int LinearGaugeFigure::getLabelOffset() const
 {
     return labelOffset;
 }
@@ -333,8 +332,8 @@ void LinearGaugeFigure::redrawTicks()
     numTicks = std::max(0.0, std::abs(max - min - shifting) / tickSize + 1);
 
     // Allocate ticks and numbers if needed
-    if (numTicks > tickFigures.size())
-        while (numTicks > tickFigures.size()) {
+    if ((size_t)numTicks > tickFigures.size())
+        while ((size_t)numTicks > tickFigures.size()) {
             cLineFigure *tick = new cLineFigure();
             cTextFigure *number = new cTextFigure();
 
@@ -391,5 +390,5 @@ void LinearGaugeFigure::refresh()
     setNeedleGeometry();
 }
 
-// } // namespace inet
+} // namespace inet
 

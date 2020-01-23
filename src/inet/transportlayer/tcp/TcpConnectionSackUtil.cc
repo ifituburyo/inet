@@ -17,19 +17,19 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include <string.h>
 #include <algorithm>    // min,max
-#include "inet/transportlayer/tcp/Tcp.h"
-#include "inet/transportlayer/tcp/TcpConnection.h"
-#include "inet/transportlayer/tcp_common/TcpHeader.h"
+#include <string.h>
+
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
-#include "inet/transportlayer/tcp/TcpSendQueue.h"
-#include "inet/transportlayer/tcp/TcpSackRexmitQueue.h"
-#include "inet/transportlayer/tcp/TcpReceiveQueue.h"
+#include "inet/transportlayer/tcp/Tcp.h"
 #include "inet/transportlayer/tcp/TcpAlgorithm.h"
+#include "inet/transportlayer/tcp/TcpConnection.h"
+#include "inet/transportlayer/tcp/TcpReceiveQueue.h"
+#include "inet/transportlayer/tcp/TcpSackRexmitQueue.h"
+#include "inet/transportlayer/tcp/TcpSendQueue.h"
+#include "inet/transportlayer/tcp_common/TcpHeader.h"
 
 namespace inet {
-
 namespace tcp {
 
 //
@@ -119,15 +119,13 @@ bool TcpConnection::processSACKOption(const Ptr<const TcpHeader>& tcpseg, const 
         }
         state->rcv_sacks += n;    // total counter, no current number
 
-        if (rcvSacksVector)
-            rcvSacksVector->record(state->rcv_sacks);
+        emit(rcvSacksSignal, state->rcv_sacks);
 
         // update scoreboard
         state->sackedBytes_old = state->sackedBytes;    // needed for RFC 3042 to check if last dupAck contained new sack information
         state->sackedBytes = rexmitQueue->getTotalAmountOfSackedBytes();
 
-        if (sackedBytesVector)
-            sackedBytesVector->record(state->sackedBytes);
+        emit(sackedBytesSignal, state->sackedBytes);
     }
     return true;
 }
@@ -214,8 +212,7 @@ void TcpConnection::setPipe()
         }
     }
 
-    if (pipeVector)
-        pipeVector->record(state->pipe);
+    emit(pipeSignal, state->pipe);
 }
 
 bool TcpConnection::nextSeg(uint32& seqNum)
@@ -238,7 +235,7 @@ bool TcpConnection::nextSeg(uint32& seqNum)
     seqNum = 0;
 
     if (state->ts_enabled)
-        shift -= TCP_OPTION_TS_SIZE;
+        shift -= B(TCP_OPTION_TS_SIZE).get();
 
     // RFC 3517, page 5: "(1) If there exists a smallest unSACKed sequence number 'S2' that
     // meets the following three criteria for determining loss, the
@@ -387,7 +384,10 @@ void TcpConnection::sendSegmentDuringLossRecoveryPhase(uint32 seqNum)
 
     uint32 sentSeqNum = seqNum + state->sentBytes;
 
-    ASSERT(seqLE(state->snd_nxt, sentSeqNum + 1));    // +1 for FIN, if sent
+    if(state->send_fin && sentSeqNum == state->snd_fin_seq)
+        sentSeqNum = sentSeqNum + 1;
+
+    ASSERT(seqLE(state->snd_nxt, sentSeqNum));
 
     // RFC 3517 page 8: "(C.2) If any of the data octets sent in (C.1) are below HighData,
     // HighRxt MUST be set to the highest sequence number of the
@@ -402,8 +402,7 @@ void TcpConnection::sendSegmentDuringLossRecoveryPhase(uint32 seqNum)
     if (seqGreater(sentSeqNum, state->snd_max)) // HighData = snd_max
         state->snd_max = sentSeqNum;
 
-    if (unackedVector)
-        unackedVector->record(state->snd_max - state->snd_una);
+    emit(unackedSignal, state->snd_max - state->snd_una);
 
     // RFC 3517, page 9: "6   Managing the RTO Timer
     //
@@ -440,8 +439,8 @@ void TcpConnection::sendSegmentDuringLossRecoveryPhase(uint32 seqNum)
 
 TcpHeader TcpConnection::addSacks(const Ptr<TcpHeader>& tcpseg)
 {
-    uint options_len = 0;
-    uint used_options_len = tcpseg->getHeaderOptionArrayLength();
+    B options_len = B(0);
+    B used_options_len = tcpseg->getHeaderOptionArrayLength();
     bool dsack_inserted = false;    // set if dsack is subsets of a bigger sack block recently reported
 
     uint32 start = state->start_seqno;
@@ -558,7 +557,7 @@ TcpHeader TcpConnection::addSacks(const Ptr<TcpHeader>& tcpseg)
 
     uint n = state->sacks_array.size();
 
-    uint maxnode = ((TCP_OPTIONS_MAX_SIZE - used_options_len) - 2) / 8;    // 2: option header, 8: size of one sack entry
+    uint maxnode = ((B(TCP_OPTIONS_MAX_SIZE - used_options_len).get()) - 2) / 8;    // 2: option header, 8: size of one sack entry
 
     if (n > maxnode)
         n = maxnode;
@@ -580,7 +579,7 @@ TcpHeader TcpConnection::addSacks(const Ptr<TcpHeader>& tcpseg)
 
     uint optArrSizeAligned = optArrSize;
 
-    while (used_options_len % 4 != 2) {
+    while (B(used_options_len).get() % 4 != 2) {
         used_options_len++;
         optArrSizeAligned++;
     }
@@ -590,7 +589,7 @@ TcpHeader TcpConnection::addSacks(const Ptr<TcpHeader>& tcpseg)
         optArrSize++;
     }
 
-    ASSERT(used_options_len % 4 == 2);
+    ASSERT(B(used_options_len).get() % 4 == 2);
 
     TcpOptionSack *option = new TcpOptionSack();
     option->setLength(8 * n + 2);
@@ -605,18 +604,17 @@ TcpHeader TcpConnection::addSacks(const Ptr<TcpHeader>& tcpseg)
     }
 
     // independent of "n" we always need 2 padding bytes (NOP) to make: (used_options_len % 4 == 0)
-    options_len = used_options_len + 8 * n + 2;    // 8 bytes for each SACK (n) + 2 bytes for kind&length
+    options_len = used_options_len + TCP_OPTION_SACK_ENTRY_SIZE * n + TCP_OPTION_HEAD_SIZE;    // 8 bytes for each SACK (n) + 2 bytes for kind&length
 
     ASSERT(options_len <= TCP_OPTIONS_MAX_SIZE);    // Options length allowed? - maximum: 40 Bytes
 
     tcpseg->insertHeaderOption(option);
-    tcpseg->setHeaderLength(TCP_HEADER_OCTETS + tcpseg->getHeaderOptionArrayLength());
-    tcpseg->setChunkLength(B(tcpseg->getHeaderLength()));
+    tcpseg->setHeaderLength(TCP_MIN_HEADER_LENGTH + tcpseg->getHeaderOptionArrayLength());
+    tcpseg->setChunkLength(tcpseg->getHeaderLength());
     // update number of sent sacks
     state->snd_sacks += n;
 
-    if (sndSacksVector)
-        sndSacksVector->record(state->snd_sacks);
+    emit(sndSacksSignal, state->snd_sacks);
 
     EV_INFO << n << " SACK(s) added to header:\n";
 
@@ -658,6 +656,5 @@ TcpHeader TcpConnection::addSacks(const Ptr<TcpHeader>& tcpseg)
 }
 
 } // namespace tcp
-
 } // namespace inet
 

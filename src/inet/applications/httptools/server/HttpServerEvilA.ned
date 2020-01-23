@@ -17,7 +17,6 @@
 
 package inet.applications.httptools.server;
 
-
 //
 // Demonstrates subclassing the server to create a custom site. This site is an attacker -- a puppetmaster --
 // which serves HTML pages containing attack code. In this case, we are simulating JavaScript attack code which prompts
@@ -25,17 +24,13 @@ package inet.applications.httptools.server;
 // the attack from the browser user by use of JavaScript timeouts or similar mechanisms.
 // The generateBody virtual function is redefined to create a page containing the attack code.
 //
-// This module definition has two additional parameters to the standard HttpServerDirect definition:
-// * minBadRequests specifies the lower bound on bad requests caused to be sent to the victim by the browser.
-// * maxBadRequests specifies the upper bound on bad requests caused to be sent to the victim by the browser.
-//
 // @author  Kristjan V. Jonsson
 //
 simple HttpServerEvilA extends HttpServer
 {
     parameters:
         @class(HttpServerEvilA);
-        int minBadRequests;     // The lower bound of bad requests.
-        int maxBadRequests;     // The upper bound of bad requests
+        int minBadRequests;     // Specifies the lower bound of bad requests to be sent to the victim by the browser.
+        int maxBadRequests;     // Specifies the upper bound of bad requests to be sent to the victim by the browser.
 }
 

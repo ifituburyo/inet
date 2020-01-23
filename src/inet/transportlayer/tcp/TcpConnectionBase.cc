@@ -16,20 +16,42 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include <string.h>
 #include <assert.h>
-#include "inet/transportlayer/tcp/Tcp.h"
-#include "inet/transportlayer/tcp/TcpConnection.h"
-#include "inet/transportlayer/tcp_common/TcpHeader.h"
+#include <string.h>
+
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
-#include "inet/transportlayer/tcp/TcpSendQueue.h"
-#include "inet/transportlayer/tcp/TcpReceiveQueue.h"
+#include "inet/transportlayer/tcp/Tcp.h"
 #include "inet/transportlayer/tcp/TcpAlgorithm.h"
+#include "inet/transportlayer/tcp/TcpConnection.h"
+#include "inet/transportlayer/tcp/TcpReceiveQueue.h"
 #include "inet/transportlayer/tcp/TcpSackRexmitQueue.h"
+#include "inet/transportlayer/tcp/TcpSendQueue.h"
+#include "inet/transportlayer/tcp_common/TcpHeader.h"
 
 namespace inet {
-
 namespace tcp {
+
+Define_Module(TcpConnection);
+
+simsignal_t TcpConnection::stateSignal = registerSignal("state");    // FSM state
+simsignal_t TcpConnection::sndWndSignal = registerSignal("sndWnd");    // snd_wnd
+simsignal_t TcpConnection::rcvWndSignal = registerSignal("rcvWnd");    // rcv_wnd
+simsignal_t TcpConnection::rcvAdvSignal = registerSignal("rcvAdv");    // current advertised window (=rcv_adv)
+simsignal_t TcpConnection::sndNxtSignal = registerSignal("sndNxt");    // sent seqNo
+simsignal_t TcpConnection::sndAckSignal = registerSignal("sndAck");    // sent ackNo
+simsignal_t TcpConnection::rcvSeqSignal = registerSignal("rcvSeq");    // received seqNo
+simsignal_t TcpConnection::rcvAckSignal = registerSignal("rcvAck");    // received ackNo (=snd_una)
+simsignal_t TcpConnection::unackedSignal = registerSignal("unacked");    // number of bytes unacknowledged
+simsignal_t TcpConnection::dupAcksSignal = registerSignal("dupAcks");    // current number of received dupAcks
+simsignal_t TcpConnection::pipeSignal = registerSignal("pipe");    // current sender's estimate of bytes outstanding in the network
+simsignal_t TcpConnection::sndSacksSignal = registerSignal("sndSacks");    // number of sent Sacks
+simsignal_t TcpConnection::rcvSacksSignal = registerSignal("rcvSacks");    // number of received Sacks
+simsignal_t TcpConnection::rcvOooSegSignal = registerSignal("rcvOooSeg");    // number of received out-of-order segments
+simsignal_t TcpConnection::rcvNASegSignal = registerSignal("rcvNASeg");    // number of received not acceptable segments
+simsignal_t TcpConnection::sackedBytesSignal = registerSignal("sackedBytes");    // current number of received sacked bytes
+simsignal_t TcpConnection::tcpRcvQueueBytesSignal = registerSignal("tcpRcvQueueBytes");    // current amount of used bytes in tcp receive queue
+simsignal_t TcpConnection::tcpRcvQueueDropsSignal = registerSignal("tcpRcvQueueDrops");    // number of drops in tcp receive queue
+
 
 TcpStateVariables::TcpStateVariables()
 {
@@ -117,6 +139,18 @@ TcpStateVariables::TcpStateVariables()
     tcpRcvQueueDrops = 0;
     sendQueueLimit = 0;
     queueUpdate = true;
+
+    sndCwr = false;
+    ecnEchoState = false;
+    gotEce = false;
+    gotCeIndication = false;
+    ect = false;
+    endPointIsWillingECN = false;
+    ecnSynSent = false;
+    ecnWillingness = false;
+    sndAck = false;
+    rexmit = false;
+    eceReactionTime = 0;          
 }
 
 std::string TcpStateVariables::str() const
@@ -169,25 +203,18 @@ std::string TcpStateVariables::detailedInfo() const
     return out.str();
 }
 
-TcpConnection::TcpConnection(Tcp *mod) :
-        tcpMain(mod)
-{
-    // Note: this ctor is NOT used to create live connections, only
-    // temporary ones to invoke segmentArrivalWhileClosed() on
-}
-
 //
 // FSM framework, TCP FSM
 //
 
-TcpConnection::TcpConnection(Tcp *_mod, int _socketId)
+void TcpConnection::initConnection(Tcp *_mod, int _socketId)
 {
+    Enter_Method_Silent();
+
     tcpMain = _mod;
     socketId = _socketId;
 
-    char fsmname[24];
-    sprintf(fsmname, "fsm-%d", socketId);
-    fsm.setName(fsmname);
+    fsm.setName(getName());
     fsm.setState(TCP_S_INIT);
 
     // queues and algorithm will be created on active or passive open
@@ -201,27 +228,6 @@ TcpConnection::TcpConnection(Tcp *_mod, int _socketId)
     connEstabTimer->setContextPointer(this);
     finWait2Timer->setContextPointer(this);
     synRexmitTimer->setContextPointer(this);
-
-    // statistics
-    if (getTcpMain()->recordStatistics) {
-        sndWndVector = new cOutVector("send window");
-        rcvWndVector = new cOutVector("receive window");
-        rcvAdvVector = new cOutVector("advertised window");
-        sndNxtVector = new cOutVector("sent seq");
-        sndAckVector = new cOutVector("sent ack");
-        rcvSeqVector = new cOutVector("rcvd seq");
-        rcvAckVector = new cOutVector("rcvd ack");
-        unackedVector = new cOutVector("unacked bytes");
-        dupAcksVector = new cOutVector("rcvd dupAcks");
-        pipeVector = new cOutVector("pipe");
-        sndSacksVector = new cOutVector("sent sacks");
-        rcvSacksVector = new cOutVector("rcvd sacks");
-        rcvOooSegVector = new cOutVector("rcvd oooseg");
-        rcvNASegVector = new cOutVector("rcvd naseg");
-        sackedBytesVector = new cOutVector("rcvd sackedBytes");
-        tcpRcvQueueBytesVector = new cOutVector("tcpRcvQueueBytes");
-        tcpRcvQueueDropsVector = new cOutVector("tcpRcvQueueDrops");
-    }
 }
 
 TcpConnection::~TcpConnection()
@@ -240,25 +246,16 @@ TcpConnection::~TcpConnection()
         delete cancelEvent(finWait2Timer);
     if (synRexmitTimer)
         delete cancelEvent(synRexmitTimer);
+}
 
-    // statistics
-    delete sndWndVector;
-    delete rcvWndVector;
-    delete rcvAdvVector;
-    delete sndNxtVector;
-    delete sndAckVector;
-    delete rcvSeqVector;
-    delete rcvAckVector;
-    delete unackedVector;
-    delete dupAcksVector;
-    delete sndSacksVector;
-    delete rcvSacksVector;
-    delete rcvOooSegVector;
-    delete rcvNASegVector;
-    delete tcpRcvQueueBytesVector;
-    delete tcpRcvQueueDropsVector;
-    delete pipeVector;
-    delete sackedBytesVector;
+void TcpConnection::handleMessage(cMessage *msg)
+{
+    if (msg->isSelfMessage()) {
+        if (!processTimer(msg))
+            tcpMain->removeConnection(this);
+    }
+    else
+        throw cRuntimeError("model error: TcpConnection allows only self messages");
 }
 
 bool TcpConnection::processTimer(cMessage *msg)
@@ -296,6 +293,8 @@ bool TcpConnection::processTimer(cMessage *msg)
 
 bool TcpConnection::processTCPSegment(Packet *packet, const Ptr<const TcpHeader>& tcpseg, L3Address segSrcAddr, L3Address segDestAddr)
 {
+    Enter_Method_Silent();
+
     printConnBrief();
     if (!localAddr.isUnspecified()) {
         ASSERT(localAddr == segDestAddr);
@@ -319,6 +318,8 @@ bool TcpConnection::processTCPSegment(Packet *packet, const Ptr<const TcpHeader>
 
 bool TcpConnection::processAppCommand(cMessage *msg)
 {
+    Enter_Method_Silent();
+
     printConnBrief();
 
     // first do actions
@@ -351,6 +352,10 @@ bool TcpConnection::processAppCommand(cMessage *msg)
             process_ABORT(event, tcpCommand, msg);
             break;
 
+        case TCP_E_DESTROY:
+            process_DESTROY(event, tcpCommand, msg);
+            break;
+
         case TCP_E_STATUS:
             process_STATUS(event, tcpCommand, msg);
             break;
@@ -361,6 +366,10 @@ bool TcpConnection::processAppCommand(cMessage *msg)
 
         case TCP_E_READ:
             process_READ_REQUEST(event, tcpCommand, msg);
+            break;
+
+        case TCP_E_SETOPTION:
+            process_OPTIONS(event, tcpCommand, msg);
             break;
 
         default:
@@ -392,6 +401,9 @@ TcpEventCode TcpConnection::preanalyseAppCommandEvent(int commandCode)
         case TCP_C_ABORT:
             return TCP_E_ABORT;
 
+        case TCP_C_DESTROY:
+            return TCP_E_DESTROY;
+
         case TCP_C_STATUS:
             return TCP_E_STATUS;
 
@@ -400,6 +412,9 @@ TcpEventCode TcpConnection::preanalyseAppCommandEvent(int commandCode)
 
         case TCP_C_READ:
             return TCP_E_READ;
+
+        case TCP_C_SETOPTION:
+            return TCP_E_SETOPTION;
 
         default:
             throw cRuntimeError(tcpMain, "Unknown message kind in app command");
@@ -431,6 +446,10 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
                     FSM_Goto(fsm, TCP_S_SYN_SENT);
                     break;
 
+                case TCP_E_DESTROY:
+                    FSM_Goto(fsm, TCP_S_CLOSED);
+                    break;
+
                 default:
                     break;
             }
@@ -454,6 +473,10 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
+                case TCP_E_DESTROY:
+                    FSM_Goto(fsm, TCP_S_CLOSED);
+                    break;
+
                 case TCP_E_RCV_SYN:
                     FSM_Goto(fsm, TCP_S_SYN_RCVD);
                     break;
@@ -470,6 +493,10 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
                     break;
 
                 case TCP_E_ABORT:
+                    FSM_Goto(fsm, TCP_S_CLOSED);
+                    break;
+
+                case TCP_E_DESTROY:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
@@ -501,17 +528,9 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
         case TCP_S_SYN_SENT:
             switch (event) {
                 case TCP_E_CLOSE:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 case TCP_E_ABORT:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
+                case TCP_E_DESTROY:
                 case TCP_E_TIMEOUT_CONN_ESTAB:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 case TCP_E_RCV_RST:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
@@ -536,19 +555,14 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
                     break;
 
                 case TCP_E_ABORT:
+                case TCP_E_DESTROY:
+                case TCP_E_RCV_RST:
+                case TCP_E_RCV_UNEXP_SYN:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
                 case TCP_E_RCV_FIN:
                     FSM_Goto(fsm, TCP_S_CLOSE_WAIT);
-                    break;
-
-                case TCP_E_RCV_RST:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
-                case TCP_E_RCV_UNEXP_SYN:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
                 default:
@@ -563,13 +577,8 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
                     break;
 
                 case TCP_E_ABORT:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
+                case TCP_E_DESTROY:
                 case TCP_E_RCV_RST:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 case TCP_E_RCV_UNEXP_SYN:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
@@ -582,17 +591,9 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
         case TCP_S_LAST_ACK:
             switch (event) {
                 case TCP_E_ABORT:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
+                case TCP_E_DESTROY:
                 case TCP_E_RCV_ACK:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 case TCP_E_RCV_RST:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 case TCP_E_RCV_UNEXP_SYN:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
@@ -605,6 +606,9 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
         case TCP_S_FIN_WAIT_1:
             switch (event) {
                 case TCP_E_ABORT:
+                case TCP_E_DESTROY:
+                case TCP_E_RCV_RST:
+                case TCP_E_RCV_UNEXP_SYN:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
@@ -620,14 +624,6 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
                     FSM_Goto(fsm, TCP_S_TIME_WAIT);
                     break;
 
-                case TCP_E_RCV_RST:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
-                case TCP_E_RCV_UNEXP_SYN:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 default:
                     break;
             }
@@ -636,23 +632,15 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
         case TCP_S_FIN_WAIT_2:
             switch (event) {
                 case TCP_E_ABORT:
+                case TCP_E_DESTROY:
+                case TCP_E_TIMEOUT_FIN_WAIT_2:
+                case TCP_E_RCV_RST:
+                case TCP_E_RCV_UNEXP_SYN:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
                 case TCP_E_RCV_FIN:
                     FSM_Goto(fsm, TCP_S_TIME_WAIT);
-                    break;
-
-                case TCP_E_TIMEOUT_FIN_WAIT_2:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
-                case TCP_E_RCV_RST:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
-                case TCP_E_RCV_UNEXP_SYN:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
                 default:
@@ -663,19 +651,14 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
         case TCP_S_CLOSING:
             switch (event) {
                 case TCP_E_ABORT:
+                case TCP_E_DESTROY:
+                case TCP_E_RCV_RST:
+                case TCP_E_RCV_UNEXP_SYN:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
                 case TCP_E_RCV_ACK:
                     FSM_Goto(fsm, TCP_S_TIME_WAIT);
-                    break;
-
-                case TCP_E_RCV_RST:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
-                case TCP_E_RCV_UNEXP_SYN:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
                 default:
@@ -686,18 +669,10 @@ bool TcpConnection::performStateTransition(const TcpEventCode& event)
         case TCP_S_TIME_WAIT:
             switch (event) {
                 case TCP_E_ABORT:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 case TCP_E_TIMEOUT_2MSL:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 case TCP_E_RCV_RST:
-                    FSM_Goto(fsm, TCP_S_CLOSED);
-                    break;
-
                 case TCP_E_RCV_UNEXP_SYN:
+                case TCP_E_DESTROY:
                     FSM_Goto(fsm, TCP_S_CLOSED);
                     break;
 
@@ -788,6 +763,5 @@ void TcpConnection::stateEntered(int state, int oldState, TcpEventCode event)
 }
 
 } // namespace tcp
-
 } // namespace inet
 

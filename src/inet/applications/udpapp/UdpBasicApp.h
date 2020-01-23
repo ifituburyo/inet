@@ -31,7 +31,7 @@ namespace inet {
 /**
  * UDP application. See NED for more info.
  */
-class INET_API UdpBasicApp : public ApplicationBase
+class INET_API UdpBasicApp : public ApplicationBase, public UdpSocket::ICallback
 {
   protected:
     enum SelfMsgKinds { START = 1, SEND, STOP };
@@ -42,6 +42,7 @@ class INET_API UdpBasicApp : public ApplicationBase
     int localPort = -1, destPort = -1;
     simtime_t startTime;
     simtime_t stopTime;
+    bool dontFragment = false;
     const char *packetName = nullptr;
 
     // state
@@ -69,9 +70,13 @@ class INET_API UdpBasicApp : public ApplicationBase
     virtual void processSend();
     virtual void processStop();
 
-    virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
-    virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
-    virtual void handleNodeCrash() override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
+
+    virtual void socketDataArrived(UdpSocket *socket, Packet *packet) override;
+    virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) override;
+    virtual void socketClosed(UdpSocket *socket) override;
 
   public:
     UdpBasicApp() {}

@@ -21,15 +21,15 @@
 #define __INET_ACKINGMAC_H
 
 #include "inet/common/INETDefs.h"
-#include "inet/physicallayer/contract/packetlevel/IRadio.h"
-#include "inet/linklayer/common/MacAddress.h"
+#include "inet/queueing/contract/IPacketQueue.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/physicallayer/contract/packetlevel/IRadio.h"
 
 namespace inet {
 
 class AckingMacHeader;
 class InterfaceEntry;
-class IPassiveQueue;
 
 /**
  * Implements a simplified ideal MAC.
@@ -43,39 +43,29 @@ class INET_API AckingMac : public MacProtocolBase
     int headerLength = 0;    // AckingMacFrame header length in bytes
     double bitrate = 0;    // [bits per sec]
     bool promiscuous = false;    // promiscuous mode
-    MacAddress address;    // MAC address
     bool fullDuplex = false;
     bool useAck = true;
 
     physicallayer::IRadio *radio = nullptr;
     physicallayer::IRadio::TransmissionState transmissionState = physicallayer::IRadio::TRANSMISSION_STATE_UNDEFINED;
-    IPassiveQueue *queueModule = nullptr;
 
-    int outStandingRequests = 0;
-    Packet *lastSentPk = nullptr;
     simtime_t ackTimeout;
     cMessage *ackTimeoutMsg = nullptr;
 
   protected:
     /** implements MacBase functions */
     //@{
-    virtual void flushQueue();
-    virtual void clearQueue();
-    virtual InterfaceEntry *createInterfaceEntry() override;
+    virtual void configureInterfaceEntry() override;
     //@}
 
-    virtual void startTransmitting(Packet *msg);
+    virtual void startTransmitting();
     virtual bool dropFrameNotForUs(Packet *frame);
     virtual void encapsulate(Packet *msg);
     virtual void decapsulate(Packet *frame);
-    virtual void initializeMacAddress();
     virtual void acked(Packet *packet);    // called by other AckingMac module, when receiving a packet with my moduleID
 
-    // get MSG from queue
-    virtual void getNextMsgFromHL();
-
     //cListener:
-    virtual void receiveSignal(cComponent *src, simsignal_t id, long value, cObject *details) override;
+    virtual void receiveSignal(cComponent *src, simsignal_t id, intval_t value, cObject *details) override;
 
     /** implements MacProtocolBase functions */
     //@{

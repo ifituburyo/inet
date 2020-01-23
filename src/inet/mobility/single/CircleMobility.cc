@@ -15,8 +15,8 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/mobility/single/CircleMobility.h"
 #include "inet/common/INETMath.h"
+#include "inet/mobility/single/CircleMobility.h"
 
 namespace inet {
 
@@ -70,8 +70,7 @@ void CircleMobility::move()
     lastVelocity.z = 0;
     // do something if we reach the wall
     Coord dummyCoord;
-    rad dummyAngle;
-    handleIfOutside(REFLECT, dummyCoord, dummyCoord, dummyAngle);
+    handleIfOutside(REFLECT, dummyCoord, dummyCoord);
 }
 
 } // namespace inet

@@ -20,18 +20,18 @@
 #define __INET_SIMPLEVOIPSENDER_H
 
 #include <string.h>
+
 #include "inet/common/INETDefs.h"
-#include "inet/transportlayer/contract/udp/UdpSocket.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
+#include "inet/transportlayer/contract/udp/UdpSocket.h"
 
 namespace inet {
 
 /**
  * Implements a simple VoIP source. See the NED file for more information.
  */
-class INET_API SimpleVoipSender : public cSimpleModule, public ILifecycle
+class INET_API SimpleVoipSender : public cSimpleModule, public LifecycleUnsupported
 {
   private:
     UdpSocket socket;
@@ -62,8 +62,6 @@ class INET_API SimpleVoipSender : public cSimpleModule, public ILifecycle
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
     virtual void handleMessage(cMessage *msg) override;
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override
-    { Enter_Method_Silent(); throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName()); return true; }
 
   public:
     virtual ~SimpleVoipSender();

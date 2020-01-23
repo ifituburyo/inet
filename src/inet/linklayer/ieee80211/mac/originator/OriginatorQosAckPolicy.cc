@@ -15,8 +15,9 @@
 // along with this program; if not, see http://www.gnu.org/licenses/.
 // 
 
-#include "OriginatorQosAckPolicy.h"
 #include <tuple>
+
+#include "inet/linklayer/ieee80211/mac/originator/OriginatorQosAckPolicy.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -29,7 +30,7 @@ void OriginatorQosAckPolicy::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         rateSelection = check_and_cast<IQosRateSelection*>(getModuleByPath(par("rateSelectionModule")));
         maxBlockAckPolicyFrameLength = par("maxBlockAckPolicyFrameLength");
-        blockAckReqTreshold = par("blockAckReqTreshold");
+        blockAckReqThreshold = par("blockAckReqThreshold");
         blockAckTimeout = par("blockAckTimeout");
         ackTimeout = par("ackTimeout");
     }
@@ -50,12 +51,12 @@ std::map<MacAddress, std::vector<Packet *>> OriginatorQosAckPolicy::getOutstandi
 }
 
 
-int OriginatorQosAckPolicy::computeStartingSequenceNumber(const std::vector<Packet *>& outstandingFrames) const
+SequenceNumber OriginatorQosAckPolicy::computeStartingSequenceNumber(const std::vector<Packet *>& outstandingFrames) const
 {
     ASSERT(outstandingFrames.size() > 0);
-    int startingSequenceNumber = outstandingFrames[0]->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber();
+    auto startingSequenceNumber = outstandingFrames[0]->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber();
     for (size_t i = 1; i < outstandingFrames.size(); i++) {
-        int seqNum = outstandingFrames[i]->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber();
+        auto seqNum = outstandingFrames[i]->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber();
         if (seqNum < startingSequenceNumber)
             startingSequenceNumber = seqNum;
     }
@@ -78,7 +79,7 @@ bool OriginatorQosAckPolicy::isBlockAckReqNeeded(InProgressFrames* inProgressFra
 {
     auto outstandingFramesPerReceiver = getOutstandingFramesPerReceiver(inProgressFrames);
     for (auto outstandingFrames : outstandingFramesPerReceiver) {
-        if ((int)outstandingFrames.second.size() >= blockAckReqTreshold)
+        if ((int)outstandingFrames.second.size() >= blockAckReqThreshold)
             return true;
     }
     return false;
@@ -89,7 +90,7 @@ std::tuple<MacAddress, SequenceNumber, Tid> OriginatorQosAckPolicy::computeBlock
 {
     auto outstandingFramesPerReceiver = getOutstandingFramesPerReceiver(inProgressFrames);
     for (auto outstandingFrames : outstandingFramesPerReceiver) {
-        if ((int)outstandingFrames.second.size() >= blockAckReqTreshold) {
+        if ((int)outstandingFrames.second.size() >= blockAckReqThreshold) {
             auto largestOutstandingFrames = outstandingFramesPerReceiver.begin();
             for (auto it = outstandingFramesPerReceiver.begin(); it != outstandingFramesPerReceiver.end(); it++) {
                 if (it->second.size() > largestOutstandingFrames->second.size())

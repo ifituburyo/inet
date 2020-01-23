@@ -22,12 +22,12 @@
 #include <sim_interface.h>    // NSC header
 #include "inet/applications/common/SocketTag_m.h"
 #include "inet/common/ProtocolTag_m.h"
-#include "inet/common/serializer/tcp/headers/tcphdr.h"
+#include "inet/common/checksum/TcpIpChecksum.h"
+#include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
+#include "inet/transportlayer/tcp_common/headers/tcphdr.h"
+#include "inet/transportlayer/tcp_common/TcpHeader.h"
 #include "inet/transportlayer/tcp_nsc/TcpNsc.h"
 #include "inet/transportlayer/tcp_nsc/queues/TcpNscQueues.h"
-#include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
-#include "inet/common/serializer/TcpIpChecksum.h"
-#include "inet/transportlayer/tcp_common/TcpHeader.h"
 
 #include <assert.h>
 #include <dlfcn.h>
@@ -184,8 +184,8 @@ void TcpNscConnection::do_SEND()
             auto indication = new Indication("CLOSED", TCP_I_CLOSED);
             TcpCommand *ind = new TcpCommand();
             indication->setControlInfo(ind);
-            indication->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::tcp);
-            indication->addTagIfAbsent<SocketInd>()->setSocketId(connIdM);
+            indication->addTag<PacketProtocolTag>()->setProtocol(&Protocol::tcp);
+            indication->addTag<SocketInd>()->setSocketId(connIdM);
             tcpNscM->send(indication, "appOut");
             //FIXME this connection never will be deleted, stayed in tcpNscM. Should delete later!
         }

@@ -16,11 +16,10 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
+#include "inet/applications/voip/SimpleVoipPacket_m.h"
 #include "inet/applications/voip/SimpleVoipReceiver.h"
-
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/applications/voip/SimpleVoipPacket_m.h"
 
 namespace inet {
 
@@ -86,9 +85,9 @@ void SimpleVoipReceiver::initialize(int stage)
         currentTalkspurt.talkspurtID = -1;
     }
     else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
 
@@ -98,6 +97,7 @@ void SimpleVoipReceiver::initialize(int stage)
             socket.setOutputGate(gate("socketOut"));
             socket.bind(port);
         }
+        socket.setCallback(this);
 
         selfTalkspurtFinished = new cMessage("selfTalkspurtFinished");
     }
@@ -116,16 +116,17 @@ void SimpleVoipReceiver::handleMessage(cMessage *msg)
     if (msg->isSelfMessage()) {
         // selfTalkspurtFinished
         evaluateTalkspurt(false);
-        return;
     }
+    else if (msg->arrivedOn("socketIn")) {
+        socket.processMessage(msg);
+    }
+    else
+        throw cRuntimeError("Unknown incoming gate: '%s'", msg->getArrivalGate()->getFullName());
+}
 
-    Packet *packet = dynamic_cast<Packet *>(msg);
-    if (packet == nullptr) {
-        // TODO: throw exception instead?
-        EV_ERROR << "VoIPReceiver: Unknown incoming message: " << msg->getClassName() << endl;
-        delete msg;
-        return;
-    }
+void SimpleVoipReceiver::socketDataArrived(UdpSocket *socket, Packet *packet)
+{
+    // process incoming packet
     const auto& voice = packet->peekAtFront<SimpleVoipPacket>();
 
     if (currentTalkspurt.status == TalkspurtInfo::EMPTY) {
@@ -149,7 +150,7 @@ void SimpleVoipReceiver::handleMessage(cMessage *msg)
     else {
         // packet from older talkspurt, ignore
         EV_DEBUG << "PACKET ARRIVED TOO LATE: TALKSPURT " << voice->getTalkspurtID() << " PACKET " << voice->getPacketID() << ", IGNORED\n\n";
-        delete msg;
+        delete packet;
         return;
     }
 
@@ -158,7 +159,13 @@ void SimpleVoipReceiver::handleMessage(cMessage *msg)
     simtime_t delay = packet->getArrivalTime() - voice->getVoipTimestamp();
     emit(voipPacketDelaySignal, delay);
 
-    delete msg;
+    delete packet;
+}
+
+void SimpleVoipReceiver::socketErrorArrived(UdpSocket *socket, Indication *indication)
+{
+    EV_WARN << "Unknown message '" << indication->getName() << "', kind = " << indication->getKind() << ", discarding it." << endl;
+    delete indication;
 }
 
 void SimpleVoipReceiver::evaluateTalkspurt(bool finish)

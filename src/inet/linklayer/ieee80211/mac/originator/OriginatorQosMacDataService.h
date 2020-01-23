@@ -18,6 +18,7 @@
 #ifndef __INET_ORIGINATORQOSMACDATASERVICE_H
 #define __INET_ORIGINATORQOSMACDATASERVICE_H
 
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFragmentation.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFragmentationPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IMpduAggregation.h"
@@ -26,8 +27,6 @@
 #include "inet/linklayer/ieee80211/mac/contract/IMsduAggregationPolicy.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/contract/ISequenceNumberAssignment.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/linklayer/ieee80211/mac/queue/Ieee80211Queue.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -54,13 +53,13 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
 
         virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header);
         virtual std::vector<Packet *> *fragmentIfNeeded(Packet *frame);
-        virtual Packet *aMsduAggregateIfNeeded(PendingQueue *pendingQueue);
+        virtual Packet *aMsduAggregateIfNeeded(queueing::IPacketQueue *pendingQueue);
         virtual Packet *aMpduAggregateIfNeeded(std::vector<Packet *> *fragments);
 
     public:
         virtual ~OriginatorQosMacDataService();
 
-        virtual std::vector<Packet *> *extractFramesToTransmit(PendingQueue *pendingQueue) override;
+        virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *pendingQueue) override;
 };
 
 } /* namespace ieee80211 */

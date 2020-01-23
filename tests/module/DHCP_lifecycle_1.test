@@ -6,7 +6,6 @@ Test for basic DHCP lifecycle handling.
 
 [General]
 network = Test
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 cmdenv-express-mode = false
 sim-time-limit = 1000s
@@ -37,6 +36,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 
 %file: test.ned
 
+import inet.test.moduletest.lib.*;
 import inet.node.ethernet.Eth10M;
 import inet.node.inet.StandardHost;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;

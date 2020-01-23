@@ -17,19 +17,19 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/common/ProtocolGroup.h"
+#include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/routing/common/ManetProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::manet, ManetProtocolDissector);
 
-void ManetProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void ManetProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     callback.startProtocolDataUnit(&Protocol::manet);
 //    callback.visitChunk(header, &Protocol::manet);
-//    auto payloadProtocol = ProtocolGroup::ethertype.getProtocol(header->getNetworkProtocol());
+//    auto payloadProtocol = ProtocolGroup::ethertype.findProtocol(header->getNetworkProtocol());
 //    callback.dissectPacket(packet, payloadProtocol);
 //    ASSERT(packet->getDataLength() == B(0));
 

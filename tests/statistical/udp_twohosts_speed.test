@@ -53,7 +53,6 @@ network UdpClientServer
 [General]
 network = UdpClientServer
 total-stack = 7MiB
-tkenv-plugin-path = ../../../etc/plugins
 #debug-on-errors = true
 #record-eventlog = true
 #**.vector-recording = false
@@ -78,10 +77,10 @@ sim-time-limit = 20s
 **.app[1].localPort = 1234
 
 **.host*snap.eth[*].useSNAP = true
-**.host*.eth[*].queue.frameCapacity = 1
+**.host*.eth[*].ppp.queue.packetCapacity = 1
 
 # Arp
-**.arpType = "GlobalArp"
+**.arp.typename = "GlobalArp"
 
 %#--------------------------------------------------------------------------------------------------------------
 %postrun-command: Rscript check.r

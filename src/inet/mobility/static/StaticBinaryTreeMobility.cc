@@ -31,7 +31,7 @@ void StaticBinaryTreeMobility::setInitialPosition()
 {
     unsigned int numHosts = par("numHosts");
     double distance = par("distance");
-    unsigned int index = visualRepresentation->getIndex()+1;
+    unsigned int index = subjectModule->getIndex()+1;
     
     unsigned int layer = (unsigned int)log2(index); 
     unsigned int layer_nodes = 1<<layer;

@@ -28,34 +28,28 @@
 #endif // ifdef WITH_IPv6
 
 #include "inet/applications/common/SocketTag_m.h"
+#include "inet/common/INETUtils.h"
 #include "inet/common/IProtocolRegistrationListener.h"
+#include "inet/common/ModuleAccess.h"
 #include "inet/common/Protocol.h"
 #include "inet/common/ProtocolTag_m.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
+#include "inet/common/checksum/TcpIpChecksum.h"
+#include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
 #include "inet/networklayer/contract/IL3AddressType.h"
-
-#include "inet/common/serializer/TcpIpChecksum.h"
-#include "inet/common/serializer/tcp/headers/tcphdr.h"
-#include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
 #include "inet/transportlayer/common/L4Tools.h"
+#include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
 #include "inet/transportlayer/tcp_common/TcpHeader.h"
+#include "inet/transportlayer/tcp_common/headers/tcphdr.h"
 #include "inet/transportlayer/tcp_nsc/queues/TcpNscQueues.h"
 
 #include <assert.h>
 #include <dlfcn.h>
 #include <netinet/in.h>
 
-#include "inet/transportlayer/tcp_nsc/queues/TcpNscQueues.h"
-#include "inet/common/ModuleAccess.h"
-#include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/common/INETUtils.h"
-
 #include <sim_errno.h>
 
 namespace inet {
-
-using namespace serializer;
 
 namespace tcp {
 
@@ -224,13 +218,7 @@ void TcpNsc::initialize(int stage)
             throw cRuntimeError("Don't use obsolete receiveQueueClass = \"%s\" parameter", q);
 
         const char *crcModeString = par("crcMode");
-        if (!strcmp(crcModeString, "declared"))
-            crcMode = CRC_DECLARED_CORRECT;
-        else if (!strcmp(crcModeString, "computed"))
-            crcMode = CRC_COMPUTED;
-        else
-            throw cRuntimeError("Unknown crc mode: '%s'", crcModeString);
-        crcInsertion.setCrcMode(crcMode);
+        crcMode = parseCrcMode(crcModeString, false);
 
         WATCH_MAP(tcpAppConnMapM);
 
@@ -242,9 +230,9 @@ void TcpNsc::initialize(int stage)
         pStackM->add_default_gateway(localInnerGwS.str().c_str());
     }
     else if (stage == INITSTAGE_TRANSPORT_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
         registerService(Protocol::tcp, gate("appIn"), gate("ipIn"));
@@ -296,8 +284,8 @@ void TcpNsc::sendEstablishedMsg(TcpNscConnection& connP)
     tcpConnectInfo->setLocalPort(connP.inetSockPairM.localM.portM);
     tcpConnectInfo->setRemotePort(connP.inetSockPairM.remoteM.portM);
     indication->setControlInfo(tcpConnectInfo);
-    indication->addTagIfAbsent<TransportProtocolInd>()->setProtocol(&Protocol::tcp);
-    indication->addTagIfAbsent<SocketInd>()->setSocketId(connP.connIdM);
+    indication->addTag<TransportProtocolInd>()->setProtocol(&Protocol::tcp);
+    indication->addTag<SocketInd>()->setSocketId(connP.connIdM);
     send(indication, "appOut");
     connP.sentEstablishedM = true;
 }
@@ -315,8 +303,8 @@ void TcpNsc::sendAvailableIndicationMsg(TcpNscConnection& c)
     tcpConnectInfo->setRemotePort(c.inetSockPairM.remoteM.portM);
 
     indication->setControlInfo(tcpConnectInfo);
-    indication->addTagIfAbsent<TransportProtocolInd>()->setProtocol(&Protocol::tcp);
-    indication->addTagIfAbsent<SocketInd>()->setSocketId(c.forkedConnId);
+    indication->addTag<TransportProtocolInd>()->setProtocol(&Protocol::tcp);
+    indication->addTag<SocketInd>()->setSocketId(c.forkedConnId);
     send(indication, "appOut");
     c.sentEstablishedM = true;
 }
@@ -570,7 +558,7 @@ void TcpNsc::sendDataToApp(TcpNscConnection& c)
 
     while (nullptr != (dataMsg = c.receiveQueueM->extractBytesUpTo())) {
         dataMsg->setKind(TCP_I_DATA);
-        dataMsg->addTagIfAbsent<SocketInd>()->setSocketId(c.connIdM);
+        dataMsg->addTag<SocketInd>()->setSocketId(c.connIdM);
         // send Msg to Application layer:
         send(dataMsg, "appOut");
     }
@@ -614,8 +602,8 @@ void TcpNsc::sendErrorNotificationToApp(TcpNscConnection& c, int err)
         auto indication = new Indication(name, code);
         TcpCommand *ind = new TcpCommand();
         indication->setControlInfo(ind);
-        indication->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::tcp);
-        indication->addTagIfAbsent<SocketInd>()->setSocketId(c.connIdM);
+        indication->addTag<PacketProtocolTag>()->setProtocol(&Protocol::tcp);
+        indication->addTag<SocketInd>()->setSocketId(c.connIdM);
         send(indication, "appOut");
     }
 }
@@ -907,8 +895,8 @@ void TcpNsc::sendToIP(const void *dataP, int lenP)
              << " to " << dest << "\n";
 
     IL3AddressType *addressType = dest.getAddressType();
-    fp->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(addressType->getNetworkProtocol());
-    auto addresses = fp->addTagIfAbsent<L3AddressReq>();
+    fp->addTag<DispatchProtocolReq>()->setProtocol(addressType->getNetworkProtocol());
+    auto addresses = fp->addTag<L3AddressReq>();
     addresses->setSrcAddress(src);
     addresses->setDestAddress(dest);
 
@@ -1105,6 +1093,7 @@ void TcpNsc::process_ACCEPT(TcpNscConnection& connP, TcpAcceptCommand *tcpComman
     sendDataToApp(connP);
     sendErrorNotificationToApp(connP, err);
     delete tcpCommandP;
+    delete msgP;
 }
 
 void TcpNsc::process_SEND(TcpNscConnection& connP, Packet *msgP)
@@ -1196,14 +1185,6 @@ void TcpNsc::process_STATUS(TcpNscConnection& connP, TcpCommand *tcpCommandP, cM
     msgP->setControlInfo(statusInfo);
     msgP->setKind(TCP_I_STATUS);
     send(msgP, "appOut");
-}
-
-bool TcpNsc::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
-{
-    Enter_Method_Silent();
-
-    throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
 }
 
 } // namespace tcp

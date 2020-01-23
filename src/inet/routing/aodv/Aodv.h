@@ -19,18 +19,18 @@
 #ifndef __INET_AODV_H
 #define __INET_AODV_H
 
+#include <map>
+
 #include "inet/common/INETDefs.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/networklayer/contract/IL3AddressType.h"
-#include "inet/networklayer/contract/IRoutingTable.h"
 #include "inet/networklayer/contract/INetfilter.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/transportlayer/contract/udp/UdpSocket.h"
-#include "inet/routing/aodv/AodvRouteData.h"
-#include "inet/transportlayer/udp/UdpHeader_m.h"
+#include "inet/networklayer/contract/IRoutingTable.h"
 #include "inet/routing/aodv/AodvControlPackets_m.h"
-#include <map>
+#include "inet/routing/aodv/AodvRouteData.h"
+#include "inet/routing/base/RoutingProtocolBase.h"
+#include "inet/transportlayer/contract/udp/UdpSocket.h"
+#include "inet/transportlayer/udp/UdpHeader_m.h"
 
 namespace inet {
 namespace aodv {
@@ -40,7 +40,7 @@ namespace aodv {
  * in the IP-layer required by this protocol.
  */
 
-class INET_API Aodv : public cSimpleModule, public ILifecycle, public NetfilterBase::HookBase, public cListener
+class INET_API Aodv : public RoutingProtocolBase, public NetfilterBase::HookBase, public UdpSocket::ICallback, public cListener
 {
   protected:
     /*
@@ -81,6 +81,8 @@ class INET_API Aodv : public cSimpleModule, public ILifecycle, public NetfilterB
     IRoutingTable *routingTable = nullptr;
     IInterfaceTable *interfaceTable = nullptr;
     INetfilter *networkProtocol = nullptr;
+    UdpSocket socket;
+    bool usingIpv6 = false;
 
     // AODV parameters: the following parameters are configurable, see the NED file for more info.
     unsigned int rerrRatelimit = 0;
@@ -134,13 +136,12 @@ class INET_API Aodv : public cSimpleModule, public ILifecycle, public NetfilterB
 
     // lifecycle
     simtime_t rebootTime;    // the last time when the node rebooted
-    bool isOperational = false;
 
     // internal
     std::multimap<L3Address, Packet *> targetAddressToDelayedPackets;    // queue for the datagrams we have no route for
 
   protected:
-    void handleMessage(cMessage *msg) override;
+    void handleMessageWhenUp(cMessage *msg) override;
     void initialize(int stage) override;
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
 
@@ -205,10 +206,19 @@ class INET_API Aodv : public cSimpleModule, public ILifecycle, public NetfilterB
     /* Helper functions */
     L3Address getSelfIPAddress() const;
     void sendAODVPacket(const Ptr<AodvControlPacket>& packet, const L3Address& destAddr, unsigned int timeToLive, double delay);
+    void processPacket(Packet *pk);
     void clearState();
+    void checkIpVersionAndPacketTypeCompatibility(AodvControlPacketType packetType);
+
+    /* UDP callback interface */
+    virtual void socketDataArrived(UdpSocket *socket, Packet *packet) override;
+    virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) override;
+    virtual void socketClosed(UdpSocket *socket) override;
 
     /* Lifecycle */
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
   public:
     Aodv();

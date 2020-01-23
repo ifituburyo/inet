@@ -12,29 +12,31 @@
 //
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/TcpIpChecksum.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/EmptyChunk.h"
-#include "inet/common/serializer/TcpIpChecksum.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/IpProtocolId_m.h"
 #include "inet/networklayer/common/L3Tools.h"
 #include "inet/networklayer/contract/INetfilter.h"
 #include "inet/transportlayer/common/TransportPseudoHeader_m.h"
 #include "inet/transportlayer/tcp_common/TcpCrcInsertionHook.h"
 
-
 namespace inet {
-
 namespace tcp {
 
 INetfilter::IHook::Result TcpCrcInsertion::datagramPostRoutingHook(Packet *packet)
 {
+    if (packet->findTag<InterfaceInd>())
+        return ACCEPT;  // FORWARD
     auto networkProtocol = packet->getTag<PacketProtocolTag>()->getProtocol();
     const auto& networkHeader = getNetworkProtocolHeader(packet);
     if (networkHeader->getProtocol() == &Protocol::tcp) {
+        ASSERT(!networkHeader->isFragment());
         packet->eraseAtFront(networkHeader->getChunkLength());
         auto tcpHeader = packet->removeAtFront<TcpHeader>();
+        ASSERT(tcpHeader->getCrcMode() == CRC_COMPUTED);
         const L3Address& srcAddress = networkHeader->getSourceAddress();
         const L3Address& destAddress = networkHeader->getDestinationAddress();
         insertCrc(networkProtocol, srcAddress, destAddress, tcpHeader, packet);
@@ -46,7 +48,7 @@ INetfilter::IHook::Result TcpCrcInsertion::datagramPostRoutingHook(Packet *packe
 
 void TcpCrcInsertion::insertCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<TcpHeader>& tcpHeader, Packet *packet)
 {
-    tcpHeader->setCrcMode(crcMode);
+    auto crcMode = tcpHeader->getCrcMode();
     switch (crcMode) {
         case CRC_DECLARED_CORRECT:
             // if the CRC mode is declared to be correct, then set the CRC to an easily recognizable value
@@ -60,11 +62,7 @@ void TcpCrcInsertion::insertCrc(const Protocol *networkProtocol, const L3Address
             // if the CRC mode is computed, then compute the CRC and set it
             // this computation is delayed after the routing decision, see INetfilter hook
             tcpHeader->setCrc(0x0000); // make sure that the CRC is 0 in the TCP header before computing the CRC
-            MemoryOutputStream tcpHeaderStream;
-            Chunk::serialize(tcpHeaderStream, tcpHeader);
-            auto tcpHeaderBytes = tcpHeaderStream.getData();
-            const std::vector<uint8_t> emptyData;
-            Ptr<const Chunk> tcpData = (packet->getDataLength() > b(0)) ? packet->peekData() : staticPtrCast<const Chunk>(makeShared<const BytesChunk>());
+            auto tcpData = packet->peekData(Chunk::PF_ALLOW_EMPTY);
             auto crc = computeCrc(networkProtocol, srcAddress, destAddress, tcpHeader, tcpData);
             tcpHeader->setCrc(crc);
             break;
@@ -81,7 +79,7 @@ uint16_t TcpCrcInsertion::computeCrc(const Protocol *networkProtocol, const L3Ad
     pseudoHeader->setDestAddress(destAddress);
     pseudoHeader->setNetworkProtocolId(networkProtocol->getId());
     pseudoHeader->setProtocolId(IP_PROT_TCP);
-    pseudoHeader->setPacketLength(B(tcpHeader->getChunkLength() + tcpData->getChunkLength()).get());
+    pseudoHeader->setPacketLength(tcpHeader->getChunkLength() + tcpData->getChunkLength());
     // pseudoHeader length: ipv4: 12 bytes, ipv6: 40 bytes, generic: ???
     if (networkProtocol == &Protocol::ipv4)
         pseudoHeader->setChunkLength(B(12));
@@ -93,13 +91,10 @@ uint16_t TcpCrcInsertion::computeCrc(const Protocol *networkProtocol, const L3Ad
     Chunk::serialize(stream, pseudoHeader);
     Chunk::serialize(stream, tcpHeader);
     Chunk::serialize(stream, tcpData);
-    uint16_t crc = inet::serializer::TcpIpChecksum::checksum(stream.getData());
+    uint16_t crc = TcpIpChecksum::checksum(stream.getData());
     return crc;
 }
 
-
 } // namespace tcp
-
 } // namespace inet
-
 

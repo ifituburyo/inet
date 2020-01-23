@@ -17,6 +17,7 @@
 //
 // Edited with OMNeT++ Academic/Noncommercial Edition.
 //
+
 package inet.networklayer.ipv6;
 
 import inet.common.MessageDispatcher;
@@ -27,7 +28,7 @@ import inet.networklayer.icmpv6.Icmpv6;
 import inet.networklayer.icmpv6.Ipv6NeighbourDiscovery;
 
 //
-// Represents an Ipv6 network layer (L3).
+// Represents an IPv6 network layer (L3).
 //
 // The module has ports to connect to a higher layer (TCP, UDP) and
 // several network interfaces.
@@ -62,32 +63,32 @@ module Ipv6NetworkLayer like INetworkLayer
         }
         up: MessageDispatcher {
             parameters:
-                @display("p=450,100;b=480,5");
+                @display("p=550,100;b=600,5");
         }
         icmpv6: Icmpv6 {
             parameters:
-                @display("p=600,200");
+                @display("p=700,200");
         }
         lp: MessageDispatcher {
             parameters:
-                @display("p=450,300;b=480,5");
+                @display("p=550,300;b=600,5");
         }
         neighbourDiscovery: Ipv6NeighbourDiscovery {
             parameters:
-                @display("p=300,400");
+                @display("p=400,400");
         }
         // TODO: rename to ip
         ipv6: Ipv6 {
             parameters:
-                @display("p=450,400");
+                @display("p=550,400");
         }
         iptunneling: <default(firstAvailable("Ipv6Tunneling"))> like IIpv6Tunneling {
             parameters:
-                @display("p=600,400");
+                @display("p=700,400");
         }
         mipv6support: <default("xMIPv6Support")> like IxMIPv6Support if xMIPv6Support {
             parameters:
-                @display("p=600,500");
+                @display("p=700,500");
         }
 
     connections allowunconnected:  // FIXME remove 'nocheck'!
@@ -121,3 +122,4 @@ module Ipv6NetworkLayer like INetworkLayer
         ipv6.queueOut --> { @display("m=s"); } --> ifOut;
         ipv6.queueIn <-- { @display("m=s"); } <-- ifIn;
 }
+

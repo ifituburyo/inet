@@ -15,8 +15,8 @@
 // along with this program; if not, see http://www.gnu.org/licenses/.
 //
 
-#include "inet/linklayer/ieee80211/mac/fragmentation/Fragmentation.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/fragmentation/Fragmentation.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -25,14 +25,11 @@ Register_Class(Fragmentation);
 
 std::vector<Packet *> *Fragmentation::fragmentFrame(Packet *frame, const std::vector<int>& fragmentSizes)
 {
-    // Notes:
-    // 1. only the MSDU is carried in the fragments (i.e. only frame's payload, without the 802.11 header)
-    // 3. for convenience, this implementation sends the original frame encapsulated in the last fragment, all other fragments are dummies with no data
-    //
+    EV_DEBUG << "Fragmenting " << *frame << " into " << fragmentSizes.size() << " fragments.\n";
     B offset = B(0);
     std::vector<Packet *> *fragments = new std::vector<Packet *>();
     const auto& frameHeader = frame->popAtFront<Ieee80211DataOrMgmtHeader>();
-    frame->popAtBack<Ieee80211MacTrailer>();
+    frame->popAtBack<Ieee80211MacTrailer>(B(4));
     for (size_t i = 0; i < fragmentSizes.size(); i++) {
         bool lastFragment = i == fragmentSizes.size() - 1;
         std::string name = std::string(frame->getName()) + "-frag" + std::to_string(i);
@@ -46,9 +43,11 @@ std::vector<Packet *> *Fragmentation::fragmentFrame(Packet *frame, const std::ve
         fragmentHeader->setMoreFragments(!lastFragment);
         fragment->insertAtFront(fragmentHeader);
         fragment->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        EV_TRACE << "Created " << *fragment << " fragment.\n";
         fragments->push_back(fragment);
     }
     delete frame;
+    EV_TRACE << "Created " << fragments->size() << " fragments.\n";
     return fragments;
 }
 

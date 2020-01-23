@@ -16,19 +16,17 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include <string.h>
 #include <assert.h>
 #include <sstream>
+#include <string.h>
 
-#include "inet/transportlayer/sctp/SctpAssociation.h"
-
-#include "inet/transportlayer/sctp/Sctp.h"
 #include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
-#include "inet/transportlayer/sctp/SctpQueue.h"
+#include "inet/transportlayer/sctp/Sctp.h"
 #include "inet/transportlayer/sctp/SctpAlgorithm.h"
+#include "inet/transportlayer/sctp/SctpAssociation.h"
+#include "inet/transportlayer/sctp/SctpQueue.h"
 
 namespace inet {
-
 namespace sctp {
 
 SctpPathVariables::SctpPathVariables(const L3Address& addr, SctpAssociation *assoc, const IRoutingTable *rt)
@@ -368,8 +366,6 @@ SctpStateVariables::SctpStateVariables()
     initChunk = nullptr;
     cookieChunk = nullptr;
     resetInfo = nullptr;
-   // sctpmsg = nullptr;
-    sctpMsg = nullptr;
     incomingRequest = nullptr;
     peerRequestType = 0;
     localRequestType = 0;
@@ -1844,6 +1840,5 @@ void SctpAssociation::removePath()
 }
 
 } // namespace sctp
-
 } // namespace inet
 

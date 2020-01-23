@@ -34,12 +34,13 @@ class INET_API ShortcutMac : public MacProtocolBase
     cPar *lengthOverhead = nullptr;
     cPar *durationOverhead = nullptr;
     cPar *packetLoss = nullptr;
-    MacAddress address;
+
+  public:
+    ~ShortcutMac();
 
   protected:
     virtual void initialize(int stage) override;
-    virtual void initializeMacAddress();
-    virtual InterfaceEntry *createInterfaceEntry() override;
+    virtual void configureInterfaceEntry() override;
 
     virtual void handleMessageWhenUp(cMessage *message) override;
     virtual void handleUpperPacket(Packet *packet) override;
@@ -48,6 +49,10 @@ class INET_API ShortcutMac : public MacProtocolBase
     virtual ShortcutMac *findPeer(MacAddress address);
     virtual void sendToPeer(Packet *packet, ShortcutMac *peer);
     virtual void receiveFromPeer(Packet *packet);
+
+    void deleteCurrentTxFrame() override { throw cRuntimeError("model error"); }
+    void dropCurrentTxFrame(PacketDropDetails& details) override { throw cRuntimeError("model error"); }
+    void popTxQueue() override { throw cRuntimeError("model error"); }
 };
 
 } // namespace inet

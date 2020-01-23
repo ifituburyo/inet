@@ -1,4 +1,3 @@
-package inet.applications.sctpapp;
 // Copyright (C) 2008 Irene Ruengeler
 //
 // This program is free software; you can redistribute it and/or
@@ -16,23 +15,8 @@ package inet.applications.sctpapp;
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 
+package inet.applications.sctpapp;
 
-//
-// Accepts any number of incoming TCP connections, and sends back the
-// messages that arrive on them, The lengths of the messages are
-// multiplied by echoFactor before sending them back (echoFactor=1 will
-// result in sending back the same message unmodified.) The reply can also be
-// delayed by a constant time (echoDelay parameter).
-//
-// When TcpEchoApp receives data packets from TCP (and such, when they can be
-// echoed) depends on the sendQueue/receiveQueue setting of TCPMain.
-// With TCPVirtualBytesSendQueue/RcvQueue, TCP passes up data to us
-// as soon as a segment arrives, so it can be echoed immediately.
-// With TCPMsgBasedSendQueue/RcvQueue, our local TCP reproduces the same
-// messages that the sender app passed down to its TCP -- so if the sender
-// app sent a single 100 MB message, it will be echoed only when all
-// 100 megabytes have arrived.
-//
 import inet.applications.contract.IApp;
 
 simple SctpNatPeer like IApp
@@ -48,7 +32,7 @@ simple SctpNatPeer like IApp
         int requestLength = default(1452); // length of a request (bytes)
         double thinkTime @unit(s) = default(0s); // time gap between requests
         double waitToClose @unit(s) = default(0s); //time to wait between last message sent and abort
-        //double reconnectInterval @unit(s) = default(0);  // if connection breaks, waits this much before trying to reconnect
+        //# double reconnectInterval @unit(s) = default(0);  // if connection breaks, waits this much before trying to reconnect
         int outboundStreams = default(1);
         int inboundStreams = default(1);
         bool echo = default(false);  // echoes received packages when true

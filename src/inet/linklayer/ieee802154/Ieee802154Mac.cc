@@ -24,8 +24,6 @@
  ***************************************************************************
  * part of:    Modifications to the MF-2 framework by CSEM
  **************************************************************************/
-#include "inet/linklayer/ieee802154/Ieee802154Mac.h"
-
 #include <cassert>
 
 #include "inet/common/FindModule.h"
@@ -36,6 +34,7 @@
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee802154/Ieee802154Mac.h"
 #include "inet/linklayer/ieee802154/Ieee802154MacHeader_m.h"
 #include "inet/networklayer/common/InterfaceEntry.h"
 
@@ -50,7 +49,6 @@ void Ieee802154Mac::initialize(int stage)
     MacProtocolBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         useMACAcks = par("useMACAcks");
-        queueLength = par("queueLength");
         sifs = par("sifs");
         headerLength = par("headerLength");
         transmissionAttemptInterruptedByRx = false;
@@ -104,11 +102,9 @@ void Ieee802154Mac::initialize(int stage)
         rxAckTimer = new cMessage("timer-rxAck");
         macState = IDLE_1;
         txAttempts = 0;
+        txQueue = check_and_cast<queueing::IPacketQueue *>(getSubmodule("queue"));
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
-        initializeMacAddress();
-        registerInterface();
-
         cModule *radioModule = getModuleFromPar<cModule>(par("radioModule"), this);
         radioModule->subscribe(IRadio::radioModeChangedSignal, this);
         radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
@@ -128,8 +124,7 @@ void Ieee802154Mac::initialize(int stage)
         }
         radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
 
-        EV_DETAIL << "queueLength = " << queueLength
-                  << " bitrate = " << bitrate
+        EV_DETAIL << " bitrate = " << bitrate
                   << " backoff method = " << par("backoffMethod").stringValue() << endl;
 
         EV_DETAIL << "finished csma init stage 1." << endl;
@@ -163,44 +158,23 @@ Ieee802154Mac::~Ieee802154Mac()
     cancelAndDelete(rxAckTimer);
     if (ackMessage)
         delete ackMessage;
-    for (auto & elem : macQueue) {
-        delete (elem);
-    }
 }
 
-void Ieee802154Mac::initializeMacAddress()
+void Ieee802154Mac::configureInterfaceEntry()
 {
-    const char *addrstr = par("address");
-
-    if (!strcmp(addrstr, "auto")) {
-        // assign automatic address
-        address = MacAddress::generateAutoAddress();
-
-        // change module parameter from "auto" to concrete address
-        par("address").setStringValue(address.str().c_str());
-    }
-    else {
-        address.setAddress(addrstr);
-    }
-}
-
-InterfaceEntry *Ieee802154Mac::createInterfaceEntry()
-{
-    InterfaceEntry *e = getContainingNicModule(this);
+    MacAddress address = parseMacAddressParameter(par("address"));
 
     // data rate
-    e->setDatarate(bitrate);
+    interfaceEntry->setDatarate(bitrate);
 
     // generate a link-layer address to be used as interface token for IPv6
-    e->setMacAddress(address);
-    e->setInterfaceToken(address.formInterfaceIdentifier());
+    interfaceEntry->setMacAddress(address);
+    interfaceEntry->setInterfaceToken(address.formInterfaceIdentifier());
 
     // capabilities
-    e->setMtu(par("mtu"));
-    e->setMulticast(true);
-    e->setBroadcast(true);
-
-    return e;
+    interfaceEntry->setMtu(par("mtu"));
+    interfaceEntry->setMulticast(true);
+    interfaceEntry->setBroadcast(true);
 }
 
 /**
@@ -218,7 +192,7 @@ void Ieee802154Mac::handleUpperPacket(Packet *packet)
     macPkt->setNetworkProtocol(ProtocolGroup::ethertype.getProtocolNumber(packet->getTag<PacketProtocolTag>()->getProtocol()));
     macPkt->setDestAddr(dest);
     delete packet->removeControlInfo();
-    macPkt->setSrcAddr(address);
+    macPkt->setSrcAddr(interfaceEntry->getMacAddress());
 
     if (useMACAcks) {
         if (SeqNrParent.find(dest) == SeqNrParent.end()) {
@@ -246,23 +220,13 @@ void Ieee802154Mac::updateStatusIdle(t_mac_event event, cMessage *msg)
 {
     switch (event) {
         case EV_SEND_REQUEST:
-            if (macQueue.size() < queueLength) {
-                macQueue.push_back(static_cast<Packet *>(msg));
+            txQueue->pushPacket(static_cast<Packet *>(msg));
+            if (!txQueue->isEmpty()) {
                 EV_DETAIL << "(1) FSM State IDLE_1, EV_SEND_REQUEST and [TxBuff avail]: startTimerBackOff -> BACKOFF." << endl;
                 updateMacState(BACKOFF_2);
                 NB = 0;
                 //BE = macMinBE;
                 startTimer(TIMER_BACKOFF);
-            }
-            else {
-                // queue is full, message has to be deleted
-                EV_DETAIL << "(12) FSM State IDLE_1, EV_SEND_REQUEST and [TxBuff not avail]: dropping packet -> IDLE." << endl;
-                PacketDropDetails details;
-                details.setReason(QUEUE_OVERFLOW);
-                details.setLimit(queueLength);
-                emit(packetDroppedSignal, msg, &details);
-                delete msg;
-                updateMacState(IDLE_1);
             }
             break;
 
@@ -370,17 +334,6 @@ void Ieee802154Mac::updateStatusBackoff(t_mac_event event, cMessage *msg)
     }
 }
 
-void Ieee802154Mac::flushQueue()
-{
-    // TODO:
-    macQueue.clear();
-}
-
-void Ieee802154Mac::clearQueue()
-{
-    macQueue.clear();
-}
-
 void Ieee802154Mac::attachSignal(Packet *mac, simtime_t_cref startTime)
 {
     simtime_t duration = mac->getBitLength() / bitrate;
@@ -397,7 +350,9 @@ void Ieee802154Mac::updateStatusCCA(t_mac_event event, cMessage *msg)
                 EV_DETAIL << "(3) FSM State CCA_3, EV_TIMER_CCA, [Channel Idle]: -> TRANSMITFRAME_4." << endl;
                 updateMacState(TRANSMITFRAME_4);
                 radio->setRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
-                Packet *mac = check_and_cast<Packet *>(macQueue.front()->dup());
+                if (currentTxFrame == nullptr)
+                    popTxQueue();
+                Packet *mac = currentTxFrame->dup();
                 attachSignal(mac, simTime() + aTurnaroundTime);
                 //sendDown(msg);
                 // give time for the radio to be in Tx state before transmitting
@@ -416,15 +371,17 @@ void Ieee802154Mac::updateStatusCCA(t_mac_event event, cMessage *msg)
                     // drop the frame
                     EV_DETAIL << "Tried " << NB << " backoffs, all reported a busy "
                               << "channel. Dropping the packet." << endl;
-                    cMessage *mac = macQueue.front();
-                    macQueue.pop_front();
                     txAttempts = 0;
-                    nbDroppedFrames++;
-                    PacketDropDetails details;
-                    details.setReason(CONGESTION);
-                    details.setLimit(macMaxCSMABackoffs);
-                    emit(packetDroppedSignal, mac, &details);
-                    delete mac;
+                    if (currentTxFrame) {
+                        nbDroppedFrames++;
+                        PacketDropDetails details;
+                        details.setReason(CONGESTION);
+                        details.setLimit(macMaxCSMABackoffs);
+                        dropCurrentTxFrame(details);
+                    }
+                    else {
+                        EV_ERROR << "too many Backoffs, but currentTxFrame is empty\n";    //TODO is it good, or model error?
+                    }
                     manageQueue();
                 }
                 else {
@@ -494,7 +451,7 @@ void Ieee802154Mac::updateStatusTransmitFrame(t_mac_event event, cMessage *msg)
 {
     if (event == EV_FRAME_TRANSMITTED) {
         //    delete msg;
-        Packet *packet = macQueue.front();
+        Packet *packet = currentTxFrame;
         const auto& csmaHeader = packet->peekAtFront<Ieee802154MacHeader>();
         radio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
 
@@ -518,8 +475,7 @@ void Ieee802154Mac::updateStatusTransmitFrame(t_mac_event event, cMessage *msg)
         }
         else {
             EV_DETAIL << ": RadioSetupRx, manageQueue..." << endl;
-            macQueue.pop_front();
-            delete packet;
+            deleteCurrentTxFrame();
             manageQueue();
         }
         delete msg;
@@ -539,10 +495,8 @@ void Ieee802154Mac::updateStatusWaitAck(t_mac_event event, cMessage *msg)
                       << " ProcessAck, manageQueue..." << endl;
             if (rxAckTimer->isScheduled())
                 cancelEvent(rxAckTimer);
-            cMessage *mac = macQueue.front();
-            macQueue.pop_front();
+            deleteCurrentTxFrame();
             txAttempts = 0;
-            delete mac;
             delete msg;
             manageQueue();
             break;
@@ -582,15 +536,11 @@ void Ieee802154Mac::manageMissingAck(t_mac_event    /*event*/, cMessage *    /*m
         // drop packet
         EV_DETAIL << "Packet was transmitted " << txAttempts
                   << " times and I never got an Ack. I drop the packet." << endl;
-        cMessage *mac = macQueue.front();
-        macQueue.pop_front();
         txAttempts = 0;
         PacketDropDetails details;
         details.setReason(RETRY_LIMIT_REACHED);
         details.setLimit(macMaxFrameRetries);
-        emit(packetDroppedSignal, mac, &details);
-        emit(linkBrokenSignal, mac);
-        delete mac;
+        dropCurrentTxFrame(details);
     }
     manageQueue();
 }
@@ -651,22 +601,7 @@ void Ieee802154Mac::updateStatusTransmitAck(t_mac_event event, cMessage *msg)
 void Ieee802154Mac::updateStatusNotIdle(cMessage *msg)
 {
     EV_DETAIL << "(20) FSM State NOT IDLE, EV_SEND_REQUEST. Is a TxBuffer available ?" << endl;
-    if (macQueue.size() < queueLength) {
-        macQueue.push_back(static_cast<Packet *>(msg));
-        EV_DETAIL << "(21) FSM State NOT IDLE, EV_SEND_REQUEST"
-                  << " and [TxBuff avail]: enqueue packet and don't move." << endl;
-    }
-    else {
-        // queue is full, message has to be deleted
-        EV_DETAIL << "(22) FSM State NOT IDLE, EV_SEND_REQUEST"
-                  << " and [TxBuff not avail]: dropping packet and don't move."
-                  << endl;
-        PacketDropDetails details;
-        details.setReason(QUEUE_OVERFLOW);
-        details.setLimit(queueLength);
-        emit(packetDroppedSignal, msg, &details);
-        delete msg;
-    }
+    txQueue->pushPacket(static_cast<Packet *>(msg));
 }
 
 /**
@@ -717,8 +652,8 @@ void Ieee802154Mac::executeMac(t_mac_event event, cMessage *msg)
 
 void Ieee802154Mac::manageQueue()
 {
-    if (macQueue.size() != 0) {
-        EV_DETAIL << "(manageQueue) there are " << macQueue.size() << " packets to send, entering backoff wait state." << endl;
+    if (currentTxFrame != nullptr || !txQueue->isEmpty()) {
+        EV_DETAIL << "(manageQueue) there are " << txQueue->getNumPackets() + (currentTxFrame == nullptr ? 0 : 1) << " packets to send, entering backoff wait state." << endl;
         if (transmissionAttemptInterruptedByRx) {
             // resume a transmission cycle which was interrupted by
             // a frame reception during CCA check
@@ -863,6 +798,7 @@ void Ieee802154Mac::handleLowerPacket(Packet *packet)
     const MacAddress& src = csmaHeader->getSrcAddr();
     const MacAddress& dest = csmaHeader->getDestAddr();
     long ExpectedNr = 0;
+    MacAddress address = interfaceEntry->getMacAddress();
 
     EV_DETAIL << "Received frame name= " << csmaHeader->getName()
               << ", myState=" << macState << " src=" << src
@@ -919,11 +855,10 @@ void Ieee802154Mac::handleLowerPacket(Packet *packet)
                     }
                 }
             }
-            else if (macQueue.size() != 0) {
+            else if (currentTxFrame != nullptr) {
                 // message is an ack, and it is for us.
                 // Is it from the right node ?
-                Packet *firstPacket = static_cast<Packet *>(macQueue.front());
-                const auto& csmaHeader = firstPacket->peekAtFront<Ieee802154MacHeader>();
+                const auto& csmaHeader = currentTxFrame->peekAtFront<Ieee802154MacHeader>();
                 if (src == csmaHeader->getDestAddr()) {
                     nbRecvdAcks++;
                     executeMac(EV_ACK_RECEIVED, packet);
@@ -951,7 +886,7 @@ void Ieee802154Mac::handleLowerPacket(Packet *packet)
     }
 }
 
-void Ieee802154Mac::receiveSignal(cComponent *source, simsignal_t signalID, long value, cObject *details)
+void Ieee802154Mac::receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details)
 {
     Enter_Method_Silent();
     if (signalID == IRadio::transmissionStateChangedSignal) {

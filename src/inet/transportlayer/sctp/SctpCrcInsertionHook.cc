@@ -12,31 +12,31 @@
 //
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/IpProtocolId_m.h"
 #include "inet/networklayer/common/L3Tools.h"
 #include "inet/networklayer/contract/INetfilter.h"
-#include "inet/transportlayer/sctp/SctpHeader.h"
+#include "inet/transportlayer/sctp/SctpChecksum.h"
 #include "inet/transportlayer/sctp/SctpCrcInsertionHook.h"
-#include "inet/common/serializer/SctpChecksum.h"
+#include "inet/transportlayer/sctp/SctpHeader.h"
 #include "inet/transportlayer/udp/UdpHeader_m.h"
 
-
-
 namespace inet {
-
 namespace sctp {
-
 
 INetfilter::IHook::Result SctpCrcInsertion::datagramPostRoutingHook(Packet *packet)
 {
+    if (packet->findTag<InterfaceInd>())
+        return ACCEPT;  // FORWARD
     auto networkProtocol = packet->getTag<PacketProtocolTag>()->getProtocol();
     const auto& networkHeader = getNetworkProtocolHeader(packet);
     if (networkHeader->getProtocol() == &Protocol::sctp) {
+        ASSERT(!networkHeader->isFragment());
         packet->eraseAtFront(networkHeader->getChunkLength());
         auto sctpHeader = packet->removeAtFront<SctpHeader>();
+        ASSERT(sctpHeader->getCrcMode() == CRC_COMPUTED);
         const L3Address& srcAddress = networkHeader->getSourceAddress();
         const L3Address& destAddress = networkHeader->getDestinationAddress();
         insertCrc(networkProtocol, srcAddress, destAddress, sctpHeader, packet);
@@ -45,7 +45,6 @@ INetfilter::IHook::Result SctpCrcInsertion::datagramPostRoutingHook(Packet *pack
     }
     return ACCEPT;
 }
-
 
 void SctpCrcInsertion::insertCrc(const Protocol *networkProtocol, const L3Address& srcAddress, const L3Address& destAddress, const Ptr<SctpHeader>& sctpHeader, Packet *packet)
 {
@@ -62,17 +61,17 @@ void SctpCrcInsertion::insertCrc(const Protocol *networkProtocol, const L3Addres
         case CRC_COMPUTED: {
             // if the CRC mode is computed, then compute the CRC and set it
             // this computation is delayed after the routing decision, see INetfilter hook
-            sctpHeader->setCrc(0x0000); // make sure that the CRC is 0 in the TCP header before computing the CRC
-            MemoryOutputStream sctpHeaderStream;
-            Chunk::serialize(sctpHeaderStream, sctpHeader);
-            auto sctpHeaderBytes = sctpHeaderStream.getData();
-            const std::vector<uint8_t> emptyData;
-            auto sctpDataBytes = (packet->getDataLength() > b(0)) ? packet->peekDataAsBytes()->getBytes() : emptyData;
-            auto headerLength = sctpHeaderBytes.size();
-            auto buffer = new uint8_t[headerLength];
-            std::copy(sctpHeaderBytes.begin(), sctpHeaderBytes.end(), (uint8_t *)buffer);
-            auto crc = inet::serializer::SctpChecksum::checksum(buffer, headerLength);
+            sctpHeader->setCrc(0); // make sure that the CRC is 0 in the SCTP header before computing the CRC
+            MemoryOutputStream sctpPacketStream;
+            Chunk::serialize(sctpPacketStream, sctpHeader);
+            Chunk::serialize(sctpPacketStream, packet->peekData(Chunk::PF_ALLOW_EMPTY));
+            const auto& sctpPacketBytes = sctpPacketStream.getData();
+            auto length = sctpPacketBytes.size();
+            auto buffer = new uint8_t[length];
+            std::copy(sctpPacketBytes.begin(), sctpPacketBytes.end(), (uint8_t *)buffer);
+            auto crc = SctpChecksum::checksum(buffer, length);
             sctpHeader->setCrc(crc);
+            delete [] buffer;
             break;
         }
         default:
@@ -81,7 +80,5 @@ void SctpCrcInsertion::insertCrc(const Protocol *networkProtocol, const L3Addres
 }
 
 } // namespace sctp
-
 } // namespace inet
-
 

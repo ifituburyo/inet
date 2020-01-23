@@ -32,8 +32,9 @@ RoutingTableVisualizerBase::RouteVisualization::RouteVisualization(const Ipv4Rou
 {
 }
 
-const char *RoutingTableVisualizerBase::DirectiveResolver::resolveDirective(char directive)
+const char *RoutingTableVisualizerBase::DirectiveResolver::resolveDirective(char directive) const
 {
+    static std::string result;
     switch (directive) {
         case 'm':
             result = route->getNetmask().isUnspecified() ? "*" : std::to_string(route->getNetmask().getNetmaskLength());
@@ -43,6 +44,9 @@ const char *RoutingTableVisualizerBase::DirectiveResolver::resolveDirective(char
             break;
         case 'd':
             result = route->getDestination().isUnspecified() ? "*" : route->getDestination().str();
+            break;
+        case 'e':
+            result = std::to_string(route->getMetric());
             break;
         case 'n':
             result = route->getInterface()->getInterfaceName();
@@ -92,6 +96,7 @@ void RoutingTableVisualizerBase::initialize(int stage)
 
 void RoutingTableVisualizerBase::handleParameterChange(const char *name)
 {
+    if (!hasGUI()) return;
     if (name != nullptr) {
         if (!strcmp(name, "destinationFilter"))
             destinationFilter.setPattern(par("destinationFilter"));
@@ -105,22 +110,21 @@ void RoutingTableVisualizerBase::handleParameterChange(const char *name)
 
 void RoutingTableVisualizerBase::subscribe()
 {
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this);
-    subscriptionModule->subscribe(routeAddedSignal, this);
-    subscriptionModule->subscribe(routeDeletedSignal, this);
-    subscriptionModule->subscribe(routeChangedSignal, this);
-    subscriptionModule->subscribe(interfaceIpv4ConfigChangedSignal, this);
+    visualizationSubjectModule->subscribe(routeAddedSignal, this);
+    visualizationSubjectModule->subscribe(routeDeletedSignal, this);
+    visualizationSubjectModule->subscribe(routeChangedSignal, this);
+    visualizationSubjectModule->subscribe(interfaceIpv4ConfigChangedSignal, this);
 }
 
 void RoutingTableVisualizerBase::unsubscribe()
 {
     // NOTE: lookup the module again because it may have been deleted first
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this, false);
-    if (subscriptionModule != nullptr) {
-        subscriptionModule->unsubscribe(routeAddedSignal, this);
-        subscriptionModule->unsubscribe(routeDeletedSignal, this);
-        subscriptionModule->unsubscribe(routeChangedSignal, this);
-        subscriptionModule->unsubscribe(interfaceIpv4ConfigChangedSignal, this);
+    auto visualizationSubjectModule = getModuleFromPar<cModule>(par("visualizationSubjectModule"), this, false);
+    if (visualizationSubjectModule != nullptr) {
+        visualizationSubjectModule->unsubscribe(routeAddedSignal, this);
+        visualizationSubjectModule->unsubscribe(routeDeletedSignal, this);
+        visualizationSubjectModule->unsubscribe(routeChangedSignal, this);
+        visualizationSubjectModule->unsubscribe(interfaceIpv4ConfigChangedSignal, this);
     }
 }
 
@@ -162,17 +166,19 @@ std::vector<Ipv4Address> RoutingTableVisualizerBase::getDestinations()
 {
     L3AddressResolver addressResolver;
     std::vector<Ipv4Address> destinations;
-    for (cModule::SubmoduleIterator it(getSystemModule()); !it.end(); it++) {
+    for (cModule::SubmoduleIterator it(visualizationSubjectModule); !it.end(); it++) {
         auto networkNode = *it;
         if (isNetworkNode(networkNode) && destinationFilter.matches(networkNode)) {
             auto interfaceTable = addressResolver.findInterfaceTableOf(networkNode);
             for (int i = 0; i < interfaceTable->getNumInterfaces(); i++) {
                 auto interface = interfaceTable->getInterface(i);
-                if (interface->ipv4Data() != nullptr) {
-                    auto address = interface->ipv4Data()->getIPAddress();
+#ifdef WITH_IPv4
+                if (auto ipv4Data = interface->findProtocolData<Ipv4InterfaceData>()) {
+                    auto address = ipv4Data->getIPAddress();
                     if (!address.isUnspecified())
                         destinations.push_back(address);
                 }
+#endif // WITH_IPv4
             }
         }
     }
@@ -236,7 +242,7 @@ void RoutingTableVisualizerBase::updateRouteVisualizations(IIpv4RoutingTable *ro
 void RoutingTableVisualizerBase::updateAllRouteVisualizations()
 {
     removeAllRouteVisualizations();
-    for (cModule::SubmoduleIterator it(getSystemModule()); !it.end(); it++) {
+    for (cModule::SubmoduleIterator it(visualizationSubjectModule); !it.end(); it++) {
         auto networkNode = *it;
         if (isNetworkNode(networkNode) && nodeFilter.matches(networkNode)) {
             L3AddressResolver addressResolver;

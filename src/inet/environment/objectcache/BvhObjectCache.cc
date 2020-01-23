@@ -15,8 +15,8 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/environment/objectcache/BvhObjectCache.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/environment/objectcache/BvhObjectCache.h"
 
 namespace inet {
 
@@ -45,7 +45,7 @@ void BvhObjectCache::initialize(int stage)
         leafCapacity = par("leafCapacity");
         axisOrder = par("axisOrder");
     }
-    else if (stage == INITSTAGE_PHYSICAL_ENVIRONMENT_2)
+    else if (stage == INITSTAGE_PHYSICAL_OBJECT_CACHE)
     {
         for (int i = 0; i < physicalEnvironment->getNumObjects(); i++)
             insertObject(physicalEnvironment->getObject(i));
@@ -65,6 +65,9 @@ bool BvhObjectCache::insertObject(const IPhysicalObject *object)
 void BvhObjectCache::visitObjects(const IVisitor *visitor, const LineSegment& lineSegment) const
 {
     if (!bvhTree)
+#ifdef _OPENMP
+#pragma omp critical
+#endif
         bvhTree = new BvhTree(physicalEnvironment->getSpaceMin(), physicalEnvironment->getSpaceMax(), objects, 0, objects.size() - 1, BvhTree::Axis(axisOrder), leafCapacity);
     bvhTree->lineSegmentQuery(lineSegment, visitor);
 }

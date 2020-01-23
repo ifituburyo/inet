@@ -19,14 +19,14 @@
 #define __INET_SCTPPEER_H
 
 #include "inet/common/INETDefs.h"
-#include "inet/transportlayer/sctp/SctpAssociation.h"
-#include "inet/transportlayer/contract/sctp/SctpSocket.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
+
 #include "inet/applications/common/SocketTag_m.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/TimeTag_m.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/common/packet/Message.h"
+#include "inet/transportlayer/contract/sctp/SctpSocket.h"
+#include "inet/transportlayer/sctp/SctpAssociation.h"
 
 namespace inet {
 
@@ -35,7 +35,7 @@ class SctpConnectInfo;
 /**
  * Implements the SctpPeer simple module. See the NED file for more info.
  */
-class INET_API SctpPeer : public cSimpleModule, public SctpSocket::CallbackInterface, public ILifecycle
+class INET_API SctpPeer : public cSimpleModule, public SctpSocket::ICallback, public LifecycleUnsupported
 {
   protected:
     struct PathStatus
@@ -101,28 +101,26 @@ class INET_API SctpPeer : public cSimpleModule, public SctpSocket::CallbackInter
     void handleTimer(cMessage *msg);
 
     void connect();
-    void socketEstablished(int connId, void *yourPtr);
-    void socketDataArrived(int connId, void *yourPtr, Packet *msg, bool urgent) override;
-    void socketDataNotificationArrived(int connId, void *yourPtr, Message *msg) override;
-    void socketPeerClosed(int connId, void *yourPtr) override;
-    void socketClosed(int connId, void *yourPtr) override;
-    void socketFailure(int connId, void *yourPtr, int code) override;
+    virtual void socketAvailable(SctpSocket *socket, Indication *indication) override { throw cRuntimeError("Model error, this module doesn't use any listener SCTP sockets"); }
+    void socketEstablished(SctpSocket *socket, unsigned long int buffer) override;
+    void socketDataArrived(SctpSocket *socket, Packet *msg, bool urgent) override;
+    void socketDataNotificationArrived(SctpSocket *socket, Message *msg) override;
+    void socketPeerClosed(SctpSocket *socket) override;
+    void socketClosed(SctpSocket *socket) override;
+    void socketFailure(SctpSocket *socket, int code) override;
 
     /* Redefine to handle incoming SctpStatusInfo */
-    void socketStatusArrived(int connId, void *yourPtr, SctpStatusReq *status) override;
+    void socketStatusArrived(SctpSocket *socket, SctpStatusReq *status) override;
 
     void sendRequest(bool last = true);
     void sendOrSchedule(cMessage *msg);
     void generateAndSend();
-    void sendRequestArrived() override;
+    void sendRequestArrived(SctpSocket *socket) override;
     void sendQueueRequest();
-    void shutdownReceivedArrived(int connId) override;
-    void sendqueueFullArrived(int connId) override;
-    void msgAbandonedArrived(int assocId) override;
+    void shutdownReceivedArrived(SctpSocket *socket) override;
+    void sendqueueFullArrived(SctpSocket *socket) override;
+    void msgAbandonedArrived(SctpSocket *socket) override;
     void setStatusString(const char *s);
-
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override
-    { Enter_Method_Silent(); throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName()); return true; }
 
   public:
     SctpPeer();

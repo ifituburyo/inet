@@ -16,6 +16,7 @@
 //
 
 #include <stdio.h>
+
 #include "inet/common/Simsignals.h"
 
 namespace inet {
@@ -40,6 +41,7 @@ simsignal_t interfaceConfigChangedSignal = cComponent::registerSignal("interface
 simsignal_t interfaceGnpConfigChangedSignal = cComponent::registerSignal("interfaceGnpConfigChanged");
 simsignal_t interfaceIpv4ConfigChangedSignal = cComponent::registerSignal("interfaceIpv4ConfigChanged");
 simsignal_t interfaceIpv6ConfigChangedSignal = cComponent::registerSignal("interfaceIpv6ConfigChanged");
+simsignal_t interfaceClnsConfigChangedSignal = cComponent::registerSignal("interfaceClnsConfigChanged");
 simsignal_t tedChangedSignal = cComponent::registerSignal("tedChanged");
 
 // layer 3 - Routing Table
@@ -53,7 +55,7 @@ simsignal_t mrouteChangedSignal = cComponent::registerSignal("mrouteChanged");
 // layer 3 - Ipv4
 simsignal_t ipv4MulticastGroupJoinedSignal = cComponent::registerSignal("ipv4MulticastGroupJoined");
 simsignal_t ipv4MulticastGroupLeftSignal = cComponent::registerSignal("ipv4MulticastGroupLeft");
-simsignal_t ipv4McastChangeSignal = cComponent::registerSignal("ipv4McastChange");
+simsignal_t ipv4MulticastChangeSignal = cComponent::registerSignal("ipv4McastChange");
 simsignal_t ipv4MulticastGroupRegisteredSignal = cComponent::registerSignal("ipv4MulticastGroupRegistered");
 simsignal_t ipv4MulticastGroupUnregisteredSignal = cComponent::registerSignal("ipv4MulticastGroupUnregistered");
 
@@ -74,6 +76,9 @@ simsignal_t ipv6MulticastGroupLeftSignal = cComponent::registerSignal("ipv6Multi
 simsignal_t ipv6MulticastGroupRegisteredSignal = cComponent::registerSignal("ipv6MulticastGroupRegistered");
 simsignal_t ipv6MulticastGroupUnregisteredSignal = cComponent::registerSignal("ipv6MulticastGroupUnregistered");
 
+//layer 3 - ISIS
+simsignal_t isisAdjChangedSignal = cComponent::registerSignal("isisAdjChanged");
+
 // - layer 4 (transport)
 //...
 
@@ -81,6 +86,9 @@ simsignal_t ipv6MulticastGroupUnregisteredSignal = cComponent::registerSignal("i
 //...
 
 // general
+simsignal_t packetCreatedSignal = cComponent::registerSignal("packetCreated");
+simsignal_t packetAddedSignal = cComponent::registerSignal("packetAdded");
+simsignal_t packetRemovedSignal = cComponent::registerSignal("packetRemoved");
 simsignal_t packetDroppedSignal = cComponent::registerSignal("packetDropped");
 
 simsignal_t packetSentToUpperSignal = cComponent::registerSignal("packetSentToUpper");
@@ -95,12 +103,27 @@ simsignal_t packetReceivedFromPeerSignal = cComponent::registerSignal("packetRec
 simsignal_t packetSentSignal = cComponent::registerSignal("packetSent");
 simsignal_t packetReceivedSignal = cComponent::registerSignal("packetReceived");
 
-void printSignalBanner(simsignal_t signalID, const cObject *obj)
+simsignal_t packetPushedSignal = cComponent::registerSignal("packetPushed");
+simsignal_t packetPoppedSignal = cComponent::registerSignal("packetPopped");
+
+void printSignalBanner(simsignal_t signalID, const cObject *obj, const cObject *details)
 {
     EV << "** Signal at T=" << simTime()
        << " to " << getSimulation()->getContextModule()->getFullPath() << ": "
        << cComponent::getSignalName(signalID) << " "
-       << (obj ? obj->str() : "") << "\n";
+       << (obj ? obj->str() : "") << " "
+       << (details ? details->str() : "")
+       << "\n";
+}
+
+void printSignalBanner(simsignal_t signalID, intval_t value, const cObject *details)
+{
+    EV << "** Signal at T=" << simTime()
+       << " to " << getSimulation()->getContextModule()->getFullPath() << ": "
+       << cComponent::getSignalName(signalID) << " "
+       << value << " "
+       << (details ? details->str() : "")
+       << "\n";
 }
 
 } // namespace inet

@@ -25,6 +25,10 @@ namespace inet {
 
 namespace physicallayer {
 
+/**
+ * TODO: refactor to use Delaunay triangulation on unit sphere, i.e. triangulate
+ * result from enclosing spherical triangle as seen from the center
+ */
 class INET_API InterpolatingAntenna : public AntennaBase
 {
   protected:
@@ -43,9 +47,9 @@ class INET_API InterpolatingAntenna : public AntennaBase
 
       public:
         AntennaGain(const char *elevation, const char *heading, const char *bank);
-        virtual double getMinGain() const { return minGain; }
+        virtual double getMinGain() const override { return minGain; }
         virtual double getMaxGain() const override { return maxGain; }
-        virtual double computeGain(const EulerAngles direction) const override;
+        virtual double computeGain(const Quaternion direction) const override;
     };
 
     Ptr<AntennaGain> gain;

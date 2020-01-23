@@ -19,11 +19,11 @@
 #define __INET_QOSRECOVERYPROCEDURE_H
 
 #include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 #include "inet/linklayer/ieee80211/mac/common/Ieee80211Defs.h"
 #include "inet/linklayer/ieee80211/mac/common/SequenceControlField.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRecoveryProcedure.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -41,9 +41,11 @@ class INET_API QosRecoveryProcedure : public cSimpleModule, public IRecoveryProc
     protected:
         ICwCalculator *cwCalculator = nullptr;
 
+        // TODO: why do we need Tid, is this class per AC or not? we should decide
         std::map<std::pair<Tid, SequenceControlField>, int> shortRetryCounter; // SRC
         std::map<std::pair<Tid, SequenceControlField>, int> longRetryCounter; // LRC
 
+        // TODO: these counters should be per AC, it's not done here but as separate recovery procedure modules
         int stationLongRetryCounter = 0; // QLRC
         int stationShortRetryCounter = 0; // QSRC
 
@@ -60,6 +62,7 @@ class INET_API QosRecoveryProcedure : public cSimpleModule, public IRecoveryProc
         void incrementStationLrc();
         void resetStationSrc() { stationShortRetryCounter = 0; }
         void resetStationLrc() { stationLongRetryCounter = 0; }
+        void incrementContentionWindow();
         void resetContentionWindow();
         int doubleCw(int cw);
         int getRc(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, std::map<std::pair<Tid, SequenceControlField>, int>& retryCounter);

@@ -19,7 +19,6 @@ package inet.common.misc;
 
 import inet.common.IHook;
 
-
 //
 // Thruput measurement utility module.
 //
@@ -30,10 +29,9 @@ simple ThruputMeter like IHook
         double startTime @unit(s) = default(0s);
         int batchSize = default(50);
         double maxInterval @unit(s) = default(1s);
-        @display("i=block/timer_vs");
+        @display("i=block/timer");
     gates:
         input in;
         output out;
 }
-
 

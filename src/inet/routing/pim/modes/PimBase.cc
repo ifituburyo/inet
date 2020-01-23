@@ -17,8 +17,6 @@
 // Authors: Veronika Rybova, Vladimir Vesely (ivesely@fit.vutbr.cz),
 //          Tamas Borbely (tomi@omnetpp.org)
 
-#include "inet/routing/pim/modes/PimBase.h"
-
 #include "inet/common/IProtocolRegistrationListener.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -29,10 +27,9 @@
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 #include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
+#include "inet/routing/pim/modes/PimBase.h"
 
 namespace inet {
-
-using namespace std;
 
 const Ipv4Address PimBase::ALL_PIM_ROUTERS_MCAST("224.0.0.13");
 
@@ -41,33 +38,6 @@ const PimBase::AssertMetric PimBase::AssertMetric::PIM_INFINITE;
 simsignal_t PimBase::sentHelloPkSignal = registerSignal("sentHelloPk");
 simsignal_t PimBase::rcvdHelloPkSignal = registerSignal("rcvdHelloPk");
 
-bool PimBase::AssertMetric::operator==(const AssertMetric& other) const
-{
-    return rptBit == other.rptBit && preference == other.preference &&
-           metric == other.metric && address == other.address;
-}
-
-bool PimBase::AssertMetric::operator!=(const AssertMetric& other) const
-{
-    return rptBit != other.rptBit || preference != other.preference ||
-           metric != other.metric || address != other.address;
-}
-
-bool PimBase::AssertMetric::operator<(const AssertMetric& other) const
-{
-    if (isInfinite())
-        return false;
-    if (other.isInfinite())
-        return true;
-    if (rptBit != other.rptBit)
-        return rptBit < other.rptBit;
-    if (preference != other.preference)
-        return preference < other.preference;
-    if (metric != other.metric)
-        return metric < other.metric;
-    return address > other.address;
-}
-
 PimBase::~PimBase()
 {
     cancelAndDelete(helloTimer);
@@ -75,7 +45,7 @@ PimBase::~PimBase()
 
 void PimBase::initialize(int stage)
 {
-    OperationalBase::initialize(stage);
+    RoutingProtocolBase::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL) {
         ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
@@ -92,22 +62,20 @@ void PimBase::initialize(int stage)
         helloPeriod = par("helloPeriod");
         holdTime = par("holdTime");
         designatedRouterPriority = mode == PimInterface::SparseMode ? par("designatedRouterPriority") : -1;
-    }
-    else if (stage == INITSTAGE_ROUTING_PROTOCOLS) {
-        registerService(Protocol::pim, nullptr, gate("ipIn"));
-        registerProtocol(Protocol::pim, gate("ipOut"), nullptr);
+        pimModule = check_and_cast<Pim *>(getParentModule());
     }
 }
 
-bool PimBase::handleNodeStart(IDoneCallback *doneCallback)
+void PimBase::handleStartOperation(LifecycleOperation *operation)
 {
     generationID = intrand(UINT32_MAX);
+
     // to receive PIM messages, join to ALL_PIM_ROUTERS multicast group
     isEnabled = false;
     for (int i = 0; i < pimIft->getNumInterfaces(); i++) {
         PimInterface *pimInterface = pimIft->getInterface(i);
         if (pimInterface->getMode() == mode) {
-            pimInterface->getInterfacePtr()->ipv4Data()->joinMulticastGroup(ALL_PIM_ROUTERS_MCAST);
+            pimInterface->getInterfacePtr()->getProtocolData<Ipv4InterfaceData>()->joinMulticastGroup(ALL_PIM_ROUTERS_MCAST);
             isEnabled = true;
         }
     }
@@ -117,19 +85,16 @@ bool PimBase::handleNodeStart(IDoneCallback *doneCallback)
         helloTimer = new cMessage("PIM HelloTimer", HelloTimer);
         scheduleAt(simTime() + par("triggeredHelloDelay"), helloTimer);
     }
-
-    return true;
 }
 
-bool PimBase::handleNodeShutdown(IDoneCallback *doneCallback)
+void PimBase::handleStopOperation(LifecycleOperation *operation)
 {
     // TODO unregister IP_PROT_PIM
     cancelAndDelete(helloTimer);
     helloTimer = nullptr;
-    return true;
 }
 
-void PimBase::handleNodeCrash()
+void PimBase::handleCrashOperation(LifecycleOperation *operation)
 {
     // TODO unregister IP_PROT_PIM
     cancelAndDelete(helloTimer);
@@ -160,7 +125,7 @@ void PimBase::sendHelloPacket(PimInterface *pimInterface)
     Packet *pk = new Packet("PimHello");
     const auto& msg = makeShared<PimHello>();
 
-    int byteLength = PIM_HEADER_LENGTH + 6 + 8;    // HoldTime + GenerationID option
+    B byteLength = PIM_HEADER_LENGTH + B(6) + B(8);    // HoldTime + GenerationID option
 
     msg->setOptionsArraySize(designatedRouterPriority < 0 ? 2 : 3);
     HoldtimeOption *holdtimeOption = new HoldtimeOption();
@@ -175,17 +140,19 @@ void PimBase::sendHelloPacket(PimInterface *pimInterface)
         DrPriorityOption *drPriorityOption = new DrPriorityOption();
         drPriorityOption->setPriority(designatedRouterPriority);
         msg->setOptions(2, drPriorityOption);
-        byteLength += 8;
+        byteLength += B(8);
     }
 
-    msg->setChunkLength(B(byteLength));
+    msg->setChunkLength(byteLength);
+    msg->setCrcMode(pimModule->getCrcMode());
+    Pim::insertCrc(msg);
     pk->insertAtFront(msg);
-    pk->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::pim);
-    pk->addTagIfAbsent<InterfaceReq>()->setInterfaceId(pimInterface->getInterfaceId());
-    pk->addTagIfAbsent<DispatchProtocolInd>()->setProtocol(&Protocol::pim);
-    pk->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::ipv4);
-    pk->addTagIfAbsent<L3AddressReq>()->setDestAddress(ALL_PIM_ROUTERS_MCAST);
-    pk->addTagIfAbsent<HopLimitReq>()->setHopLimit(1);
+    pk->addTag<PacketProtocolTag>()->setProtocol(&Protocol::pim);
+    pk->addTag<InterfaceReq>()->setInterfaceId(pimInterface->getInterfaceId());
+    pk->addTag<DispatchProtocolInd>()->setProtocol(&Protocol::pim);
+    pk->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::ipv4);
+    pk->addTag<L3AddressReq>()->setDestAddress(ALL_PIM_ROUTERS_MCAST);
+    pk->addTag<HopLimitReq>()->setHopLimit(1);
 
     emit(sentHelloPkSignal, pk);
 
@@ -243,6 +210,40 @@ void PimBase::processHelloPacket(Packet *packet)
     neighbor->setDRPriority(drPriority);
 
     delete packet;
+}
+
+bool PimBase::AssertMetric::operator==(const AssertMetric& other) const
+{
+    return rptBit == other.rptBit && preference == other.preference &&
+           metric == other.metric && address == other.address;
+}
+
+bool PimBase::AssertMetric::operator!=(const AssertMetric& other) const
+{
+    return rptBit != other.rptBit || preference != other.preference ||
+           metric != other.metric || address != other.address;
+}
+
+bool PimBase::AssertMetric::operator<(const AssertMetric& other) const
+{
+    if (isInfinite())
+        return false;
+    if (other.isInfinite())
+        return true;
+    if (rptBit != other.rptBit)
+        return rptBit < other.rptBit;
+    if (preference != other.preference)
+        return preference < other.preference;
+    if (metric != other.metric)
+        return metric < other.metric;
+    return address > other.address;
+}
+
+std::ostream& operator<<(std::ostream& out, const PimBase::SourceAndGroup& sourceGroup)
+{
+    out << "(source: " << (sourceGroup.source.isUnspecified() ? "*" : sourceGroup.source.str()) << ", "
+        << "group: " << (sourceGroup.group.isUnspecified() ? "*" : sourceGroup.group.str()) << ")";
+    return out;
 }
 
 }    // namespace inet

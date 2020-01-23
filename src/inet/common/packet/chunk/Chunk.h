@@ -17,11 +17,13 @@
 #define __INET_CHUNK_H_
 
 #include <memory>
+
 #include "inet/common/MemoryInputStream.h"
 #include "inet/common/MemoryOutputStream.h"
-#include "inet/common/packet/tag/RegionTagSet.h"
 #include "inet/common/Ptr.h"
 #include "inet/common/Units.h"
+#include "inet/common/packet/tag/RegionTagSet.h"
+#include "inet/common/TemporarySharedPtr.h"
 
 // checking chunk implementation is disabled by default
 #ifndef CHUNK_CHECK_IMPLEMENTATION_ENABLED
@@ -286,12 +288,15 @@ class INET_API Chunk : public cObject,
      */
     enum PeekFlag {
         PF_ALLOW_NULLPTR                = (1 << 0),
-        PF_ALLOW_INCOMPLETE             = (1 << 1),
-        PF_ALLOW_INCORRECT              = (1 << 2),
-        PF_ALLOW_IMPROPERLY_REPRESENTED = (1 << 3),
-        PF_ALLOW_SERIALIZATION          = (1 << 4),
+        PF_ALLOW_EMPTY                  = (1 << 1),
+        PF_ALLOW_INCOMPLETE             = (1 << 2),
+        PF_ALLOW_INCORRECT              = (1 << 3),
+        PF_ALLOW_IMPROPERLY_REPRESENTED = (1 << 4),
+        PF_ALLOW_SERIALIZATION          = (1 << 5),
         PF_ALLOW_ALL                    = -1
     };
+
+    static const b unspecifiedLength;
 
     class INET_API Iterator
     {
@@ -366,14 +371,14 @@ class INET_API Chunk : public cObject,
     RegionTagSet tags;
 
   protected:
-    void checkMutable() { CHUNK_CHECK_USAGE(isMutable(), "chunk is immutable"); }
+    void checkMutable() const { CHUNK_CHECK_USAGE(isMutable(), "chunk is immutable"); }
 
     virtual void handleChange();
 
-    virtual int getBitsArraySize(); // only for class descriptor
-    virtual int getBytesArraySize(); // only for class descriptor
-    virtual const char *getBitsAsString(int index); // only for class descriptor
-    virtual const char *getBytesAsString(int index); // only for class descriptor
+    virtual int getBinDumpNumLines(); // only for class descriptor
+    virtual int getHexDumpNumLines(); // only for class descriptor
+    virtual const char *getBinDumpLine(int index); // only for class descriptor
+    virtual const char *getHexDumpLine(int index); // only for class descriptor
 
     virtual int getTagsArraySize(); // only for class descriptor
     virtual const RegionTagSet::RegionTag<cObject>& getTags(int index); // only for class descriptor
@@ -398,7 +403,7 @@ class INET_API Chunk : public cObject,
 
     template <typename T>
     const Ptr<T> peekConverted(const Iterator& iterator, b length, int flags) const {
-        CHUNK_CHECK_USAGE(iterator.isForward() || length != b(-1), "chunk conversion using backward iterator with undefined length is invalid");
+        CHUNK_CHECK_USAGE(iterator.isForward() || length >= b(0), "chunk conversion using backward iterator with undefined length is invalid");
         auto offset = iterator.isForward() ? iterator.getPosition() : getChunkLength() - iterator.getPosition() - length;
         const auto& chunk = T::convertChunk(typeid(T), const_cast<Chunk *>(this)->shared_from_this(), offset, length, flags);
         chunk->markImmutable();
@@ -409,7 +414,11 @@ class INET_API Chunk : public cObject,
     const Ptr<T> checkPeekResult(const Ptr<T>& chunk, int flags) const {
         if (chunk == nullptr) {
             if (!(flags & PF_ALLOW_NULLPTR))
-                throw cRuntimeError("Returning an empty chunk is not allowed according to the flags: %x", flags);
+                throw cRuntimeError("Returning an empty chunk (nullptr) is not allowed according to the flags: %x", flags);
+        }
+        else if (chunk->getChunkType() == CT_EMPTY) {
+            if (!(flags & PF_ALLOW_EMPTY))
+                throw cRuntimeError("Returning an empty chunk (EmptyChunk) is not allowed according to the flags: %x", flags);
         }
         else {
             if (chunk->isIncomplete() && !(flags & PF_ALLOW_INCOMPLETE))
@@ -432,6 +441,7 @@ class INET_API Chunk : public cObject,
      * Returns a mutable copy of this chunk in a shared pointer.
      */
     virtual const Ptr<Chunk> dupShared() const { return Ptr<Chunk>(static_cast<Chunk *>(dup())); };
+    virtual void forEachChild(cVisitor *v) override;
     //@}
 
     /** @name Mutability related functions */
@@ -452,7 +462,7 @@ class INET_API Chunk : public cObject,
     // NOTE: there is no markComplete() intentionally
     virtual bool isComplete() const { return !(flags & CF_INCOMPLETE); }
     virtual bool isIncomplete() const { return flags & CF_INCOMPLETE; }
-    virtual void markIncomplete() { flags |= CF_INCOMPLETE; }
+    virtual void markIncomplete() { checkMutable(); flags |= CF_INCOMPLETE; }
     //@}
 
     /** @name Correctness related functions */
@@ -460,7 +470,7 @@ class INET_API Chunk : public cObject,
     // NOTE: there is no markCorrect() intentionally
     virtual bool isCorrect() const { return !(flags & CF_INCORRECT); }
     virtual bool isIncorrect() const { return flags & CF_INCORRECT; }
-    virtual void markIncorrect() { flags |= CF_INCORRECT; }
+    virtual void markIncorrect() { checkMutable(); flags |= CF_INCORRECT; }
     //@}
 
     /** @name Proper representation related functions */
@@ -468,7 +478,7 @@ class INET_API Chunk : public cObject,
     // NOTE: there is no markProperlyRepresented() intentionally
     virtual bool isProperlyRepresented() const { return !(flags & CF_IMPROPERLY_REPRESENTED); }
     virtual bool isImproperlyRepresented() const { return flags & CF_IMPROPERLY_REPRESENTED; }
-    virtual void markImproperlyRepresented() { flags |= CF_IMPROPERLY_REPRESENTED; }
+    virtual void markImproperlyRepresented() { checkMutable(); flags |= CF_IMPROPERLY_REPRESENTED; }
     //@}
 
     /** @name Iteration related functions */
@@ -580,19 +590,20 @@ class INET_API Chunk : public cObject,
     /**
      * Returns the designated part of the data represented by this chunk in its
      * default representation. If the length is unspecified, then the length of
-     * the result is chosen according to the internal representation. The result
-     * is mutable iff the designated part is directly represented in this chunk
-     * by a mutable chunk, otherwise the result is immutable.
+     * the result is chosen according to the internal representation. If the
+     * length is negative, then the result won't be longer than the absolute
+     * length. The result is mutable iff the designated part is directly represented
+     * in this chunk by a mutable chunk, otherwise the result is immutable.
      */
-    const Ptr<Chunk> peek(const Iterator& iterator, b length = b(-1), int flags = 0) const;
+    const Ptr<Chunk> peek(const Iterator& iterator, b length = unspecifiedLength, int flags = 0) const;
 
     /**
      * Returns whether if the designated part of the data is available in the
      * requested representation.
      */
     template <typename T>
-    bool has(const Iterator& iterator, b length = b(-1)) const {
-        if (length != b(-1) && getChunkLength() < iterator.getPosition() + length)
+    bool has(const Iterator& iterator, b length = unspecifiedLength) const {
+        if (length >= b(0) && getChunkLength() < iterator.getPosition() + length)
             return false;
         else {
             const auto& chunk = peek<T>(iterator, length, PF_ALLOW_NULLPTR | PF_ALLOW_INCOMPLETE);
@@ -603,12 +614,14 @@ class INET_API Chunk : public cObject,
     /**
      * Returns the designated part of the data represented by this chunk in the
      * requested representation. If the length is unspecified, then the length of
-     * the result is chosen according to the internal representation. The result
-     * is mutable iff the designated part is directly represented in this chunk
-     * by a mutable chunk, otherwise the result is immutable.
+     * the result is chosen according to the internal representation. If the
+     * length is negative, then the result won't be longer than the absolute
+     * length. The result is mutable iff the designated part is directly represented
+     * in this chunk by a mutable chunk, otherwise the result is immutable.
      */
     template <typename T>
-    const Ptr<T> peek(const Iterator& iterator, b length = b(-1), int flags = 0) const {
+    const Ptr<T> peek(const Iterator& iterator, b length = unspecifiedLength, int flags = 0) const {
+        CHUNK_CHECK_USAGE((flags & PF_ALLOW_EMPTY) == 0, "peeking with a specific chunk type with PF_ALLOW_EMPTY is an invalid operation");
         const auto& predicate = [] (const Ptr<Chunk>& chunk) -> bool { return chunk == nullptr || dynamicPtrCast<T>(chunk); };
         const auto& converter = [] (const Ptr<Chunk>& chunk, const Iterator& iterator, b length, int flags) -> const Ptr<Chunk> { return chunk->peekConverted<T>(iterator, length, flags); };
         const auto& chunk = peekUnchecked(predicate, converter, iterator, length, flags);
@@ -628,7 +641,7 @@ class INET_API Chunk : public cObject,
     /**
      * Returns the chunk tag at the given index.
      */
-    cObject *getTag(int index) const {
+    const cObject *getTag(int index) const {
         return tags.getTag(index);
     }
 
@@ -651,22 +664,22 @@ class INET_API Chunk : public cObject,
     /**
      * Returns the chunk tag for the provided type and range, or returns nullptr if no such chunk tag is found.
      */
-    template<typename T> T *findTag(b offset = b(0), b length = b(-1)) const {
+    template<typename T> const T *findTag(b offset = b(0), b length = b(-1)) const {
         return tags.findTag<T>(offset, length == b(-1) ? getChunkLength() - offset : length);
     }
 
     /**
      * Returns the chunk tag for the provided type and range, or throws an exception if no such chunk tag is found.
      */
-    template<typename T> T *getTag(b offset = b(0), b length = b(-1)) const {
+    template<typename T> const T *getTag(b offset = b(0), b length = b(-1)) const {
         return tags.getTag<T>(offset, length == b(-1) ? getChunkLength() - offset : length);
     }
 
     /**
-     * Returns all chunk tags for the provided type and range.
+     * Returns all chunk tags for the provided type and range in a detached vector of region tags.
      */
-    template<typename T> std::vector<RegionTagSet::RegionTag<T>> getAllTags(b offset = b(0), b length = b(-1)) const {
-        return tags.getAllTags<T>(offset, length == b(-1) ? getChunkLength() - offset : length);
+    template<typename T> std::vector<RegionTagSet::RegionTag<const T>> getAllTags(b offset = b(0), b length = b(-1)) const {
+        return tags.getAllTags<const T>(offset, length == b(-1) ? getChunkLength() - offset : length);
     }
 
     /**
@@ -722,6 +735,9 @@ class INET_API Chunk : public cObject,
     /**
      * Serializes a chunk into the given stream. The bytes representing the
      * chunk is written at the current position of the stream up to its length.
+     * The offset parameter and the offset + length value must be in the range
+     * [0, chunkLength]. If the length parameter is -1, then the chunk will be
+     * serialized up to its end.
      */
     static void serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk, b offset = b(0), b length = b(-1));
 
@@ -749,6 +765,8 @@ const Ptr<T> makeExclusivelyOwnedMutableChunk(const Ptr<const T>& chunk)
 inline std::ostream& operator<<(std::ostream& os, const Chunk *chunk) { if (chunk != nullptr) return os << chunk->str(); else return os << "<nullptr>"; }
 
 inline std::ostream& operator<<(std::ostream& os, const Chunk& chunk) { return os << chunk.str(); }
+
+typedef TemporarySharedPtr<Chunk> ChunkTemporarySharedPtr;
 
 } // namespace
 

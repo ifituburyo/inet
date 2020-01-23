@@ -1,3 +1,5 @@
+package inet.test.moduletest.lib;
+
 import inet.networklayer.common.InterfaceTable;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.networklayer.configurator.ipv4.Ipv4NodeConfigurator;
@@ -14,15 +16,15 @@ module IgmpTesterNic
         *.routingTableModule = absPath(routingTableModule);
         @class(InterfaceEntry);
     gates:
-        input igmpIn;
-        output igmpOut;
+        input upperLayerIn;
+        output upperLayerOut;
     submodules:
         mac: IGMPTester {
             @display("p=70,153");
         }
     connections:
-        igmpIn --> mac.igmpIn;
-        igmpOut <-- mac.igmpOut;
+        upperLayerIn --> mac.upperLayerIn;
+        upperLayerOut <-- mac.upperLayerOut;
 }
 
 network TestIGMPNetwork
@@ -32,7 +34,6 @@ network TestIGMPNetwork
         {
             parameters:
                 @networkNode;
-                string igmpType = default("Igmpv3");
                 *.interfaceTableModule = absPath(".interfaceTable");
                 *.routingTableModule = absPath(".routingTable");
             submodules:
@@ -45,7 +46,7 @@ network TestIGMPNetwork
                 tester: IgmpTesterNic {
                     @display("p=70,153");
                 }
-                igmp: <igmpType> like IIgmp {
+                igmp: <default("Igmpv3")> like IIgmp {
                     @display("p=176,153");
                 }
                 nodeConfigurator: Ipv4NodeConfigurator {
@@ -54,8 +55,8 @@ network TestIGMPNetwork
                     configureRoutingTable = false;
                 }
             connections allowunconnected:
-                tester.igmpOut --> igmp.ipIn;
-                igmp.ipOut --> tester.igmpIn;
+                tester.upperLayerOut --> igmp.ipIn;
+                igmp.ipOut --> tester.upperLayerIn;
         }
     submodules:
         node: TestIGMPNode;

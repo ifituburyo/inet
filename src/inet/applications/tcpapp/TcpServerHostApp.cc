@@ -16,11 +16,10 @@
 //
 
 #include "inet/applications/tcpapp/TcpServerHostApp.h"
-
-#include "inet/networklayer/common/L3AddressResolver.h"
-#include "inet/common/ModuleAccess.h"
-#include "inet/common/lifecycle/NodeOperations.h"
 #include "inet/common/INETUtils.h"
+#include "inet/common/ModuleAccess.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
 
 namespace inet {
 
@@ -28,92 +27,107 @@ Define_Module(TcpServerHostApp);
 
 void TcpServerHostApp::initialize(int stage)
 {
-    cSimpleModule::initialize(stage);
-
-    if (stage == INITSTAGE_APPLICATION_LAYER) {
-        nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        if (isNodeUp())
-            start();
-    }
+    ApplicationBase::initialize(stage);
 }
 
-void TcpServerHostApp::start()
+void TcpServerHostApp::handleStartOperation(LifecycleOperation *operation)
 {
     const char *localAddress = par("localAddress");
     int localPort = par("localPort");
 
     serverSocket.setOutputGate(gate("socketOut"));
+    serverSocket.setCallback(this);
     serverSocket.bind(localAddress[0] ? L3Address(localAddress) : L3Address(), localPort);
     serverSocket.listen();
 }
 
-void TcpServerHostApp::stop()
+void TcpServerHostApp::handleStopOperation(LifecycleOperation *operation)
 {
-    //FIXME close sockets?
-
-    // remove and delete threads
-    while (!threadSet.empty())
-        removeThread(*threadSet.begin());
+    for (auto thread: threadSet)
+        thread->getSocket()->close();
+    serverSocket.close();
+    delayActiveOperationFinish(par("stopOperationTimeout"));
 }
 
-void TcpServerHostApp::crash()
+void TcpServerHostApp::handleCrashOperation(LifecycleOperation *operation)
 {
     // remove and delete threads
-    while (!threadSet.empty())
-        removeThread(*threadSet.begin());
+    while (!threadSet.empty()) {
+        auto thread = *threadSet.begin();
+        // TODO: destroy!!!
+        thread->getSocket()->close();
+        removeThread(thread);
+    }
+    // TODO: always?
+    if (operation->getRootModule() != getContainingNode(this))
+        serverSocket.destroy();
 }
 
 void TcpServerHostApp::refreshDisplay() const
 {
+    ApplicationBase::refreshDisplay();
+
     char buf[32];
     sprintf(buf, "%d threads", socketMap.size());
     getDisplayString().setTagArg("t", 0, buf);
 }
 
-void TcpServerHostApp::handleMessage(cMessage *msg)
+void TcpServerHostApp::handleMessageWhenUp(cMessage *msg)
 {
-    if (!isNodeUp()) {
-        //TODO error?
-        EV_ERROR << "message " << msg->getFullName() << "(" << msg->getClassName() << ") arrived when module is down\n";
-        delete msg;
-    }
-    else if (msg->isSelfMessage()) {
+    if (msg->isSelfMessage()) {
         TcpServerThreadBase *thread = (TcpServerThreadBase *)msg->getContextPointer();
         if (threadSet.find(thread) == threadSet.end())
             throw cRuntimeError("Invalid thread pointer in the timer (msg->contextPointer is invalid)");
         thread->timerExpired(msg);
     }
     else {
-        TcpSocket *socket = socketMap.findSocketFor(msg);
-
-        if (!socket) {
-            // new connection -- create new socket object and server process
-            socket = new TcpSocket(msg);
-            socket->setOutputGate(gate("socketOut"));
-
-            const char *serverThreadModuleType = par("serverThreadModuleType");
-            cModuleType *moduleType = cModuleType::get(serverThreadModuleType);
-            char name[80];
-            sprintf(name, "thread_%i", socket->getConnectionId());
-            TcpServerThreadBase *proc = check_and_cast<TcpServerThreadBase *>(moduleType->create(name, this));
-            proc->finalizeParameters();
-
-            proc->callInitialize();
-
-            socket->setCallbackObject(proc);
-            proc->init(this, socket);
-
-            socketMap.addSocket(socket);
-            threadSet.insert(proc);
+        TcpSocket *socket = check_and_cast_nullable<TcpSocket*>(socketMap.findSocketFor(msg));
+        if (socket)
+            socket->processMessage(msg);
+        else if (serverSocket.belongsToSocket(msg))
+            serverSocket.processMessage(msg);
+        else {
+            // throw cRuntimeError("Unknown incoming message: '%s'", msg->getName());
+            EV_ERROR << "message " << msg->getFullName() << "(" << msg->getClassName() << ") arrived for unknown socket \n";
+            delete msg;
         }
-
-        socket->processMessage(msg);
     }
 }
 
 void TcpServerHostApp::finish()
 {
-    stop();
+    // remove and delete threads
+    while (!threadSet.empty())
+        removeThread(*threadSet.begin());
+}
+
+void TcpServerHostApp::socketAvailable(TcpSocket *socket, TcpAvailableInfo *availableInfo)
+{
+    // new TCP connection -- create new socket object and server process
+    TcpSocket *newSocket = new TcpSocket(availableInfo);
+    newSocket->setOutputGate(gate("socketOut"));
+
+    const char *serverThreadModuleType = par("serverThreadModuleType");
+    cModuleType *moduleType = cModuleType::get(serverThreadModuleType);
+    char name[80];
+    sprintf(name, "thread_%i", newSocket->getSocketId());
+    TcpServerThreadBase *proc = check_and_cast<TcpServerThreadBase *>(moduleType->create(name, this));
+    proc->finalizeParameters();
+    proc->callInitialize();
+
+    newSocket->setCallback(proc);
+    proc->init(this, newSocket);
+
+    socketMap.addSocket(newSocket);
+    threadSet.insert(proc);
+
+    socket->accept(availableInfo->getNewSocketId());
+}
+
+void TcpServerHostApp::socketClosed(TcpSocket *socket)
+{
+    if (operationalState == State::STOPPING_OPERATION && threadSet.empty() && !serverSocket.isOpen())
+        startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
 }
 
 void TcpServerHostApp::removeThread(TcpServerThreadBase *thread)
@@ -123,36 +137,25 @@ void TcpServerHostApp::removeThread(TcpServerThreadBase *thread)
     threadSet.erase(thread);
 
     // remove thread object
-    delete thread;
+    thread->deleteModule();
 }
 
-bool TcpServerHostApp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void TcpServerHostApp::threadClosed(TcpServerThreadBase *thread)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER) {
-            start();
-        }
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
-            stop();
-        }
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH)
-            crash();
-    }
-    else
-        throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
+    // remove socket
+    socketMap.removeSocket(thread->getSocket());
+    threadSet.erase(thread);
+
+    socketClosed(thread->getSocket());
+
+    // remove thread object
+    thread->deleteModule();
 }
 
 void TcpServerThreadBase::refreshDisplay() const
 {
     getDisplayString().setTagArg("t", 0, TcpSocket::stateName(sock->getState()));
 }
-
 
 } // namespace inet
 

@@ -16,6 +16,7 @@
 //
 
 #include <algorithm>
+
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/Simsignals.h"
 #ifdef WITH_IEEE80211
@@ -64,6 +65,7 @@ void LinkBreakVisualizerBase::initialize(int stage)
 
 void LinkBreakVisualizerBase::handleParameterChange(const char *name)
 {
+    if (!hasGUI()) return;
     if (name != nullptr) {
         if (!strcmp(name, "nodeFilter"))
             nodeFilter.setPattern(par("nodeFilter"));
@@ -103,16 +105,15 @@ void LinkBreakVisualizerBase::refreshDisplay() const
 
 void LinkBreakVisualizerBase::subscribe()
 {
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this);
-    subscriptionModule->subscribe(linkBrokenSignal, this);
+    visualizationSubjectModule->subscribe(linkBrokenSignal, this);
 }
 
 void LinkBreakVisualizerBase::unsubscribe()
 {
     // NOTE: lookup the module again because it may have been deleted first
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this, false);
-    if (subscriptionModule != nullptr)
-        subscriptionModule->unsubscribe(linkBrokenSignal, this);
+    auto visualizationSubjectModule = getModuleFromPar<cModule>(par("visualizationSubjectModule"), this, false);
+    if (visualizationSubjectModule != nullptr)
+        visualizationSubjectModule->unsubscribe(linkBrokenSignal, this);
 }
 
 void LinkBreakVisualizerBase::receiveSignal(cComponent *source, simsignal_t signal, cObject *object, cObject *details)
@@ -166,7 +167,7 @@ void LinkBreakVisualizerBase::removeLinkBreakVisualization(const LinkBreakVisual
 cModule *LinkBreakVisualizerBase::findNode(MacAddress address)
 {
     L3AddressResolver addressResolver;
-    for (cModule::SubmoduleIterator it(getSystemModule()); !it.end(); it++) {
+    for (cModule::SubmoduleIterator it(visualizationSubjectModule); !it.end(); it++) {
         auto networkNode = *it;
         if (isNetworkNode(networkNode)) {
             auto interfaceTable = addressResolver.findInterfaceTableOf(networkNode);

@@ -42,7 +42,7 @@ void EtherBus::initialize()
     numMessages = 0;
     WATCH(numMessages);
 
-    propagationSpeed = par("propagationSpeed");
+    propagationSpeed = par("propagationSpeed");  //TODO there is a hardcoded propagation speed in EtherMACBase.cc -- use that?
 
     // initialize the positions where the hosts connects to the bus
     numTaps = gateSize("ethg");
@@ -225,6 +225,7 @@ void EtherBus::handleMessage(cMessage *msg)
         int direction = msg->getKind();
         BusTap *thistap = (BusTap *)msg->getContextPointer();
         int tapPoint = thistap->id;
+        msg->setContextPointer(nullptr);
 
         EV << "Event " << msg << " on tap " << tapPoint << ", sending out frame\n";
 

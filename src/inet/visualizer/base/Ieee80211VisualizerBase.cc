@@ -66,6 +66,7 @@ void Ieee80211VisualizerBase::initialize(int stage)
 
 void Ieee80211VisualizerBase::handleParameterChange(const char *name)
 {
+    if (!hasGUI()) return;
     if (name != nullptr) {
         if (!strcmp(name, "nodeFilter"))
             nodeFilter.setPattern(par("nodeFilter"));
@@ -77,22 +78,21 @@ void Ieee80211VisualizerBase::handleParameterChange(const char *name)
 
 void Ieee80211VisualizerBase::subscribe()
 {
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this);
-    subscriptionModule->subscribe(l2AssociatedSignal, this);
-    subscriptionModule->subscribe(l2DisassociatedSignal, this);
-    subscriptionModule->subscribe(l2ApAssociatedSignal, this);
-    subscriptionModule->subscribe(l2ApDisassociatedSignal, this);
+    visualizationSubjectModule->subscribe(l2AssociatedSignal, this);
+    visualizationSubjectModule->subscribe(l2DisassociatedSignal, this);
+    visualizationSubjectModule->subscribe(l2ApAssociatedSignal, this);
+    visualizationSubjectModule->subscribe(l2ApDisassociatedSignal, this);
 }
 
 void Ieee80211VisualizerBase::unsubscribe()
 {
     // NOTE: lookup the module again because it may have been deleted first
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this, false);
-    if (subscriptionModule != nullptr) {
-        subscriptionModule->unsubscribe(l2AssociatedSignal, this);
-        subscriptionModule->unsubscribe(l2DisassociatedSignal, this);
-        subscriptionModule->unsubscribe(l2ApAssociatedSignal, this);
-        subscriptionModule->unsubscribe(l2ApDisassociatedSignal, this);
+    auto visualizationSubjectModule = getModuleFromPar<cModule>(par("visualizationSubjectModule"), this, false);
+    if (visualizationSubjectModule != nullptr) {
+        visualizationSubjectModule->unsubscribe(l2AssociatedSignal, this);
+        visualizationSubjectModule->unsubscribe(l2DisassociatedSignal, this);
+        visualizationSubjectModule->unsubscribe(l2ApAssociatedSignal, this);
+        visualizationSubjectModule->unsubscribe(l2ApDisassociatedSignal, this);
     }
 }
 
@@ -120,9 +120,9 @@ void Ieee80211VisualizerBase::removeAllIeee80211Visualizations()
     std::vector<const Ieee80211Visualization *> removedIeee80211Visualizations;
     for (auto it : ieee80211Visualizations)
         removedIeee80211Visualizations.push_back(it.second);
-    for (auto it : removedIeee80211Visualizations) {
-        removeIeee80211Visualization(it);
-        delete it;
+    for (auto visualization : removedIeee80211Visualizations) {
+        removeIeee80211Visualization(visualization);
+        delete visualization;
     }
 }
 
@@ -144,16 +144,18 @@ void Ieee80211VisualizerBase::receiveSignal(cComponent *source, simsignal_t sign
         if (nodeFilter.matches(networkNode)) {
             auto interfaceEntry = check_and_cast<InterfaceEntry *>(object);
             auto ieee80211Visualization = getIeee80211Visualization(networkNode, interfaceEntry);
-            removeIeee80211Visualization(ieee80211Visualization);
+            if (ieee80211Visualization != nullptr) {
+                removeIeee80211Visualization(ieee80211Visualization);
+                delete ieee80211Visualization;
+            }
         }
     }
     else if (signal == l2ApAssociatedSignal) {
         auto networkNode = getContainingNode(check_and_cast<cModule *>(source));
         if (nodeFilter.matches(networkNode)) {
             // TODO: KLUDGE: this is the wrong way to lookup the interface and the ssid
-            L3AddressResolver addressResolver;
             auto mgmt = check_and_cast<inet::ieee80211::Ieee80211MgmtAp *>(source);
-            auto interfaceEntry = addressResolver.findInterfaceTableOf(networkNode)->getInterfaceByInterfaceModule(mgmt->getParentModule());
+            auto interfaceEntry = getContainingNicModule(mgmt);
             auto ieee80211Visualization = getIeee80211Visualization(networkNode, interfaceEntry);
             if (ieee80211Visualization == nullptr) {
                 auto ieee80211Visualization = createIeee80211Visualization(networkNode, interfaceEntry, mgmt->par("ssid"), W(NaN));
@@ -165,11 +167,13 @@ void Ieee80211VisualizerBase::receiveSignal(cComponent *source, simsignal_t sign
         auto networkNode = getContainingNode(check_and_cast<cModule *>(source));
         if (nodeFilter.matches(networkNode)) {
             // TODO: KLUDGE: this is the wrong way to lookup the interface
-            L3AddressResolver addressResolver;
             auto mgmt = check_and_cast<inet::ieee80211::Ieee80211MgmtAp *>(source);
-            auto interfaceEntry = addressResolver.findInterfaceTableOf(networkNode)->getInterfaceByInterfaceModule(mgmt->getParentModule());
+            auto interfaceEntry = getContainingNicModule(mgmt);
             auto ieee80211Visualization = getIeee80211Visualization(networkNode, interfaceEntry);
-            removeIeee80211Visualization(ieee80211Visualization);
+            if (ieee80211Visualization != nullptr) {
+                removeIeee80211Visualization(ieee80211Visualization);
+                delete ieee80211Visualization;
+            }
         }
     }
     else
@@ -180,7 +184,7 @@ void Ieee80211VisualizerBase::receiveSignal(cComponent *source, simsignal_t sign
 std::string Ieee80211VisualizerBase::getIcon(W power) const
 {
     int index;
-    auto powerDbm = inet::math::mW2dBm(mW(power).get());
+    auto powerDbm = math::mW2dBmW(mW(power).get());
     if (std::isnan(powerDbm))
         index = icons.size() - 1;
     else if (powerDbm < minPowerDbm)

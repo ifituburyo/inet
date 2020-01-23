@@ -20,18 +20,17 @@
 
 #include <string.h>
 
-#include "inet/networklayer/ipv4/Icmp.h"
-
 #include "inet/common/IProtocolRegistrationListener.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolGroup.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/common/checksum/TcpIpChecksum.h"
 #include "inet/common/packet/dissector/ProtocolDissector.h"
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
-#include "inet/common/serializer/TcpIpChecksum.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/networklayer/ipv4/Icmp.h"
 #include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
 
@@ -44,12 +43,7 @@ void Icmp::initialize(int stage)
     cSimpleModule::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         const char *crcModeString = par("crcMode");
-        if (!strcmp(crcModeString, "declared"))
-            crcMode = CRC_DECLARED_CORRECT;
-        else if (!strcmp(crcModeString, "computed"))
-            crcMode = CRC_COMPUTED;
-        else
-            throw cRuntimeError("unknown CRC mode: '%s'", crcModeString);
+        crcMode = parseCrcMode(crcModeString, false);
     }
     else if (stage == INITSTAGE_NETWORK_LAYER) {
         registerService(Protocol::icmpv4, gate("transportIn"), gate("ipIn"));
@@ -129,17 +123,17 @@ void Icmp::sendErrorMessage(Packet *packet, int inputInterfaceId, IcmpType type,
     icmpHeader->setCode(code);
     // ICMP message length: the internet header plus the first 8 bytes of
     // the original datagram's data is returned to the sender.
-    errorPacket->insertAtBack(packet->peekDataAt(B(0), B(ipv4Header->getHeaderLength() + 8)));
-    insertCrc(icmpHeader,errorPacket);
+    errorPacket->insertAtBack(packet->peekDataAt(B(0), ipv4Header->getHeaderLength() + B(8)));
+    insertCrc(icmpHeader, errorPacket);
     errorPacket->insertAtFront(icmpHeader);
 
-    errorPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::icmpv4);
+    errorPacket->addTag<PacketProtocolTag>()->setProtocol(&Protocol::icmpv4);
 
     // if srcAddr is not filled in, we're still in the src node, so we just
     // process the ICMP message locally, right away
     if (origSrcAddr.isUnspecified()) {
         // pretend it came from the Ipv4 layer
-        errorPacket->addTagIfAbsent<L3AddressInd>()->setDestAddress(Ipv4Address::LOOPBACK_ADDRESS);    // FIXME maybe use configured loopback address
+        errorPacket->addTag<L3AddressInd>()->setDestAddress(Ipv4Address::LOOPBACK_ADDRESS);    // FIXME maybe use configured loopback address
 
         // then process it locally
         processICMPMessage(errorPacket);
@@ -163,15 +157,18 @@ bool Icmp::possiblyLocalBroadcast(const Ipv4Address& addr, int interfaceId)
     IInterfaceTable *ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
     if (interfaceId != -1) {
         InterfaceEntry *ie = ift->getInterfaceById(interfaceId);
-        bool interfaceUnconfigured = (ie->ipv4Data() == nullptr) || ie->ipv4Data()->getIPAddress().isUnspecified();
+        auto ipv4Data = ie->findProtocolData<Ipv4InterfaceData>();
+        bool interfaceUnconfigured = (ipv4Data == nullptr) || ipv4Data->getIPAddress().isUnspecified();
         return interfaceUnconfigured;
     }
     else {
         // if all interfaces are configured, we are OK
         bool allInterfacesConfigured = true;
-        for (int i = 0; i < ift->getNumInterfaces(); i++)
-            if ((ift->getInterface(i)->ipv4Data() == nullptr) || ift->getInterface(i)->ipv4Data()->getIPAddress().isUnspecified())
+        for (int i = 0; i < ift->getNumInterfaces(); i++) {
+            auto ipv4Data = ift->getInterface(i)->findProtocolData<Ipv4InterfaceData>();
+            if ((ipv4Data == nullptr) || ipv4Data->getIPAddress().isUnspecified())
                 allInterfacesConfigured = false;
+        }
 
         return !allInterfacesConfigured;
     }
@@ -182,6 +179,9 @@ void Icmp::processICMPMessage(Packet *packet)
     if (!verifyCrc(packet)) {
         EV_WARN << "incoming ICMP packet has wrong CRC, dropped\n";
         // drop packet
+        PacketDropDetails details;
+        details.setReason(INCORRECTLY_RECEIVED);
+        emit(packetDroppedSignal, packet, &details);
         delete packet;
         return;
     }
@@ -264,7 +264,7 @@ void Icmp::processEchoRequest(Packet *request)
     // swap src and dest
     // TBD check what to do if dest was multicast etc?
     // A. Ariza Modification 5/1/2011 clean the interface id, this forces the use of routing table in the Ipv4 layer
-    auto addressReq = reply->addTagIfAbsent<L3AddressReq>();
+    auto addressReq = reply->addTag<L3AddressReq>();
     addressReq->setSrcAddress(addressInd->getDestAddress().toIpv4());
     addressReq->setDestAddress(addressInd->getSrcAddress().toIpv4());
 
@@ -280,7 +280,6 @@ void Icmp::sendToIP(Packet *msg, const Ipv4Address& dest)
 
 void Icmp::sendToIP(Packet *msg)
 {
-    // assumes Ipv4ControlInfo is already attached
     EV_INFO << "Sending " << msg << " to lower layer.\n";
     msg->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::ipv4);
     msg->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::icmpv4);
@@ -319,8 +318,9 @@ void Icmp::insertCrc(CrcMode crcMode, const Ptr<IcmpHeader>& icmpHeader, Packet 
             icmpHeader->setChksum(0x0000); // make sure that the CRC is 0 in the header before computing the CRC
             MemoryOutputStream icmpStream;
             Chunk::serialize(icmpStream, icmpHeader);
-            Chunk::serialize(icmpStream, packet->peekDataAsBytes());
-            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(icmpStream.getData());
+            if (packet->getByteLength() > 0)
+                Chunk::serialize(icmpStream, packet->peekDataAsBytes());
+            uint16_t crc = TcpIpChecksum::checksum(icmpStream.getData());
             icmpHeader->setChksum(crc);
             break;
         }
@@ -342,7 +342,7 @@ bool Icmp::verifyCrc(const Packet *packet)
         case CRC_COMPUTED: {
             // otherwise compute the CRC, the check passes if the result is 0xFFFF (includes the received CRC)
             auto dataBytes = packet->peekDataAsBytes(Chunk::PF_ALLOW_INCORRECT);
-            uint16_t crc = inet::serializer::TcpIpChecksum::checksum(dataBytes->getBytes());
+            uint16_t crc = TcpIpChecksum::checksum(dataBytes->getBytes());
             // TODO: delete these isCorrect calls, rely on CRC only
             return crc == 0 && icmpHeader->isCorrect();
         }

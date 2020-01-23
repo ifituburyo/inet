@@ -15,8 +15,9 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "inet/common/IProtocolRegistrationListener.h"
 #include <string.h>
+
+#include "inet/common/IProtocolRegistrationListener.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/networklayer/common/EchoProtocol.h"
 #include "inet/networklayer/common/IpProtocolId_m.h"
@@ -75,12 +76,12 @@ void EchoProtocol::processEchoRequest(Packet *request)
 
     // swap src and dest
     // TBD check what to do if dest was multicast etc?
-    auto addressReq = reply->addTagIfAbsent<L3AddressReq>();
+    auto addressReq = reply->addTag<L3AddressReq>();
     addressReq->setSrcAddress(addressInd->getDestAddress());
     addressReq->setDestAddress(addressInd->getSrcAddress());
 
-    reply->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(request->getTag<NetworkProtocolInd>()->getProtocol());
-    reply->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::echo);
+    reply->addTag<DispatchProtocolReq>()->setProtocol(request->getTag<NetworkProtocolInd>()->getProtocol());
+    reply->addTag<PacketProtocolTag>()->setProtocol(&Protocol::echo);
     send(reply, "ipOut");
     delete request;
 }

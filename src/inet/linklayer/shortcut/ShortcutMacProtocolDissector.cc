@@ -16,14 +16,14 @@
 //
 
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
-#include "inet/linklayer/shortcut/ShortcutMacProtocolDissector.h"
 #include "inet/linklayer/shortcut/ShortcutMacHeader_m.h"
+#include "inet/linklayer/shortcut/ShortcutMacProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::shortcutMac, ShortcutMacProtocolDissector);
 
-void ShortcutMacProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void ShortcutMacProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     const auto& header = packet->popAtFront<ShortcutMacHeader>();
     callback.startProtocolDataUnit(&Protocol::shortcutMac);

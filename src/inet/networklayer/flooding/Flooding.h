@@ -24,6 +24,7 @@
 #define __INET_FLOODING_H
 
 #include <list>
+
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/base/NetworkProtocolBase.h"
 #include "inet/networklayer/common/L3Address.h"
@@ -145,6 +146,11 @@ class INET_API Flooding : public NetworkProtocolBase, public INetworkProtocol
      * @param pDestAddr The MAC address of the message receiver.
      */
     virtual void setDownControlInfo(Packet *const pMsg, const MacAddress& pDestAddr);
+
+    // OperationalBase:
+    virtual void handleStartOperation(LifecycleOperation *operation) override {}    //TODO implementation
+    virtual void handleStopOperation(LifecycleOperation *operation) override {}    //TODO implementation
+    virtual void handleCrashOperation(LifecycleOperation *operation) override {}    //TODO implementation
 };
 
 } // namespace inet

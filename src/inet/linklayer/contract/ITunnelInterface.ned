@@ -17,8 +17,12 @@
 
 package inet.linklayer.contract;
 
+//
+// Module interface for tunnel interfaces.
+//
 moduleinterface ITunnelInterface extends INetworkInterface
 {
     parameters:
         @display("i=block/ifcard");
 }
+

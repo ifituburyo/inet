@@ -98,6 +98,12 @@ class INET_API Ipv4NetworkConfigurator : public NetworkConfiguratorBase
       public:
         RouteInfo(int color, uint32 destination, uint32 netmask) { this->color = color; this->enabled = true; this->destination = destination; this->netmask = netmask; }
         ~RouteInfo() {} // don't delete originalRouteInfos elements, they are not exclusively owned
+
+        std::string str() const {
+            std::stringstream out;
+            out << "color = " << color << ", destination = " << Ipv4Address(destination) << ", netmask = " << Ipv4Address(netmask);
+            return out.str();
+        }
     };
 
     /**
@@ -106,28 +112,29 @@ class INET_API Ipv4NetworkConfigurator : public NetworkConfiguratorBase
     class RoutingTableInfo
     {
       public:
-        std::vector<RouteInfo *> originalRouteInfos;    // keep track of the original routes
         std::vector<RouteInfo *> routeInfos;    // list of routes in the routing table
 
       public:
         RoutingTableInfo() {}
-        ~RoutingTableInfo() { for (size_t i = 0; i < originalRouteInfos.size(); i++) delete originalRouteInfos[i]; }
+        ~RoutingTableInfo() {}
 
         int addRouteInfo(RouteInfo *routeInfo);
         void removeRouteInfo(const RouteInfo *routeInfo) { routeInfos.erase(std::find(routeInfos.begin(), routeInfos.end(), routeInfo)); }
-        RouteInfo *findBestMatchingRouteInfo(const uint32 destination) const { return findBestMatchingRouteInfo(destination, 0, routeInfos.size()); }
-        RouteInfo *findBestMatchingRouteInfo(const uint32 destination, int begin, int end) const;
+        RouteInfo *findBestMatchingRouteInfo(const uint32 destination, int begin = 0, int end = -1) const { return findBestMatchingRouteInfo(routeInfos, destination, 0, end == -1 ? routeInfos.size() : end); }
+        static RouteInfo *findBestMatchingRouteInfo(const std::vector<RouteInfo *>& routeInfos, const uint32 destination, int begin, int end);
         static bool routeInfoLessThan(const RouteInfo *a, const RouteInfo *b) { return a->netmask != b->netmask ? a->netmask > b->netmask : a->destination < b->destination; }
     };
 
   protected:
     // parameters
-    bool assignAddressesParameter;
-    bool assignDisjunctSubnetAddressesParameter;
-    bool addStaticRoutesParameter;
-    bool addSubnetRoutesParameter;
-    bool addDefaultRoutesParameter;
-    bool optimizeRoutesParameter;
+    bool assignAddressesParameter = false;
+    bool assignUniqueAddresses = false;
+    bool assignDisjunctSubnetAddressesParameter = false;
+    bool addStaticRoutesParameter = false;
+    bool addSubnetRoutesParameter = false;
+    bool addDefaultRoutesParameter = false;
+    bool addDirectRoutesParameter = false;
+    bool optimizeRoutesParameter = false;
 
     // internal state
     Topology topology;
@@ -158,6 +165,11 @@ class INET_API Ipv4NetworkConfigurator : public NetworkConfiguratorBase
      * Configures the provided routing table based on the current network configuration.
      */
     virtual void configureRoutingTable(IIpv4RoutingTable *routingTable);
+
+    /**
+     * Configures the provided routing table based on the current network configuration for specified interfaceEntry.
+     */
+    virtual void configureRoutingTable(IIpv4RoutingTable *routingTable, InterfaceEntry *interfaceEntry);
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -209,6 +221,7 @@ class INET_API Ipv4NetworkConfigurator : public NetworkConfiguratorBase
     void ensureConfigurationComputed(Topology& topology);
     void configureInterface(InterfaceInfo *interfaceInfo);
     void configureRoutingTable(Node *node);
+    void configureRoutingTable(Node *node, InterfaceEntry *interfaceEntry);
 
     /**
      * Prints the current network configuration to the module output.
@@ -223,12 +236,12 @@ class INET_API Ipv4NetworkConfigurator : public NetworkConfiguratorBase
     virtual InterfaceInfo *createInterfaceInfo(NetworkConfiguratorBase::Topology& topology, NetworkConfiguratorBase::Node *node, LinkInfo *linkInfo, InterfaceEntry *interfaceEntry) override;
     virtual void parseAddressAndSpecifiedBits(const char *addressAttr, uint32_t& outAddress, uint32_t& outAddressSpecifiedBits);
     virtual bool linkContainsMatchingHostExcept(LinkInfo *linkInfo, Matcher *hostMatcher, cModule *exceptModule);
-    virtual const char *getMandatoryAttribute(cXMLElement *element, const char *attr);
     virtual void resolveInterfaceAndGateway(Node *node, const char *interfaceAttr, const char *gatewayAttr, InterfaceEntry *& outIE, Ipv4Address& outGateway, Topology& topology);
     virtual InterfaceInfo *findInterfaceOnLinkByNode(LinkInfo *linkInfo, cModule *node);
     virtual InterfaceInfo *findInterfaceOnLinkByNodeAddress(LinkInfo *linkInfo, Ipv4Address address);
     virtual LinkInfo *findLinkOfInterface(Topology& topology, InterfaceEntry *interfaceEntry);
     virtual IRoutingTable *findRoutingTable(NetworkConfiguratorBase::Node *node) override;
+    virtual void assignAddresses(std::vector<LinkInfo *> links);
 
     // helpers for address assignment
     static bool compareInterfaceInfos(InterfaceInfo *i, InterfaceInfo *j);
@@ -246,7 +259,7 @@ class INET_API Ipv4NetworkConfigurator : public NetworkConfiguratorBase
     bool interruptsOriginalRoute(const RoutingTableInfo& routingTableInfo, int begin, int end, RouteInfo *originalRouteInfo);
     bool interruptsAnyOriginalRoute(const RoutingTableInfo& routingTableInfo, int begin, int end, const std::vector<RouteInfo *>& originalRouteInfos);
     bool interruptsSubsequentOriginalRoutes(const RoutingTableInfo& routingTableInfo, int index);
-    void checkOriginalRoutes(const RoutingTableInfo& routingTableInfo, const std::vector<RouteInfo *>& originalRouteInfos);
+    void checkOriginalRoutes(const RoutingTableInfo& routingTableInfo, const RoutingTableInfo& originalRoutingTableInfo);
     void findLongestCommonDestinationPrefix(uint32 destination1, uint32 netmask1, uint32 destination2, uint32 netmask2, uint32& destinationOut, uint32& netmaskOut);
     void addOriginalRouteInfos(RoutingTableInfo& routingTableInfo, int begin, int end, const std::vector<RouteInfo *>& originalRouteInfos);
     bool tryToMergeTwoRoutes(RoutingTableInfo& routingTableInfo, int i, int j, RouteInfo *routeInfoI, RouteInfo *routeInfoJ);

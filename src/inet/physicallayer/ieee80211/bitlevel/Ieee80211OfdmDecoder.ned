@@ -28,28 +28,25 @@ import inet.physicallayer.contract.bitlevel.IScrambler;
 // This module integrates the bit domain specific components
 // of the OFDM physical layer and has three main submodules:
 //
-//       - Convolutional decoder (18.3.5.6 Convolutional encoder) @see ~ConvolutionalCoder
-//       - Additive descrambler (18.3.5.5 PLCP DATA scrambler and descrambler) @see ~AdditiveScrambler
-//       - Block deinterleaver (18.3.5.7 Data interleaving) @see ~Ieee80211OfdmInterleaver
-//
+// - Convolutional decoder (18.3.5.6 Convolutional encoder) (see: ~ConvolutionalCoder)
+// - Additive descrambler (18.3.5.5 PLCP DATA scrambler and descrambler) (see: ~AdditiveScrambler)
+// - Block deinterleaver (18.3.5.7 Data interleaving) (see: ~Ieee80211OfdmInterleaver)
 //
 module Ieee80211OfdmDecoder like IDecoder
 {
     parameters:
-        string fecType = default("");
-        string deinterleaverType = default("");
-        string descramblerType = default("");
         @display("i=block/blackboard");
         @class(Ieee80211OfdmDecoderModule);
 
     submodules:
-        descrambler: <descramblerType> like IScrambler if descramblerType != "" {
-            @display("p=72,196");
+        descrambler: <default("")> like IScrambler if typename != "" {
+            @display("p=100,300");
         }
-        fecDecoder: <fecType> like IFecCoder if fecType != "" {
-            @display("p=72,106");
+        fecDecoder: <default("")> like IFecCoder if typename != "" {
+            @display("p=100,200");
         }
-        deinterleaver: <deinterleaverType> like IInterleaver if deinterleaverType != "" {
-            @display("p=72,29");
+        deinterleaver: <default("")> like IInterleaver if typename != "" {
+            @display("p=100,100");
         }
 }
+

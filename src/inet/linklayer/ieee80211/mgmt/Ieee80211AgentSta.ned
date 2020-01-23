@@ -15,7 +15,6 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-
 package inet.linklayer.ieee80211.mgmt;
 
 //
@@ -25,7 +24,7 @@ package inet.linklayer.ieee80211.mgmt;
 //
 // @author Andras Varga
 //
-simple Ieee80211AgentSta
+simple Ieee80211AgentSta like IIeee80211Agent
 {
     parameters:
         string interfaceTableModule;   // The path to the InterfaceTable module
@@ -38,7 +37,7 @@ simple Ieee80211AgentSta
         double authenticationTimeout @unit(s) = default(5s); // timeout for the authentication procedure
         double associationTimeout @unit(s) = default(5s); // timeout for the association procedure
         double startingTime @unit(s) = default(-1s); // agent starting time.
-        string default_ssid = default("SSID"); // default ssid
+        string defaultSsid = default("SSID"); // default ssid
         @display("i=block/control");
         @signal[sentRequest](type=long); // ENUM! ~Ieee80211PrimRequestCode
         @signal[acceptConfirm](type=long); // ENUM! ~Ieee80211PrimConfirmCode
@@ -53,3 +52,4 @@ simple Ieee80211AgentSta
         input mgmtIn;
         output mgmtOut;
 }
+

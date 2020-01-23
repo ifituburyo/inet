@@ -27,7 +27,7 @@
 #endif
 #include <assert.h>
 
-#include "PacketDrillUtils.h"
+#include "inet/applications/packetdrill/PacketDrillUtils.h"
 
 namespace inet {
 using namespace sctp;
@@ -282,12 +282,7 @@ PacketDrillScript::PacketDrillScript(const char *scriptFile)
 
 PacketDrillScript::~PacketDrillScript()
 {
-    //FIXME check memory leak
-    for (cQueue::Iterator iter(*eventList); !iter.end(); iter++)
-        eventList->remove(*iter);
     delete eventList;
-    for (cQueue::Iterator iter(*optionList); !iter.end(); iter++)
-        optionList->remove(*iter);
     delete optionList;
 }
 
@@ -414,18 +409,16 @@ PacketDrillBytes::PacketDrillBytes()
     listLength = 0;
 }
 
-PacketDrillBytes::PacketDrillBytes(uint8 byte)
+PacketDrillBytes::PacketDrillBytes(uint8_t byte)
 {
     listLength = 0;
-    byteList.setDataArraySize(listLength + 1);
-    byteList.setData(listLength, (0x00FF & byte));
-    listLength++;
+    appendByte(0x00FF & byte);
 }
 
-void PacketDrillBytes::appendByte(uint8 byte)
+void PacketDrillBytes::appendByte(uint8_t byte)
 {
-    byteList.setDataArraySize(listLength + 1);
-    byteList.setData(listLength, byte);
+    byteList.resize(listLength + 1);
+    byteList.at(listLength) = byte;
     listLength++;
 }
 

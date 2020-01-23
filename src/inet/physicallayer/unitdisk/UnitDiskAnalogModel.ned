@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2013 OpenSim Ltd
+// Copyright (C) 2013 OpenSim Ltd.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public License
@@ -25,7 +25,7 @@ import inet.physicallayer.contract.packetlevel.IAnalogModel;
 // based on the distance between the transmitter and the receiver. It doesn't
 // support noise and signal to noise ratio calculations.
 //
-// See also ~UnitDiskRadio, ~UnitDiskRadioMedium, ~UnitDiskTransmitter, and
+// @see ~UnitDiskRadio, ~UnitDiskRadioMedium, ~UnitDiskTransmitter,
 // ~UnitDiskReceiver.
 //
 module UnitDiskAnalogModel like IAnalogModel
@@ -34,3 +34,4 @@ module UnitDiskAnalogModel like IAnalogModel
         @class(UnitDiskAnalogModel);
         @display("i=block/tunnel");
 }
+

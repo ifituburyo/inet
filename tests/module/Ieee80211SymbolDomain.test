@@ -17,7 +17,7 @@ of SIGNAL field with pilots inserted.
 %#--------------------------------------------------------------------------------------------------------------
 %file: test.ned
 
-import ieee80211.Ieee80211SymbolDomainTest;
+import inet.test.moduletest.lib.ieee80211.Ieee80211SymbolDomainTest;
 import inet.physicallayer.ieee80211.bitlevel.Ieee80211OfdmDecoder;
 import inet.physicallayer.ieee80211.bitlevel.Ieee80211OfdmDemodulator;
 import inet.physicallayer.ieee80211.bitlevel.Ieee80211OfdmEncoder;
@@ -41,7 +41,6 @@ network SymbolDomainTest
 %inifile: omnetpp.ini
 
 [General]
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 cmdenv-express-mode = false
 
@@ -63,19 +62,19 @@ network = SymbolDomainTest
 **.ieee80211OFDMSignalDemodulatorModule = "^.ieee80211OFDMSignalDemodulator"
 **.ieee80211OFDMDataDemodulatorModule = "^.ieee80211OFDMDataDemodulator"
 
-**.ieee80211OFDMDataEncoder.fecType = "ConvolutionalCoder"
-**.ieee80211OFDMDataEncoder.scramblerType = "AdditiveScrambler"
-**.ieee80211OFDMDataEncoder.interleaverType = "Ieee80211OfdmInterleaver"
-**.ieee80211OFDMSignalEncoder.fecType = "ConvolutionalCoder"
-**.ieee80211OFDMSignalEncoder.scramblerType = ""
-**.ieee80211OFDMSignalEncoder.interleaverType = "Ieee80211OfdmInterleaver"
+**.ieee80211OFDMDataEncoder.fecEncoder.typename = "ConvolutionalCoder"
+**.ieee80211OFDMDataEncoder.scrambler.typename = "AdditiveScrambler"
+**.ieee80211OFDMDataEncoder.interleaver.typename = "Ieee80211OfdmInterleaver"
+**.ieee80211OFDMSignalEncoder.fecEncoder.typename = "ConvolutionalCoder"
+**.ieee80211OFDMSignalEncoder.scrambler.typename = ""
+**.ieee80211OFDMSignalEncoder.interleaver.typename = "Ieee80211OfdmInterleaver"
 
-**.ieee80211OFDMDataDecoder.fecType = "ConvolutionalCoder"
-**.ieee80211OFDMDataDecoder.descramblerType = "AdditiveScrambler"
-**.ieee80211OFDMDataDecoder.deinterleaverType = "Ieee80211OfdmInterleaver"
-**.ieee80211OFDMSignalDecoder.fecType = "ConvolutionalCoder"
-**.ieee80211OFDMSignalDecoder.descramblerType = ""
-**.ieee80211OFDMSignalDecoder.deinterleaverType = "Ieee80211OfdmInterleaver"
+**.ieee80211OFDMDataDecoder.fecDecoder.typename = "ConvolutionalCoder"
+**.ieee80211OFDMDataDecoder.descrambler.typename = "AdditiveScrambler"
+**.ieee80211OFDMDataDecoder.deinterleaver.typename = "Ieee80211OfdmInterleaver"
+**.ieee80211OFDMSignalDecoder.fecDecoder.typename = "ConvolutionalCoder"
+**.ieee80211OFDMSignalDecoder.descrambler.typename = ""
+**.ieee80211OFDMSignalDecoder.deinterleaver.typename = "Ieee80211OfdmInterleaver"
 
 # Data deinterleaver
 **.ieee80211OFDMDataDecoder.deinterleaver.numberOfCodedBitsPerSubcarrier = 4

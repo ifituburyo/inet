@@ -16,14 +16,10 @@
 // Author: Benjamin Martin Seregi
 
 #include "inet/common/IProtocolRegistrationListener.h"
-#include "inet/common/LayeredProtocolBase.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
-#include "inet/linklayer/configurator/Ieee8021dInterfaceData.h"
-#include "inet/linklayer/ethernet/EtherEncap.h"
-#include "inet/linklayer/ethernet/EtherPhyFrame_m.h"
 #include "inet/linklayer/ieee8021d/relay/Ieee8021dRelay.h"
 #include "inet/linklayer/ieee8022/Ieee8022LlcHeader_m.h"
 #include "inet/networklayer/common/InterfaceEntry.h"
@@ -38,33 +34,25 @@ Ieee8021dRelay::Ieee8021dRelay()
 
 void Ieee8021dRelay::initialize(int stage)
 {
+    LayeredProtocolBase::initialize(stage);
+
     if (stage == INITSTAGE_LOCAL) {
         // statistics
         numDispatchedBDPUFrames = numDispatchedNonBPDUFrames = numDeliveredBDPUsToSTP = 0;
         numReceivedBPDUsFromSTP = numReceivedNetworkFrames = numDroppedFrames = 0;
-        fcsMode = parseEthernetFcsMode(par("fcsMode"));
-    }
-    else if (stage == INITSTAGE_LINK_LAYER) {
-        registerService(Protocol::ethernetMac, gate("stpIn"), gate("ifIn"));
-        registerProtocol(Protocol::ethernetMac, gate("ifOut"), gate("stpOut"));
-    }
-    else if (stage == INITSTAGE_LINK_LAYER_2) {
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        isStpAware = par("hasStp");
 
         macTable = getModuleFromPar<IMacAddressTable>(par("macTableModule"), this);
         ifTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
+    }
+    else if (stage == INITSTAGE_LINK_LAYER) {
+        registerService(Protocol::ethernetMac, gate("upperLayerIn"), gate("ifIn"));
+        registerProtocol(Protocol::ethernetMac, gate("ifOut"), gate("upperLayerOut"));
 
-        if (isOperational) {
-            ie = chooseInterface();
-
-            if (ie)
-                bridgeAddress = ie->getMacAddress(); // get the bridge's MAC address
-            else
-                throw cRuntimeError("No non-loopback interface found!");
+        //TODO FIX Move it at least to STP module (like in ANSA's CDP/LLDP)
+        if(isStpAware) {
+            registerAddress(MacAddress::STP_MULTICAST_ADDRESS);
         }
-
-        isStpAware = gate("stpIn")->isConnected();    // if the stpIn is not connected then the switch is STP/RSTP unaware
 
         WATCH(bridgeAddress);
         WATCH(numReceivedNetworkFrames);
@@ -75,57 +63,80 @@ void Ieee8021dRelay::initialize(int stage)
     }
 }
 
-void Ieee8021dRelay::handleMessage(cMessage *msg)
+void Ieee8021dRelay::registerAddress(MacAddress mac)
 {
-    if (!isOperational) {
-        EV_ERROR << "Message '" << msg << "' arrived when module status is down, dropped it." << endl;
-        delete msg;
-        return;
-    }
+    registerAddresses(mac, mac);
+}
 
-    if (!msg->isSelfMessage()) {
-        // messages from STP process
-        Packet *frame = check_and_cast<Packet *>(msg);
-        if (msg->arrivedOn("stpIn")) {
-            numReceivedBPDUsFromSTP++;
-            EV_INFO << "Received " << msg << " from STP/RSTP module." << endl;
-            dispatchBPDU(frame);
-        }
-        // messages from network
-        else if (msg->arrivedOn("ifIn")) {
-            numReceivedNetworkFrames++;
-            EV_INFO << "Received " << msg << " from network." << endl;
-            delete frame->removeTagIfPresent<DispatchProtocolReq>();
-            emit(packetReceivedFromLowerSignal, frame);
-            handleAndDispatchFrame(frame);
+void Ieee8021dRelay::registerAddresses(MacAddress startMac, MacAddress endMac)
+{
+    registeredMacAddresses.insert(MacAddressPair(startMac, endMac));
+}
+
+void Ieee8021dRelay::handleLowerPacket(Packet *packet)
+{
+    // messages from network
+    numReceivedNetworkFrames++;
+    EV_INFO << "Received " << packet << " from network." << endl;
+    delete packet->removeTagIfPresent<DispatchProtocolReq>();
+    handleAndDispatchFrame(packet);
+}
+
+void Ieee8021dRelay::handleUpperPacket(Packet *packet)
+{
+    const auto& frame = packet->peekAtFront<EthernetMacHeader>();
+
+    InterfaceReq* interfaceReq = packet->findTag<InterfaceReq>();
+    int interfaceId =
+            interfaceReq == nullptr ? -1 : interfaceReq->getInterfaceId();
+
+    if (interfaceId != -1) {
+        InterfaceEntry *ie = ifTable->getInterfaceById(interfaceId);
+        dispatch(packet, ie);
+    } else if (frame->getDest().isBroadcast()) {    // broadcast address
+        broadcast(packet, -1);
+    } else {
+        int outInterfaceId = macTable->getInterfaceIdForAddress(frame->getDest());
+        // Not known -> broadcast
+        if (outInterfaceId == -1) {
+            EV_DETAIL << "Destination address = " << frame->getDest()
+                      << " unknown, broadcasting frame " << frame
+                      << endl;
+            broadcast(packet, -1);
+        } else {
+            InterfaceEntry *ie = ifTable->getInterfaceById(interfaceId);
+            dispatch(packet, ie);
         }
     }
-    else
-        throw cRuntimeError("This module doesn't handle self-messages!");
 }
 
 bool Ieee8021dRelay::isForwardingInterface(InterfaceEntry *ie)
 {
     if (isStpAware) {
-        if (!ie->ieee8021dData())
+        if (!ie->getProtocolData<Ieee8021dInterfaceData>())
             throw cRuntimeError("Ieee8021dInterfaceData not found for interface %s", ie->getFullName());
-        return ie->ieee8021dData()->isForwarding();
+        return ie->getProtocolData<Ieee8021dInterfaceData>()->isForwarding();
     }
     return true;
 }
 
-void Ieee8021dRelay::broadcast(Packet *packet)
+void Ieee8021dRelay::broadcast(Packet *packet, int arrivalInterfaceId)
 {
     EV_DETAIL << "Broadcast frame " << packet << endl;
 
-    int inputInterfacceId = packet->getTag<InterfaceInd>()->getInterfaceId();
+    auto oldPacketProtocolTag = packet->removeTag<PacketProtocolTag>();
+    packet->clearTags();
+    auto newPacketProtocolTag = packet->addTag<PacketProtocolTag>();
+    *newPacketProtocolTag = *oldPacketProtocolTag;
+    delete oldPacketProtocolTag;
+    packet->trim();
 
     int numPorts = ifTable->getNumInterfaces();
     for (int i = 0; i < numPorts; i++) {
         InterfaceEntry *ie = ifTable->getInterface(i);
         if (ie->isLoopback() || !ie->isBroadcast())
             continue;
-        if (ie->getInterfaceId() != inputInterfacceId && isForwardingInterface(ie)) {
+        if (ie->getInterfaceId() != arrivalInterfaceId && isForwardingInterface(ie)) {
             dispatch(packet->dup(), ie);
         }
     }
@@ -149,10 +160,13 @@ void Ieee8021dRelay::handleAndDispatchFrame(Packet *packet)
     const auto& frame = packet->peekAtFront<EthernetMacHeader>();
     int arrivalInterfaceId = packet->getTag<InterfaceInd>()->getInterfaceId();
     InterfaceEntry *arrivalInterface = ifTable->getInterfaceById(arrivalInterfaceId);
-    Ieee8021dInterfaceData *arrivalPortData = arrivalInterface->ieee8021dData();
+    Ieee8021dInterfaceData *arrivalPortData = arrivalInterface->findProtocolData<Ieee8021dInterfaceData>();
     if (isStpAware && arrivalPortData == nullptr)
         throw cRuntimeError("Ieee8021dInterfaceData not found for interface %s", arrivalInterface->getFullName());
     learn(frame->getSrc(), arrivalInterfaceId);
+
+    //TODO revise next "if"s: 2nd drops all packets for me if not forwarding port; 3rd sends up when dest==STP_MULTICAST_ADDRESS; etc.
+    // reordering, merge 1st and 3rd, ...
 
     // BPDU Handling
     if (isStpAware
@@ -160,22 +174,26 @@ void Ieee8021dRelay::handleAndDispatchFrame(Packet *packet)
             && arrivalPortData->getRole() != Ieee8021dInterfaceData::DISABLED
             && isBpdu(packet, frame)) {
         EV_DETAIL << "Deliver BPDU to the STP/RSTP module" << endl;
-        deliverBPDU(packet);    // deliver to the STP/RSTP module
+        sendUp(packet);    // deliver to the STP/RSTP module
     }
     else if (isStpAware && !arrivalPortData->isForwarding()) {
         EV_INFO << "The arrival port is not forwarding! Discarding it!" << endl;
         numDroppedFrames++;
         delete packet;
     }
+    else if (in_range(registeredMacAddresses, frame->getDest())) {
+        // destination MAC address is registered, send it up
+        sendUp(packet);
+    }
     else if (frame->getDest().isBroadcast()) {    // broadcast address
-        broadcast(packet);
+        broadcast(packet, arrivalInterfaceId);
     }
     else {
-        int outputInterfaceId = macTable->getPortForAddress(frame->getDest());
+        int outputInterfaceId = macTable->getInterfaceIdForAddress(frame->getDest());
         // Not known -> broadcast
         if (outputInterfaceId == -1) {
             EV_DETAIL << "Destination address = " << frame->getDest() << " unknown, broadcasting frame " << frame << endl;
-            broadcast(packet);
+            broadcast(packet, arrivalInterfaceId);
         }
         else {
             InterfaceEntry *outputInterface = ifTable->getInterfaceById(outputInterfaceId);
@@ -222,58 +240,17 @@ void Ieee8021dRelay::learn(MacAddress srcAddr, int arrivalInterfaceId)
         macTable->updateTableWithAddress(arrivalInterfaceId, srcAddr);
 }
 
-void Ieee8021dRelay::dispatchBPDU(Packet *packet)
+void Ieee8021dRelay::sendUp(Packet *packet)
 {
-    const auto& bpdu = packet->peekAtFront<Bpdu>();
-    (void)bpdu;       // unused variable
-    unsigned int portNum = packet->getTag<InterfaceReq>()->getInterfaceId();
-    MacAddress address = packet->getTag<MacAddressReq>()->getDestAddress();
-
-    if (ifTable->getInterfaceById(portNum) == nullptr)
-        throw cRuntimeError("Output port %d doesn't exist!", portNum);
-
-    // use LLCFrame
-    const auto& llcHeader = makeShared<Ieee8022LlcHeader>();
-    llcHeader->setSsap(0x42);
-    llcHeader->setDsap(0x42);
-    llcHeader->setControl(3);
-    packet->insertAtFront(llcHeader);
-    const auto& header = makeShared<EthernetMacHeader>();
-    packet->setKind(packet->getKind());
-    header->setSrc(bridgeAddress);
-    header->setDest(address);
-    header->setTypeOrLength(packet->getByteLength());
-    packet->insertAtFront(header);
-
-    EtherEncap::addPaddingAndFcs(packet, fcsMode);
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ethernetMac);
-
-    EV_INFO << "Sending BPDU frame " << packet << " with destination = " << header->getDest() << ", port = " << portNum << endl;
-    numDispatchedBDPUFrames++;
-    emit(packetSentToLowerSignal, packet);
-    send(packet, "ifOut");
-}
-
-void Ieee8021dRelay::deliverBPDU(Packet *packet)
-{
-    auto eth = EtherEncap::decapsulateMacHeader(packet);
-    ASSERT(isIeee8023Header(*eth));
-
-    const auto& llc = packet->popAtFront<Ieee8022LlcHeader>();
-    ASSERT(llc->getSsap() == 0x42 && llc->getDsap() == 0x42 && llc->getControl() == 3);
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::stp);
-    const auto& bpdu = packet->peekAtFront<Bpdu>();
-
-    EV_INFO << "Sending BPDU frame " << bpdu << " to the STP/RSTP module" << endl;
-    numDeliveredBDPUsToSTP++;
-    send(packet, "stpOut");
+    EV_INFO << "Sending frame " << packet << " to the upper layer" << endl;
+    send(packet, "upperLayerOut");
 }
 
 Ieee8021dInterfaceData *Ieee8021dRelay::getPortInterfaceData(unsigned int interfaceId)
 {
     if (isStpAware) {
         InterfaceEntry *gateIfEntry = ifTable->getInterfaceById(interfaceId);
-        Ieee8021dInterfaceData *portData = gateIfEntry ? gateIfEntry->ieee8021dData() : nullptr;
+        Ieee8021dInterfaceData *portData = gateIfEntry ? gateIfEntry->getProtocolData<Ieee8021dInterfaceData>() : nullptr;
 
         if (!portData)
             throw cRuntimeError("Ieee8021dInterfaceData not found for port = %d", interfaceId);
@@ -285,22 +262,17 @@ Ieee8021dInterfaceData *Ieee8021dRelay::getPortInterfaceData(unsigned int interf
 
 void Ieee8021dRelay::start()
 {
-    isOperational = true;
-
     ie = chooseInterface();
-    if (ie)
+    if (ie) {
         bridgeAddress = ie->getMacAddress(); // get the bridge's MAC address
+        registerAddress(bridgeAddress); // register bridge's MAC address
+    }
     else
         throw cRuntimeError("No non-loopback interface found!");
-
-    macTable->clearTable();
 }
 
 void Ieee8021dRelay::stop()
 {
-    isOperational = false;
-
-    macTable->clearTable();
     ie = nullptr;
 }
 
@@ -326,32 +298,6 @@ void Ieee8021dRelay::finish()
     recordScalar("number of delivered BPDUs to the STP module", numDeliveredBDPUsToSTP);
     recordScalar("number of dispatched BPDU frames to the network", numDispatchedBDPUFrames);
     recordScalar("number of dispatched non-BDPU frames to the network", numDispatchedNonBPDUFrames);
-}
-
-bool Ieee8021dRelay::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
-{
-    Enter_Method_Silent();
-
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_LINK_LAYER) {
-            start();
-        }
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_LINK_LAYER) {
-            stop();
-        }
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
-            stop();
-        }
-    }
-    else {
-        throw cRuntimeError("Unsupported operation '%s'", operation->getClassName());
-    }
-
-    return true;
 }
 
 } // namespace inet

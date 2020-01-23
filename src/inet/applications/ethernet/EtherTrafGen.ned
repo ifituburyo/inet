@@ -18,10 +18,9 @@
 package inet.applications.ethernet;
 
 //
-// A simple traffic generator for the Ethernet model and the 802.11 model,
-// and generally for any L2 model that accepts Ieee80211Ctrl control info
-// on the packets. It should be connected directly to ~EtherEncap or
-// an Ieee802NicXXX module.
+// A simple traffic generator for the Ethernet model and the 802.11 model, and
+// generally for any L2 model that accepts ~Ieee802SapReq tag on packets. It
+// should be connected directly to ~EtherEncap module.
 //
 simple EtherTrafGen
 {
@@ -34,9 +33,12 @@ simple EtherTrafGen
         volatile double sendInterval @unit(s);  // interval between sending bursts
         volatile int numPacketsPerBurst = default(1);  // number of packets to send per burst (packets within a burst are sent at the same simulation time)
         volatile int packetLength @unit(B);  // length of packets to send
+        @lifecycleSupport;
+        double stopOperationExtraTime @unit(s) = default(-1s);    // extra time after lifecycle stop operation finished
+        double stopOperationTimeout @unit(s) = default(2s);    // timeout value for lifecycle stop operation
         @display("i=block/app");
-        @signal[packetSent](type=Packet);
-        @signal[packetReceived](type=Packet);
+        @signal[packetSent](type=inet::Packet);
+        @signal[packetReceived](type=inet::Packet);
         @statistic[packetReceived](title="packets received"; source=packetReceived; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[packetSent](title="packets sent"; source=packetSent; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[endToEndDelay](title="end-to-end delay"; source="dataAge(packetReceived)"; unit=s; record=histogram,vector; interpolationmode=none);

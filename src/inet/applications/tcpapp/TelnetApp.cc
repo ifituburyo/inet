@@ -20,8 +20,9 @@
 #include "inet/applications/tcpapp/GenericAppMsg_m.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeStatus.h"
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/common/TimeTag_m.h"
 
 namespace inet {
 
@@ -51,54 +52,39 @@ void TelnetApp::initialize(int stage)
         numCharsToType = numLinesToType = 0;
         WATCH(numCharsToType);
         WATCH(numLinesToType);
-    }
-    else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
-        if (!isOperational)
-            throw cRuntimeError("This module doesn't support starting in node DOWN state");
-
         simtime_t startTime = par("startTime");
         stopTime = par("stopTime");
         if (stopTime >= SIMTIME_ZERO && stopTime < startTime)
             throw cRuntimeError("Invalid startTime/stopTime parameters");
-
         timeoutMsg = new cMessage("timer");
-        timeoutMsg->setKind(MSGKIND_CONNECT);
-        scheduleAt(startTime, timeoutMsg);
     }
 }
 
-bool TelnetApp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void TelnetApp::handleStartOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER) {
-            simtime_t now = simTime();
-            simtime_t startTime = par("startTime");
-            simtime_t start = std::max(startTime, now);
-            if (timeoutMsg && ((stopTime < SIMTIME_ZERO) || (start < stopTime) || (start == stopTime && startTime == stopTime))) {
-                timeoutMsg->setKind(MSGKIND_CONNECT);
-                scheduleAt(start, timeoutMsg);
-            }
-        }
+    simtime_t now = simTime();
+    simtime_t startTime = par("startTime");
+    simtime_t start = std::max(startTime, now);
+    if (timeoutMsg && ((stopTime < SIMTIME_ZERO) || (start < stopTime) || (start == stopTime && startTime == stopTime))) {
+        timeoutMsg->setKind(MSGKIND_CONNECT);
+        scheduleAt(start, timeoutMsg);
     }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
-            cancelEvent(timeoutMsg);
-            if (socket.getState() == TcpSocket::CONNECTED || socket.getState() == TcpSocket::CONNECTING || socket.getState() == TcpSocket::PEER_CLOSED)
-                close();
-            // TODO: wait until socket is closed
-        }
+}
+
+void TelnetApp::handleStopOperation(LifecycleOperation *operation)
+{
+    cancelEvent(timeoutMsg);
+    if (socket.isOpen()) {
+        close();
+        delayActiveOperationFinish(par("stopOperationTimeout"));
     }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH)
-            cancelEvent(timeoutMsg);
-    }
-    else
-        throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
+}
+
+void TelnetApp::handleCrashOperation(LifecycleOperation *operation)
+{
+    cancelEvent(timeoutMsg);
+    if (operation->getRootModule() != getContainingNode(this))
+        socket.destroy();
 }
 
 void TelnetApp::handleTimer(cMessage *msg)
@@ -143,16 +129,17 @@ void TelnetApp::sendGenericAppMsg(int numBytes, int expectedReplyBytes)
     const auto& payload = makeShared<GenericAppMsg>();
     Packet *packet = new Packet("data");
     payload->setChunkLength(B(numBytes));
-    payload->setExpectedReplyLength(expectedReplyBytes);
+    payload->setExpectedReplyLength(B(expectedReplyBytes));
     payload->setServerClose(false);
+    payload->addTag<CreationTimeTag>()->setCreationTime(simTime());
     packet->insertAtBack(payload);
 
     sendPacket(packet);
 }
 
-void TelnetApp::socketEstablished(int connId, void *ptr)
+void TelnetApp::socketEstablished(TcpSocket *socket)
 {
-    TcpAppBase::socketEstablished(connId, ptr);
+    TcpAppBase::socketEstablished(socket);
 
     // schedule first sending
     numLinesToType = par("numCommands");
@@ -161,10 +148,10 @@ void TelnetApp::socketEstablished(int connId, void *ptr)
     checkedScheduleAt(simTime() + par("thinkTime"), timeoutMsg);
 }
 
-void TelnetApp::socketDataArrived(int connId, void *ptr, Packet *msg, bool urgent)
+void TelnetApp::socketDataArrived(TcpSocket *socket, Packet *msg, bool urgent)
 {
     int len = msg->getByteLength();
-    TcpAppBase::socketDataArrived(connId, ptr, msg, urgent);
+    TcpAppBase::socketDataArrived(socket, msg, urgent);
 
     if (len == 1) {
         // this is an echo, ignore
@@ -195,19 +182,24 @@ void TelnetApp::socketDataArrived(int connId, void *ptr, Packet *msg, bool urgen
     }
 }
 
-void TelnetApp::socketClosed(int connId, void *ptr)
+void TelnetApp::socketClosed(TcpSocket *socket)
 {
-    TcpAppBase::socketClosed(connId, ptr);
-
-    // start another session after a delay
+    TcpAppBase::socketClosed(socket);
     cancelEvent(timeoutMsg);
-    timeoutMsg->setKind(MSGKIND_CONNECT);
-    checkedScheduleAt(simTime() + par("idleInterval"), timeoutMsg);
+    if (operationalState == State::OPERATING) {
+        // start another session after a delay
+        timeoutMsg->setKind(MSGKIND_CONNECT);
+        checkedScheduleAt(simTime() + par("idleInterval"), timeoutMsg);
+    }
+    else if (operationalState == State::STOPPING_OPERATION) {
+        if (!this->socket.isOpen())
+            startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
+    }
 }
 
-void TelnetApp::socketFailure(int connId, void *ptr, int code)
+void TelnetApp::socketFailure(TcpSocket *socket, int code)
 {
-    TcpAppBase::socketFailure(connId, ptr, code);
+    TcpAppBase::socketFailure(socket, code);
 
     // reconnect after a delay
     cancelEvent(timeoutMsg);

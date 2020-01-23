@@ -19,12 +19,10 @@
 #define __INET_SCTPALGORITHM_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/transportlayer/sctp/SctpAssociation.h"
 #include "inet/transportlayer/sctp/SctpQueue.h"
 
 namespace inet {
-
 namespace sctp {
 
 /**
@@ -51,7 +49,7 @@ class INET_API SctpAlgorithm : public cObject
      */
     virtual ~SctpAlgorithm() {}
 
-    inline void setAssociation(SctpAssociation *_assoc)
+    void setAssociation(SctpAssociation *_assoc)
     {
         assoc = _assoc;
         transmissionQ = assoc->getTransmissionQueue();
@@ -82,7 +80,6 @@ class INET_API SctpAlgorithm : public cObject
 };
 
 } // namespace sctp
-
 } // namespace inet
 
 #endif // ifndef __INET_SCTPALGORITHM_H

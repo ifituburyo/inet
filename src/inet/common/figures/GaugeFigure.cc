@@ -16,8 +16,8 @@
 //
 //
 
-#include "GaugeFigure.h"
 #include "inet/common/INETUtils.h"
+#include "inet/common/figures/GaugeFigure.h"
 
 namespace inet {
 
@@ -112,7 +112,7 @@ void GaugeFigure::setLabel(const char *text)
     labelFigure->setText(text);
 }
 
-const int GaugeFigure::getLabelOffset() const
+int GaugeFigure::getLabelOffset() const
 {
     return labelOffset;
 }
@@ -397,8 +397,8 @@ void GaugeFigure::redrawTicks()
     numTicks = std::max(0.0, std::abs(max - min - shifting) / tickSize + 1);
 
     // Allocate ticks and numbers if needed
-    if (numTicks > tickFigures.size())
-        while (numTicks > tickFigures.size()) {
+    if ((size_t)numTicks > tickFigures.size())
+        while ((size_t)numTicks > tickFigures.size()) {
             cLineFigure *tick = new cLineFigure();
             cTextFigure *number = new cTextFigure();
 
@@ -441,7 +441,7 @@ void GaugeFigure::redrawCurves()
     double lastStop = 0.0;
     double newStop = 0.0;
     Color color;
-    int index = 0;
+    size_t index = 0;
     const double deg270InRad = 6 * M_PI / 4;
     while (signalTokenizer.hasMoreTokens()) {
         const char *token = signalTokenizer.nextToken();

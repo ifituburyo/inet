@@ -17,24 +17,24 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/linklayer/xmac/XMacProtocolDissector.h"
-
 #include "inet/common/ProtocolGroup.h"
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/linklayer/xmac/XMacHeader_m.h"
+#include "inet/linklayer/xmac/XMacProtocolDissector.h"
 
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::xmac, XMacProtocolDissector);
 
-void XMacProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void XMacProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
-    auto header = packet->popAtFront<XMacHeader>();
+    auto header = packet->popAtFront<XMacHeaderBase>();
     callback.startProtocolDataUnit(&Protocol::xmac);
     callback.visitChunk(header, &Protocol::xmac);
     if (header->getType() == XMAC_DATA) {
-        auto payloadProtocol = ProtocolGroup::ethertype.getProtocol(header->getNetworkProtocol());
+        auto dataHeader = dynamicPtrCast<const XMacDataFrameHeader>(header);
+        auto payloadProtocol = ProtocolGroup::ethertype.findProtocol(dataHeader->getNetworkProtocol());
         callback.dissectPacket(packet, payloadProtocol);
     }
     ASSERT(packet->getDataLength() == B(0));

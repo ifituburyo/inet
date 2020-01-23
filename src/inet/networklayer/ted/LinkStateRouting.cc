@@ -14,16 +14,15 @@
 
 #include <algorithm>
 
-#include "inet/networklayer/ted/LinkStateRouting.h"
-
 #include "inet/common/IProtocolRegistrationListener.h"
 #include "inet/common/ModuleAccess.h"
-#include "inet/common/Simsignals.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Simsignals.h"
 #include "inet/networklayer/common/L3AddressTag_m.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
 #include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
+#include "inet/networklayer/ted/LinkStateRouting.h"
 #include "inet/networklayer/ted/Ted.h"
 
 namespace inet {
@@ -42,7 +41,7 @@ LinkStateRouting::~LinkStateRouting()
 void LinkStateRouting::initialize(int stage)
 {
     cSimpleModule::initialize(stage);
-
+    // TODO: INITSTAGE
     if (stage == INITSTAGE_ROUTING_PROTOCOLS) {
         tedmod = getModuleFromPar<Ted>(par("tedModule"), this);
 
@@ -59,8 +58,7 @@ void LinkStateRouting::initialize(int stage)
         IInterfaceTable *ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
         const char *token;
         while ((token = tokenizer.nextToken()) != nullptr) {
-            ASSERT(ift->getInterfaceByName(token));
-            peerIfAddrs.push_back(ift->getInterfaceByName(token)->ipv4Data()->getIPAddress());
+            peerIfAddrs.push_back(CHK(ift->findInterfaceByName(token))->getProtocolData<Ipv4InterfaceData>()->getIPAddress());
         }
 
         // schedule start of flooding link state info
@@ -90,7 +88,7 @@ void LinkStateRouting::handleMessage(cMessage *msg)
 void LinkStateRouting::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
 {
     Enter_Method_Silent();
-    printSignalBanner(signalID, obj);
+    printSignalBanner(signalID, obj, details);
 
     ASSERT(signalID == tedChangedSignal);
 
@@ -210,8 +208,8 @@ void LinkStateRouting::sendToPeer(Ipv4Address peer, const std::vector<TeLinkStat
         out->setLinkInfo(j, list[j]);
 
     out->setRequest(req);
-    int length = out->getLinkInfoArraySize() * 72;
-    out->setChunkLength(B(length));
+    B length = B(72) * out->getLinkInfoArraySize();
+    out->setChunkLength(length);
     pk->insertAtBack(out);
 
     sendToIP(pk, peer);

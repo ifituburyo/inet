@@ -19,16 +19,16 @@
 #define __INET_IEEE80211MAC_H
 
 #include "inet/linklayer/base/MacProtocolBase.h"
+#include "inet/linklayer/ieee80211/mac/contract/IDs.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
-#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
-#include "inet/linklayer/ieee80211/mac/contract/IDs.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Mcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Pcf.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/physicallayer/contract/packetlevel/IRadio.h"
 
 namespace inet {
@@ -36,6 +36,7 @@ namespace ieee80211 {
 
 class IContention;
 class IRx;
+class IIeee80211Llc;
 class Ieee80211MacHeader;
 
 /**
@@ -49,6 +50,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     FcsMode fcsMode;
 
     Ieee80211Mib *mib = nullptr;
+    IIeee80211Llc *llc = nullptr;
     IDs *ds = nullptr;
 
     IRx *rx = nullptr;
@@ -65,16 +67,15 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     // The last change channel message received and not yet sent to the physical layer, or NULL.
     cMessage *pendingRadioConfigMsg = nullptr;
 
-    static simsignal_t stateSignal;
-    static simsignal_t radioStateSignal;
-
   protected:
     virtual int numInitStages() const override {return NUM_INIT_STAGES;}
     virtual void initialize(int) override;
+    virtual void initializeRadioMode();
 
-    void receiveSignal(cComponent *source, simsignal_t signalID, long value, cObject *details) override;
-    void configureRadioMode(physicallayer::IRadio::RadioMode radioMode);
-    virtual InterfaceEntry *createInterfaceEntry() override;
+    virtual void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
+    using MacProtocolBase::receiveSignal;
+    virtual void configureRadioMode(physicallayer::IRadio::RadioMode radioMode);
+    virtual void configureInterfaceEntry() override;
     virtual const MacAddress& isInterfaceRegistered();
 
     virtual void handleMessageWhenUp(cMessage *message) override;
@@ -94,9 +95,9 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     /** @brief Handle messages from lower (physical) layer */
     virtual void handleLowerPacket(Packet *packet) override;
 
-    virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
-    virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
-    virtual void handleNodeCrash() override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
     virtual void encapsulate(Packet *packet);
     virtual void decapsulate(Packet *packet);
@@ -114,6 +115,10 @@ class INET_API Ieee80211Mac : public MacProtocolBase
 
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header);
     virtual void processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
+
+    void deleteCurrentTxFrame() override { throw cRuntimeError("model error"); }
+    void dropCurrentTxFrame(PacketDropDetails& details) override { throw cRuntimeError("model error"); }
+    void popTxQueue() override { throw cRuntimeError("model error"); }
 };
 
 } // namespace ieee80211

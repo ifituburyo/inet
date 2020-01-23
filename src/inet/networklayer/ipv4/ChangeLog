@@ -1,5 +1,255 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-12-16  Zoltan Bojthe
+
+	Fixed sending local broadcast packets only on designated interfaces.
+
+2019-12-05  Zoltan Bojthe
+
+	Added OMNeT++ 6.0 custom fields as comment.
+
+2019-11-28  Zoltan Bojthe
+
+	Routing table and configurator detects when an interface connecting/disconnecting.
+
+2019-11-18  Zoltan Bojthe
+
+	Renamed fields: diffServCodePoint to dscp, explicitCongestionNotification to ecn.
+	Redesigned how TOS is stored, DSCP and ECN calculated.
+	Added TOS (type of service) support (TosReq, TosInd tags).
+
+2019-11-13  Levente Mészáros
+
+	Added IIpv4NodeConfigurator module interface.
+
+2019-11-11  Zoltan Bojthe
+
+	Added  notifications about changing the InterfaceProtocolData set in InterfaceEntry.
+
+2019-11-11  Levente Mészáros
+
+	Added @packetData annotation to non-Chunk based packet parts.
+
+2019-11-08  Levente Mészáros
+
+	Fixed memory leaks detected by static analysis.
+
+2019-10-21  Zoltan Bojthe
+
+	Fixed types, reordered fields in IPv4 header, added missing reserved bit.
+
+2019-09-25  Zoltan Bojthe
+
+	Changed Ipv4RoutingTable to initialize routerId in INITSTAGE_ROUTER_ID_ASSIGNMENT.
+
+2019-09-17  Zoltan Bojthe
+
+	Simplified serializing empty data part.
+
+2019-09-02  Zoltan Bojthe
+
+	Optimized Tag usage.
+
+2019-08-26  Marcell Juhász
+
+	Added auxData[], removed additionalData[].
+
+2019-08-26  Zoltan Bojthe
+
+	Fixed CRC calculation for empty payload.
+
+2019-07-24  Zoltan Bojthe
+
+	igmp: crcMode, crc calculation, crc verification added
+
+2019-07-16  Zoltan Bojthe
+
+	Set Router Alert option and TOS value in Igmp.
+	Added option Ipv4OptionRouterAlert.
+	Allow Ipv4OptionsReq tag: transport layer can set Ipv4 header options on outgoing packets.
+	Emit PacketDroppedSignal when received packet has incorrect CRC.
+
+2019-07-15  Zoltan Bojthe
+
+	Replaced Igmpv3::AddressVector with inet::AddressVector.
+	Changed maxRespTime to be stored in RFC-specified format.
+	Use parseCrcMode().
+
+2019-07-01  Marcell Juhász
+
+	Allow nonlocal src address if enabled in L3AddressReq in Ipv4.
+
+2019-05-06  Zoltan Bojthe
+
+	Fixed length field check in Ipv4ProtocolDissector.
+
+2019-03-20  Zoltan Bojthe
+
+	Added insertCrc().
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2019-01-23  Levente Mészáros
+
+	Extracted a separate updateDisplayString() method.
+	Added display string text to Ipv4NatTable and Ipv4NetworkLayer.
+
+2019-01-07  Zoltan Bojthe
+
+	Added handling interface state changed signal to Ipv4RoutingTable.
+	Delete routing entries when an interface goes down.
+	Do not add netmask route entries for interfaces in down state.
+
+2019-01-05  Mani Amoozadeh
+
+	Removed useProxyARP parameter from ipv4 module.
+
+2018-12-19  Zoltan Bojthe
+
+	Moved omnetpp::cEventlogListener related code from RoutingTableRecorder to a separate branch.
+
+2018-12-10  Zoltan Bojthe
+
+	Added TCP support to Ipv4NatTable.
+	Marked feature dependent code fragments
+	Fixed CRC recalculation.
+
+2018-11-30  Levente Mészáros
+
+	Fixed wrong IP option codes for STREAM_ID and RECORD_ROUTE, see #376 reported by screw.
+	Renamed direct broadcast related parameters to better express the purpose.
+
+2018-11-29  Mani Amoozadeh
+
+	Selectively enable direct broadcast on each interface.
+
+2018-11-27  Mani Amoozadeh
+
+	Added several important variables to WATCHes.
+	Added hostData and routerData to WATCHes in Igmpv2 and Igmpv3.
+
+2018-11-26  Zoltan Bojthe
+
+	Removed QueueBase base class which was used to incorrectly simulate a processing delay.
+
+2018-11-14  Zoltan Bojthe
+
+	Send up socket closed indication, set kind when sent data to a network socket.
+
+2018-11-12  Zoltan Bojthe
+
+	Added lifecycle operation support.
+
+2018-11-09  Zoltan Bojthe
+
+	Added handlers for processing destroy command.
+
+2018-11-06  Zoltan Bojthe
+
+	Drop sockets when Ipv4 stops or crashes.
+
+2018-10-25  Zoltan Bojthe
+
+	Fixed Ipv4SocketCloseCommand bug, it used 0 instead of socketId in request.
+
+2018-10-22  Levente Mészáros
+
+	Changed ipv4 submodule to be repaceable with alternative implementations.
+
+2018-10-19  Levente Mészáros
+
+	Extracted typeColumn from infoColumn in IcmpProtocolPrinter.
+
+2018-09-27  Levente Mészáros
+
+	Merged INITSTAGE_NETWORK_LAYER and INITSTAGE_NETWORK_LAYER_3.
+
+2018-09-25  Zoltan Bojthe
+
+	Processing incoming request in Ipv4 moved to handleRequest, throw error when unknown request arrived.
+
+2018-09-19  Zoltan Bojthe
+
+	Adapted to the new protocol specific data storage API of InterfaceEntry.
+
+2018-08-28  Zoltan Bojthe
+
+	Remove IPv4RoutingTable localAddresses cache.
+
+2018-08-17  Zoltan Bojthe
+
+	Added namespace qualifier to @signal type parameters.
+
+2018-07-19  Mani Amoozadeh
+
+	Display administrative distance in the routing table if enabled.
+
+2018-07-11  Gyorgy Szaszko
+
+	Added missing handling of parameters: srcAddress, srcPort, destPort.
+
+2018-06-29  Levente Mészáros
+
+	Added UDP CRC handling and destPort.
+
+2018-06-28  Levente Mészáros
+
+	Added network address translation, added Ipv4NatTable submodule to Ipv4NetworkLayer.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-08  Levente Mészáros
+
+	Fixed Ipv4RoutingTable cache invalidation.
+
+2018-06-05  Levente Mészáros
+
+	Replaced fooType NED parameters with foo.typename parameters.
+
+2018-06-01  Zoltan Bojthe
+
+	Added B/b units to length constants and length fields of chunks.
+
+2018-05-22  Levente Mészáros
+
+	Removed obsolete references to IPv4ControlInfo from documentation and comments.
+
+2018-05-10  Zoltan Bojthe
+
+	Moved header serializers to the corresponding protocol folders.
+
+2018-05-09  Zoltan Bojthe
+
+	Implemented bind() and connect().
+
+2018-05-07  Levente Mészáros
+
+	Changed Ipv4 to use the socket specific BIND and CLOSE commands.
+
+2018-04-17  Andras Varga
+
+	Cleared fragbuf on shutdown and crash.
+
+2018-04-09  Zoltan Bojthe
+
+	Fixed RoutingTable printout format #299.
+
+2018-04-06  Levente Mészáros
+
+	Fixed bug #270 in RoutingTableRecorder.
+
+2018-03-21  Zoltan Bojthe
+
+	Added IgmpProtocolPrinter
+
+2018-03-09  Zoltan Bojthe
+
+	Optimized CRC calculation.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-09  Zoltan Bojthe
 
 	Fixed double free in Ipv4FragBuf destructor.
@@ -99,10 +349,12 @@
 	    ICMPDestinationUnreachableCodes -> IcmpDestinationUnreachableCodes
 	    ICMPEchoReply -> IcmpEchoReply
 	    ICMPEchoRequest -> IcmpEchoRequest
+	    ICMPHeaderSerializer -> IcmpHeaderSerializer
 	    ICMPParameterProblemSubcodes -> IcmpParameterProblemSubcodes
 	    ICMPRedirectSubcodes -> IcmpRedirectSubcodes
 	    ICMPTimeExceededSubcodes -> IcmpTimeExceededSubcodes
 	    ICMPType -> IcmpType
+	    IGMPHeaderSerializer -> IgmpHeaderSerializer
 	    IGMPHostTimerContext -> IgmpHostTimerContext
 	    IGMPMessage -> IgmpMessage
 	    IGMPQuery -> IgmpQuery
@@ -129,6 +381,7 @@
 	    IPv4AddressVector -> Ipv4AddressVector
 	    IPv4ControlInfo -> Ipv4ControlInfo
 	    IPv4FragBuf -> Ipv4FragBuf
+	    IPv4HeaderSerializer -> Ipv4HeaderSerializer
 	    IPv4InterfaceData -> Ipv4InterfaceData
 	    IPv4MulticastGroupInfo -> Ipv4MulticastGroupInfo
 	    IPv4MulticastGroupSourceInfo -> Ipv4MulticastGroupSourceInfo
@@ -153,6 +406,7 @@
 	    TCPSegment -> TcpHeader
 	    TLVOption -> TlvOptions
 	    TLVOptionBase -> TlvOptionBase
+	    TLVOptionRaw -> TlvOptionRaw
 	    TLVOptions -> TlvOptions
 
 2017-12-15  Andras Varga
@@ -169,6 +423,7 @@
 
 2017-12-14  Levente Mészáros
 
+	Fixed a few compiler warnings.
 	Removed unnecessary markImmutable() calls.
 
 2017-12-11  Zoltan Bojthe
@@ -216,7 +471,7 @@
 
 2017-09-27  Zoltan Bojthe
 
-	Added crc mode.
+	Added CRC mode handling.
 
 2017-09-20  Zoltan Bojthe
 
@@ -309,6 +564,10 @@
 	ICMP messages are only sent about errors in handling fragment zero of
 	fragmented datagrams.
 
+2017-04-12  Levente Mészáros
+
+	Removed discouraged setChunkLength calls from deserializers.
+
 2017-04-11  Levente Mészáros
 
 	Fixed chunkLength, it must be independent of the header field's value to
@@ -351,9 +610,22 @@
 
 	Removed declaredIncorrect from crcMode.
 
+2017-03-01  Levente Mészáros
+
+	Ported IGMPHeaderSerializer to new API.
+
+2017-02-22  Levente Mészáros
+
+	Extracted PingPayloadSerializer.
+	Ported serialization of IPv4 options.
+
 2017-02-22  Levente Mészáros
 
 	Added crcMode parameter.
+
+2017-02-21  Levente Mészáros
+
+	Ported IPv4HeaderSerializer and ICMPHeaderSerializer to new API.
 
 2017-02-21  Levente Mészáros
 

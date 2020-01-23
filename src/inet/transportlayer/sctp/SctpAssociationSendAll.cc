@@ -17,15 +17,14 @@
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 
-#include "inet/transportlayer/sctp/SctpAssociation.h"
-#include "inet/transportlayer/sctp/SctpAlgorithm.h"
-#include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
-
 #include <assert.h>
 #include <algorithm>
 
-namespace inet {
+#include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
+#include "inet/transportlayer/sctp/SctpAlgorithm.h"
+#include "inet/transportlayer/sctp/SctpAssociation.h"
 
+namespace inet {
 namespace sctp {
 
 void SctpAssociation::increaseOutstandingBytes(SctpDataVariables *chunk,
@@ -53,13 +52,12 @@ void SctpAssociation::increaseOutstandingBytes(SctpDataVariables *chunk,
 }
 
 void SctpAssociation::storePacket(SctpPathVariables *pathVar,
-        const Ptr<SctpHeader>& sctp,
+        const Ptr<SctpHeader>& sctpMsg,
         const uint16 chunksAdded,
         const uint16 dataChunksAdded,
         const bool authAdded)
 {
     uint32 packetBytes = 0;
-    const SctpHeader *sctpMsg = sctp.get();
     for (uint16 i = 0; i < sctpMsg->getSctpChunksArraySize(); i++) {
         const SctpChunk *chunkPtr = sctpMsg->getSctpChunks(i);
         if (chunkPtr->getSctpChunkType() == DATA) {
@@ -75,7 +73,7 @@ void SctpAssociation::storePacket(SctpPathVariables *pathVar,
             }
         }
     }
-    state->sctpMsg = sctpMsg->dup();
+    state->sctpMsg = dynamicPtrCast<SctpHeader>(sctpMsg->dupShared());
     state->chunksAdded = chunksAdded;
     state->dataChunksAdded = dataChunksAdded;
     state->packetBytes = packetBytes;
@@ -92,7 +90,7 @@ void SctpAssociation::storePacket(SctpPathVariables *pathVar,
 }
 
 void SctpAssociation::loadPacket(SctpPathVariables *pathVar,
-        SctpHeader **sctpMsg,
+        Ptr<SctpHeader> *sctpMsg,
         uint16 *chunksAdded,
         uint16 *dataChunksAdded,
         bool *authAdded)
@@ -675,7 +673,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
 {
     // ====== Variables ======================================================
     SctpPathVariables *path = nullptr;    // Path to send next message to
-    SctpHeader *sctpMsg = nullptr;
+    Ptr<SctpHeader> sctpMsg;
     SctpSackChunk *sackChunk = nullptr;
     SctpDataChunk *dataChunkPtr = nullptr;
     SctpForwardTsnChunk *forwardChunk = nullptr;
@@ -803,8 +801,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
             headerCreated = true;
         }
         else if (bytesToSend > 0 || bytes.chunk || bytes.packet || sackWithData || sackOnly || forwardPresent) {
-            sctpMsg = new SctpHeader();
-          //  sctpMsg = makeShared<SctpHeader>();
+            sctpMsg = makeShared<SctpHeader>();
             sctpMsg->setChunkLength(B(SCTP_COMMON_HEADER));
             headerCreated = true;
             chunksAdded = 0;
@@ -841,7 +838,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                 stopTimer(SackTimer);
                 sctpAlgorithm->sackSent();
                 state->sackAllowed = false;
-                sendSACKviaSelectedPath(Ptr<SctpHeader>(sctpMsg));
+                sendSACKviaSelectedPath(sctpMsg);
                 sctpMsg = nullptr;
                 return;
             }
@@ -854,8 +851,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                 totalChunksSent++;
                 state->ackPointAdvanced = false;
                 if (!headerCreated) {
-                    sctpMsg = new SctpHeader();
-                  //  sctpMsg = makeShared<SctpHeader>();
+                    sctpMsg = makeShared<SctpHeader>();
                     sctpMsg->setChunkLength(B(SCTP_COMMON_HEADER));
                     headerCreated = true;
                     chunksAdded = 0;
@@ -870,7 +866,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                 }
                 if (bytesToSend == 0) {
                     Packet *pkt = new Packet("DATA");
-                    sendToIP(pkt, Ptr<SctpHeader>(sctpMsg), path->remoteAddress);
+                    sendToIP(pkt, sctpMsg, path->remoteAddress);
                     sctpMsg = nullptr;
                     forwardPresent = false;
                     headerCreated = false;
@@ -978,7 +974,8 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                                         path->pmtu - B(sctpMsg->getChunkLength()).get() + sackChunk->getByteLength() - 20,
                                         (bytes.packet == true) ? path->pmtu : allowance);
                             if (!sackOnly) {
-                                sctpMsg->removeFirstChunk();
+                                auto x = sctpMsg->removeFirstChunk();
+                                ASSERT(x == sackChunk);
                                 EV_DETAIL << "RTX: Remove SACK chunk\n";
                                 delete sackChunk;
                                 chunksAdded--;
@@ -998,11 +995,11 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                                 sctpAlgorithm->sackSent();
                                 state->sackAllowed = false;
                                 EV_DETAIL << "RTX: send only SACK\n";
-                                sendSACKviaSelectedPath((const Ptr<SctpHeader>&)sctpMsg);
+                                sendSACKviaSelectedPath(sctpMsg);
                                 sctpMsg = nullptr;
 
                                 // TD 17.02.2015: There is data to send (on current path) -> create new message structure!
-                                sctpMsg = new SctpHeader();
+                                sctpMsg = makeShared<SctpHeader>();
                              //   sctpMsg = makeShared<SctpHeader>();
                                 sctpMsg->setChunkLength(B(SCTP_COMMON_HEADER));
                                 headerCreated = true;
@@ -1133,10 +1130,10 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                                     sctpAlgorithm->sackSent();
                                     state->sackAllowed = false;
                                     EV_DETAIL << assocId << ": send SACK and make new header for datMsg (" << &datMsg << "). scount=" << scount << "\n";
-                                    sendSACKviaSelectedPath((const Ptr<SctpHeader>&)sctpMsg);
+                                    sendSACKviaSelectedPath(sctpMsg);
                                     sctpMsg = nullptr;
                                     if (datMsg != nullptr) {
-                                        sctpMsg = new SctpHeader();
+                                        sctpMsg = makeShared<SctpHeader>();
                                       //  sctpMsg = makeShared<SctpHeader>();
                                         sctpMsg->setChunkLength(B(SCTP_COMMON_HEADER));
                                         headerCreated = true;
@@ -1195,7 +1192,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                                     (B(sctpMsg->getChunkLength()).get() < path->pmtu - 32 - 20) && (tcount == 0))
                                 {
                                     EV_DETAIL << "Nagle: Packet has to be stored\n";
-                                    storePacket(path, (const Ptr<SctpHeader>&)sctpMsg, chunksAdded, dataChunksAdded, authAdded);
+                                    storePacket(path, sctpMsg, chunksAdded, dataChunksAdded, authAdded);
                                     sctpMsg = nullptr;
                                     chunksAdded = 0;
                                 }
@@ -1205,7 +1202,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                         }
                     }
                     else if (chunksAdded == 1 && sackAdded && !sackOnly) {
-                        sctpMsg->removeChunk();
+                        sctpMsg->removeFirstChunk();
                         EV_DETAIL << "Nagle or no data: Remove SACK chunk, delete sctpmsg" << endl;
                         delete sackChunk;
                         packetFull = true;
@@ -1223,7 +1220,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                     }
                 }
                 else if (chunksAdded == 1 && sackAdded && !sackOnly) {
-                    sctpMsg->removeChunk();
+                    sctpMsg->removeFirstChunk();
                     EV_DETAIL << "Nagle or no data: Remove SACK chunk, delete sctpmsg\n";
                     delete sackChunk;
                     packetFull = true;
@@ -1354,7 +1351,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                                 nextChunkFitsIntoPacket(path, path->pmtu - B(sctpMsg->getChunkLength()).get() - 20) &&
                                 (B(sctpMsg->getChunkLength()).get() < path->pmtu - 32 - 20) && (tcount == 0))
                             {
-                                storePacket(path, (const Ptr<SctpHeader>&)sctpMsg, chunksAdded, dataChunksAdded, authAdded);
+                                storePacket(path, sctpMsg, chunksAdded, dataChunksAdded, authAdded);
                                 sctpMsg = nullptr;
                                 chunksAdded = 0;
                                 packetFull = true;    // chunksAdded==0, packetFull==true => leave inner while loop
@@ -1387,7 +1384,6 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                 // ====== Send packet ===========================================
                 if (packetFull) {
                     if (chunksAdded == 0) {    // Nothing to send
-                        delete sctpMsg;
                         sctpMsg = nullptr;
                         sendingAllowed = false;    // sendingAllowed==false => leave outer while loop
                     }
@@ -1422,15 +1418,14 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                             SctpDataChunk *pkt = check_and_cast<SctpDataChunk *>(chunk);
                           //  SctpDataChunk *pkt = check_and_cast<SctpDataChunk *>(sctpMsg->getSctpChunks(sctpMsg->getSctpChunksArraySize() - 1));
                             pkt->setIBit(sctpMain->sackNow);
-                            sctpMsg->insertSctpChunks(sctpMsg->getSctpChunksArraySize() - 1, pkt);
+                            sctpMsg->setSctpChunks(sctpMsg->getSctpChunksArraySize() - 1, pkt);
                         }
 
                         // Set I-bit when this is the final packet for this path!
                         const int32 a = (int32)path->cwnd - (int32)path->outstandingBytes;
                         if ((((a > 0) && (nextChunkFitsIntoPacket(path, a) == false)) || (!firstPass)) && !forwardPresent) {
-                            SctpDataChunk *pkt = (SctpDataChunk *)(sctpMsg->getSctpChunks(sctpMsg->getSctpChunksArraySize() - 1));
+                            SctpDataChunk *pkt = check_and_cast<SctpDataChunk *>(sctpMsg->peekLastChunk());
                             pkt->setIBit(sctpMain->sackNow);
-                            sctpMsg->insertSctpChunks(sctpMsg->getSctpChunksArraySize() - 1, pkt);
                         }
 
                         if (dataChunksAdded > 0) {
@@ -1438,7 +1433,7 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
                         }
                         EV_DETAIL << assocId << ":sendToIP: packet size=" << B(sctpMsg->getChunkLength()).get() << " numChunks=" << sctpMsg->getSctpChunksArraySize() << "\n";
                         Packet *pkt = new Packet("DATA");
-                        sendToIP(pkt, (const Ptr<SctpHeader>&)sctpMsg, path->remoteAddress);
+                        sendToIP(pkt, sctpMsg, path->remoteAddress);
                         sctpMsg = nullptr;
                         pmDataIsSentOn(path);
                         totalPacketsSent++;
@@ -1465,12 +1460,11 @@ void SctpAssociation::sendOnPath(SctpPathVariables *pathId, bool firstPass)
             }    // if (bytesToSend > 0 || bytes.chunk || bytes.packet)
             else if (headerCreated && state->bundleReset) {
                 Packet *pkt = new Packet("DATA");
-                sendToIP(pkt, (const Ptr<SctpHeader>&)sctpMsg, path->remoteAddress);
+                sendToIP(pkt, sctpMsg, path->remoteAddress);
                 sctpMsg = nullptr;
                 return;
             } else {
                 packetFull = true;    // Leave inner while loop
-                delete sctpMsg;    // T.D. 19.01.2010: Free unsent message
                 sctpMsg = nullptr;
             }
 
@@ -1501,6 +1495,5 @@ uint32 SctpAssociation::getAllTransQ()
 }
 
 } // namespace sctp
-
 } // namespace inet
 

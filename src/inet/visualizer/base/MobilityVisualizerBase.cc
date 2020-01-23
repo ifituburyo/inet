@@ -75,6 +75,7 @@ void MobilityVisualizerBase::initialize(int stage)
 
 void MobilityVisualizerBase::handleParameterChange(const char *name)
 {
+    if (!hasGUI()) return;
     if (name != nullptr) {
         if (!strcmp(name, "moduleFilter"))
             moduleFilter.setPattern(par("moduleFilter"));
@@ -84,16 +85,18 @@ void MobilityVisualizerBase::handleParameterChange(const char *name)
 
 void MobilityVisualizerBase::subscribe()
 {
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this);
-    subscriptionModule->subscribe(IMobility::mobilityStateChangedSignal, this);
+    visualizationSubjectModule->subscribe(IMobility::mobilityStateChangedSignal, this);
+    visualizationSubjectModule->subscribe(PRE_MODEL_CHANGE, this);
 }
 
 void MobilityVisualizerBase::unsubscribe()
 {
     // NOTE: lookup the module again because it may have been deleted first
-    auto subscriptionModule = getModuleFromPar<cModule>(par("subscriptionModule"), this, false);
-    if (subscriptionModule != nullptr)
-        subscriptionModule->unsubscribe(IMobility::mobilityStateChangedSignal, this);
+    auto visualizationSubjectModule = getModuleFromPar<cModule>(par("visualizationSubjectModule"), this, false);
+    if (visualizationSubjectModule != nullptr) {
+        visualizationSubjectModule->unsubscribe(IMobility::mobilityStateChangedSignal, this);
+        visualizationSubjectModule->unsubscribe(PRE_MODEL_CHANGE, this);
+    }
 }
 
 } // namespace visualizer

@@ -3,15 +3,15 @@
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU Lesser General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program.  If not, see http://www.gnu.org/licenses/.
-// 
+//
 
 package inet.linklayer.bmac;
 
@@ -32,16 +32,16 @@ package inet.linklayer.bmac;
 //*
 //**************************************************************************/
 
+import inet.queueing.contract.IPacketQueue;
 import inet.linklayer.base.MacProtocolBase;
 import inet.linklayer.contract.IMacProtocol;
 
-
 //
-// Implementation of B-MAC (called also Berkeley MAC, Low Power Listening or 
+// Implementation of B-MAC (called also Berkeley MAC, Low Power Listening or
 // LPL).
 // See C++ documentation for details.
 //
-simple BMac extends MacProtocolBase like IMacProtocol
+module BMac extends MacProtocolBase like IMacProtocol
 {
     parameters:
         string address = default("auto"); // MAC address as hex string (12 hex digits), or
@@ -52,13 +52,11 @@ simple BMac extends MacProtocolBase like IMacProtocol
         double slotDuration @unit(s) = default(0.1s);
 
         int headerLength @unit(b) = default(10b);
+        int ctrlFrameLength @unit(b) = default(headerLength);
         int mtu @unit(B) = default(0B);
 
         // how long is the check interval (CCA)?
         double checkInterval @unit(s) = default(0.01s);
-
-		// size of the MAC queue (maximum number of packets in Tx buffer)
-        int queueLength = default(20);
 
         // should we animate the nodes with colors depending on their state or 
         // not?
@@ -78,9 +76,18 @@ simple BMac extends MacProtocolBase like IMacProtocol
         int maxTxAttempts = default(2);     //  Maximum transmission attempts per data packet, when ACKs are used
 
         @class(BMac);
-        @signal[linkBroken](type=Packet);
+        @signal[linkBroken](type=inet::Packet);
         @statistic[linkBroken](title="link break"; source=linkBroken; record=count; interpolationmode=none);
         @statistic[packetDropIncorrectlyReceived](title="packet drop: incorrectly received"; source=packetDropReasonIsIncorrectlyReceived(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetDropNotAddressedToUs](title="packet drop: not addressed to us"; source=packetDropReasonIsNotAddressedToUs(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
-        @statistic[packetDropQueueOverlow](title="packet drop: queue overflow"; source=packetDropReasonIsQueueOverflow(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+        @statistic[packetDropQueueOverflow](title="packet drop: queue overflow"; source=packetDropReasonIsQueueOverflow(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+
+        @selfMessageKinds(inet::BMacType);
+    submodules:
+        queue: <default("DropTailQueue")> like IPacketQueue {
+            parameters:
+                packetCapacity = default(20);
+                @display("p=100,100;q=l2queue");
+        }
 }
+

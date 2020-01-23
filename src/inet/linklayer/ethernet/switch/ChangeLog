@@ -1,5 +1,55 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-09-02  Zoltan Bojthe
+
+	Optimized tag usage.
+
+2019-08-07  Zoltan Bojthe
+
+	Redesigned file format for 'addressTableFile' parameter
+
+2019-07-31  Zoltan Bojthe
+
+	Renamed port to interfaceId in MacAddressTable.
+
+2019-07-26  Zoltan Bojthe
+
+	Added support for lifecycle interface to MacAddressTable.
+
+2019-07-25  Rudolf Hornig
+
+	MacAddressTable now initializes correctly from a file.
+
+2019-01-23  Levente Mészáros
+
+	Extracted a separate updateDisplayString() method.
+	Added display string texts to MacAddressTable and MacRelayUnit.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-10-10  Zoltan Bojthe
+
+	Changed MacRelayUnit base class to LayeredProtocolBase.
+
+2018-09-28  Levente Mészáros
+
+	Extracted INITSTAGE_LINK_LAYER from INITSTAGE_NETWORK_INTERFACE_CONFIGURATION where applicable.
+
+2018-09-27  Levente Mészáros
+
+	Renamed INITSTAGE_LINK_LAYER to INITSTAGE_NETWORK_INTERFACE_CONFIGURATION.	Renamed INITSTAGE_LINK_LAYER_2 to INITSTAGE_LINK_LAYER.
+
+2018-09-04  Zoltan Bojthe
+
+	Removed multicast addresses from MacAddressTable, because more ports can use same multicast address.
+	Reduced differences between MacRelayUnit and Ieee8021dRelay relay units.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-02-21  Zoltan Bojthe
 
 	Changed clearing tags when sending a packet to leave the PacketProtocolTag intact.

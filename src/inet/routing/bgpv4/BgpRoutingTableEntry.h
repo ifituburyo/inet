@@ -25,36 +25,43 @@ namespace inet {
 
 namespace bgp {
 
-class INET_API RoutingTableEntry : public Ipv4Route
+class INET_API BgpRoutingTableEntry : public Ipv4Route
 {
-  public:
+private:
     typedef unsigned char RoutingPathType;
-
-    RoutingTableEntry(void);
-    RoutingTableEntry(const Ipv4Route *entry);
-    virtual ~RoutingTableEntry(void) {}
-
-    void setPathType(RoutingPathType type) { _pathType = type; }
-    RoutingPathType getPathType(void) const { return _pathType; }
-    void addAS(AsId newAS) { _ASList.push_back(newAS); }
-    unsigned int getASCount(void) const { return _ASList.size(); }
-    AsId getAS(unsigned int index) const { return _ASList[index]; }
-
-  private:
     // destinationID is RoutingEntry::host
     // addressMask is RoutingEntry::netmask
     RoutingPathType _pathType = INCOMPLETE;
     std::vector<AsId> _ASList;
+    int localPreference = 0;
+    bool IBGP_learned = false;
+
+  public:
+    BgpRoutingTableEntry(void);
+    BgpRoutingTableEntry(const Ipv4Route *entry);
+    virtual ~BgpRoutingTableEntry(void) {}
+
+    void setPathType(RoutingPathType type) { _pathType = type; }
+    RoutingPathType getPathType(void) const { return _pathType; }
+    static const std::string getPathTypeString(RoutingPathType type);
+    void addAS(AsId newAS) { _ASList.push_back(newAS); }
+    unsigned int getASCount(void) const { return _ASList.size(); }
+    AsId getAS(unsigned int index) const { return _ASList[index]; }
+    int getLocalPreference(void) const { return localPreference; }
+    void setLocalPreference(int l) { localPreference = l; }
+    bool isIBgpLearned(void) { return IBGP_learned; }
+    void setIBgpLearned(bool i) { IBGP_learned = i;}
+    virtual std::string str() const;
 };
 
-inline RoutingTableEntry::RoutingTableEntry(void)
+inline BgpRoutingTableEntry::BgpRoutingTableEntry(void)
 {
     setNetmask(Ipv4Address::ALLONES_ADDRESS);
     setMetric(DEFAULT_COST);
     setSourceType(IRoute::BGP);
 }
 
-inline RoutingTableEntry::RoutingTableEntry(const Ipv4Route *entry)
+inline BgpRoutingTableEntry::BgpRoutingTableEntry(const Ipv4Route *entry)
 {
     setDestination(entry->getDestination());
     setNetmask(entry->getNetmask());
@@ -62,42 +69,81 @@ inline RoutingTableEntry::RoutingTableEntry(const Ipv4Route *entry)
     setInterface(entry->getInterface());
     setMetric(DEFAULT_COST);
     setSourceType(IRoute::BGP);
+    setAdminDist(dBGPExternal);
 }
 
-inline std::ostream& operator<<(std::ostream& out, RoutingTableEntry& entry)
+inline const std::string BgpRoutingTableEntry::getPathTypeString(RoutingPathType type)
 {
-    out << "BGP - Destination: "
-        << entry.getDestination().str()
-        << '/'
-        << entry.getNetmask().str()
-        << " , PathType: ";
-    switch (entry.getPathType()) {
-        case EGP:
-            out << "EGP";
-            break;
+    if(type == IGP)
+        return "IGP";
+    else if(type == EGP)
+        return "EGP";
+    else if(type == INCOMPLETE)
+        return "INCOMPLETE";
 
-        case IGP:
-            out << "IGP";
-            break;
+    return "Unknown";
+}
 
-        case INCOMPLETE:
-            out << "Incomplete";
-            break;
+inline std::ostream& operator<<(std::ostream& out, BgpRoutingTableEntry& entry)
+{
+    if (entry.getDestination().isUnspecified())
+        out << "0.0.0.0";
+    else
+        out << entry.getDestination();
+    out << "/";
+    if (entry.getNetmask().isUnspecified())
+        out << "0";
+    else
+        out << entry.getNetmask().getNetmaskLength();
+    out << " nextHop: " << entry.getGateway().str(false)
+        << " cost: " << entry.getMetric()
+        << " if: " << entry.getInterfaceName()
+        << " origin: " << BgpRoutingTableEntry::getPathTypeString(entry.getPathType());
+    if(entry.isIBgpLearned())
+        out << " localPref: " << entry.getLocalPreference();
+    out << " ASlist: ";
+    for (uint32_t i = 0; i < entry.getASCount(); i++)
+        out << entry.getAS(i) << ' ';
 
-        default:
-            out << "Unknown";
-            break;
-    }
-
-    out << " , NextHops: "
-        << entry.getGateway()
-        << " , AS: ";
-    unsigned int ASCount = entry.getASCount();
-    for (unsigned int i = 0; i < ASCount; i++) {
-        out << entry.getAS(i)
-            << ' ';
-    }
     return out;
+}
+
+inline std::string BgpRoutingTableEntry::str() const
+{
+    std::stringstream out;
+    out << getSourceTypeAbbreviation();
+    out << " ";
+    if (getDestination().isUnspecified())
+        out << "0.0.0.0";
+    else
+        out << getDestination();
+    out << "/";
+    if (getNetmask().isUnspecified())
+        out << "0";
+    else
+        out << getNetmask().getNetmaskLength();
+    out << " gw:";
+    if (getGateway().isUnspecified())
+        out << "*  ";
+    else
+        out << getGateway() << "  ";
+    if(getRoutingTable() && getRoutingTable()->isAdminDistEnabled())
+        out << "AD:" << getAdminDist() << "  ";
+    out << "metric:" << getMetric() << "  ";
+    out << "if:";
+    if (!getInterface())
+        out << "*";
+    else
+        out << getInterfaceName();
+
+    out << " origin: " << BgpRoutingTableEntry::getPathTypeString(_pathType);
+    if(IBGP_learned)
+        out << " localPref: " << getLocalPreference();
+    out << " ASlist: ";
+    for (auto &element : _ASList)
+        out << element << ' ';
+
+    return out.str();
 }
 
 } // namespace bgp

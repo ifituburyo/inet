@@ -1,5 +1,67 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-11-12  Zoltan Bojthe
+
+	Fixed code for nullptr exception-safe.
+
+2019-11-07  Levente Mészáros
+
+	Added SSID to BssData in MiB.
+	Extended display string to display SSID too.
+
+2019-09-02  Zoltan Bojthe
+
+	Optimized tag usage.
+
+2019-02-15  Levente Mészáros
+
+	Ported to the new queueing API.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-12-17  Zoltan Bojthe
+
+	Fixed issue #371: Ieee80211MgmtStaSimplified.accessPointAddress parameter
+	only accepts hex string, but no symbolic name like module name
+
+2018-11-07  Zoltan Bojthe
+
+	Changed Ieee80211MgmtBase base class to OperationalBase.
+
+2018-10-25  Zoltan Bojthe
+
+	Fixed NodeStatus module detection.
+
+2018-11-14  Zoltan Bojthe
+
+	Renamed 'default_ssid' parameter to 'defaultSsid'.
+
+2018-09-28  Levente Mészáros
+
+	Extracted INITSTAGE_LINK_LAYER from INITSTAGE_NETWORK_INTERFACE_CONFIGURATION where applicable.
+
+2018-09-27  Levente Mészáros
+
+	Renamed INITSTAGE_LINK_LAYER to INITSTAGE_NETWORK_INTERFACE_CONFIGURATION.	Renamed INITSTAGE_LINK_LAYER_2 to INITSTAGE_LINK_LAYER.
+
+2018-08-17  Zoltan Bojthe
+
+	Added namespace qualifier to @signal type parameters.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-05-25  Levente Mészáros
+
+	Added IIeee80211Agent and replaced mgmtType with mgmt.typename parameter.
+
+2018-05-10  Zoltan Bojthe
+
+	Moved header serializers to the corresponding protocol folders.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-08  Zoltan Bojthe
 
 	Added Ieee80211MgmtProtocolPrinter.
@@ -109,6 +171,10 @@
 	Ieee80211ACKFrame -> Ieee80211AckFrame
 	Ieee80211RTSFrame -> Ieee80211RtsFrame
 	Ieee80211CTSFrame -> Ieee80211CtsFrame
+
+2017-05-09  Levente Mészáros
+
+	Extracted Ieee80211MgmtFrameSerializer from Ieee80211MacHeaderSerializer.
 
 2017-05-09  Levente Mészáros
 

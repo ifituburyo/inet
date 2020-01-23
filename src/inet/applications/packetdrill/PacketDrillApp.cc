@@ -15,24 +15,24 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "PacketDrillApp.h"
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "inet/applications/common/SocketTag_m.h"
+#include "inet/applications/packetdrill/PacketDrillApp.h"
+#include "inet/applications/packetdrill/PacketDrillInfo_m.h"
+#include "inet/applications/packetdrill/PacketDrillUtils.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/TimeTag_m.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
-#include "PacketDrillUtils.h"
-#include "PacketDrillInfo_m.h"
-#include "inet/transportlayer/udp/UdpHeader_m.h"
+#include "inet/networklayer/configurator/ipv4/Ipv4NodeConfigurator.h"
 #include "inet/networklayer/ipv4/Ipv4Header_m.h"
 #include "inet/transportlayer/contract/sctp/SctpCommand_m.h"
 #include "inet/transportlayer/sctp/SctpAssociation.h"
-#include "inet/common/TimeTag_m.h"
-#include "inet/networklayer/configurator/ipv4/Ipv4NodeConfigurator.h"
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/transportlayer/udp/UdpHeader_m.h"
 
 
 namespace inet {
@@ -47,52 +47,11 @@ using namespace tcp;
 
 PacketDrillApp::PacketDrillApp()
 {
-    script = nullptr;
-    config = nullptr;
-    localPort = 1000;
-    remotePort = 2000;
-    protocol = 0;
-    tcpConnId = -1;
-    sctpAssocId = -1;
-    pd = nullptr;
-    msgArrived = false;
-    recvFromSet = false;
-    listenSet = false;
-    acceptSet = false;
-    establishedPending = false;
-    abortSent = false;
-    socketOptionsArrived = false;
-    receivedPackets = nullptr;
-    outboundPackets = nullptr;
-    expectedMessageSize = 0;
-    relSequenceIn = 0;
-    relSequenceOut = 0;
-    peerTS = 0;
-    peerWindow = 0;
-    peerInStreams = 0;
-    peerOutStreams = 0;
-    peerCookie = nullptr;
-    peerCookieLength = 0;
-    initPeerTsn = 0;
-    initLocalTsn = 0;
-    localDiffTsn = 0;
-    peerCumTsn = 0;
-    localCumTsn = 0;
-    eventCounter = 0;
-    numEvents = 0;
-    idInbound = 0;
-    idOutbound = 0;
-    localVTag = 0;
-    peerVTag = 0;
-    eventTimer = nullptr;
-
-    localAddress = L3Address("127.0.0.1");
-    remoteAddress = L3Address("127.0.0.1");
 }
 
 void PacketDrillApp::initialize(int stage)
 {
-    cSimpleModule::initialize(stage);
+    ApplicationBase::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL) {
         // parameters
@@ -101,7 +60,7 @@ void PacketDrillApp::initialize(int stage)
         listenSet = false;
         acceptSet = false;
         establishedPending = false;
-        socketOptionsArrived = false;
+        socketOptionsArrived_ = false;
         abortSent = false;
         receivedPackets = new cPacketQueue("receiveQueue");
         outboundPackets = new cPacketQueue("outboundPackets");
@@ -109,15 +68,12 @@ void PacketDrillApp::initialize(int stage)
         eventCounter = 0;
         numEvents = 0;
         localVTag = 0;
-        eventTimer = new cMessage("event timer");
-        eventTimer->setKind(MSGKIND_EVENT);
+        eventTimer = new cMessage("event timer", MSGKIND_EVENT);
         simStartTime = simTime();
         simRelTime = simTime();
     } else if (stage == INITSTAGE_APPLICATION_LAYER) {
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
-        if (!isOperational)
-            throw cRuntimeError("This module doesn't support starting in node DOWN state");
+        if (operationalState != OPERATING)
+            throw cRuntimeError("This module doesn't support starting in NOT_OPERATING state");
         pd = new PacketDrill(this);
         config = new PacketDrillConfig();
         script = new PacketDrillScript(par("scriptFile").stringValue());
@@ -126,34 +82,247 @@ void PacketDrillApp::initialize(int stage)
         localPort = par("localPort");
         remotePort = par("remotePort");
         const char *crcModeString = par("crcMode");
-        if (!strcmp(crcModeString, "declared")) {
-            crcMode = CRC_DECLARED_CORRECT;
-        } else if (!strcmp(crcModeString, "computed")) {
-            crcMode = CRC_COMPUTED;
-        } else {
-            throw cRuntimeError("Unknown crc mode: '%s'", crcModeString);
-        }
+        crcMode = parseCrcMode(crcModeString, false);
         const char *interface = par("interface");
         //const char *interfaceTableModule = par("interfaceTableModule");
         IInterfaceTable *interfaceTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
-        InterfaceEntry *interfaceEntry = interfaceTable->getInterfaceByName(interface);
+        InterfaceEntry *interfaceEntry = interfaceTable->findInterfaceByName(interface);
         if (interfaceEntry == nullptr)
             throw cRuntimeError("TUN interface not found: %s", interface);
-        Ipv4InterfaceData *idat = interfaceEntry->ipv4Data();
+        auto *idat = interfaceEntry->getProtocolData<Ipv4InterfaceData>();
         idat->setIPAddress(localAddress.toIpv4());
         tunSocket.setOutputGate(gate("socketOut"));
         tunSocket.open(interfaceEntry->getInterfaceId());
         tunInterfaceId = interfaceEntry->getInterfaceId();
         tunSocketId = tunSocket.getSocketId();
 
-        cMessage* timeMsg = new cMessage("PacketDrillAppTimer");
-        timeMsg->setKind(MSGKIND_START);
+        cMessage* timeMsg = new cMessage("PacketDrillAppTimer", MSGKIND_START);
         scheduleAt(par("startTime"), timeMsg);
     }
 }
 
+void PacketDrillApp::socketDataArrived(UdpSocket *socket, Packet *packet)
+{
+    if (recvFromSet) {
+        recvFromSet = false;
+        msgArrived = false;
+        if (!(packet->getByteLength() == expectedMessageSize)) {
+            throw cTerminationException("Packetdrill error: Received data has unexpected size");
+        }
+        if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
+            eventCounter++;
+            scheduleEvent();
+        }
+        delete packet;
+    } else {
+        PacketDrillInfo* info = new PacketDrillInfo();
+        info->setLiveTime(getSimulation()->getSimTime());
+        packet->setContextPointer(info);
+        receivedPackets->insert(packet);
+        msgArrived = true;
+        if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
+            eventCounter++;
+            scheduleEvent();
+        }
+    }
+}
 
-void PacketDrillApp::handleMessage(cMessage *msg)
+// UdpSocket:
+
+void PacketDrillApp::socketErrorArrived(UdpSocket *socket, Indication *indication)
+{
+}
+
+void PacketDrillApp::socketClosed(UdpSocket *socket)
+{
+}
+
+// TcpSocket:
+
+void PacketDrillApp::socketDataArrived(TcpSocket *socket, Packet *msg, bool urgent)
+{
+    if (recvFromSet)
+    {
+        auto *msg = new Request("data request", TCP_C_READ);
+        TcpCommand *cmd = new TcpCommand();
+        msg->addTag<SocketReq>()->setSocketId(tcpConnId);
+        msg->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::tcp);
+        msg->setControlInfo(cmd);
+        send(msg, "socketOut");       //send to TCP
+        recvFromSet = false;
+        // send a receive request to TCP
+    }
+    msgArrived = true;
+    delete msg;
+}
+
+void PacketDrillApp::socketAvailable(TcpSocket *socket, TcpAvailableInfo *availableInfo)
+{
+    // new TCP connection -- create new socket object and server process
+    TcpSocket *newSocket = new TcpSocket(availableInfo);
+    newSocket->setOutputGate(gate("socketOut"));
+    newSocket->setCallback(this);
+    socketMap.addSocket(newSocket);
+    socket->accept(newSocket->getSocketId());
+}
+
+void PacketDrillApp::socketEstablished(TcpSocket *socket)
+{
+}
+
+void PacketDrillApp::socketPeerClosed(TcpSocket *socket)
+{
+}
+
+void PacketDrillApp::socketClosed(TcpSocket *socket)
+{
+    delete socketMap.removeSocket(socket);
+}
+
+void PacketDrillApp::socketFailure(TcpSocket *socket, int code)
+{
+    delete socketMap.removeSocket(socket);
+}
+
+// SctpSocket:
+
+void PacketDrillApp::socketDataArrived(SctpSocket *socket, Packet *packet, bool urgent)
+{
+    PacketDrillEvent *event = check_and_cast<PacketDrillEvent *>(script->getEventList()->get(eventCounter));
+    if (verifyTime(event->getTimeType(), event->getEventTime(), event->getEventTimeEnd(),
+            event->getEventOffset(), getSimulation()->getSimTime(), "inbound packet") == STATUS_ERR)
+    {
+        delete packet;
+        throw cTerminationException("Packetdrill error: Packet arrived at the wrong time");
+    }
+    if (!(packet->getByteLength() == expectedMessageSize)) {
+        throw cTerminationException("Packetdrill error: Delivered message has wrong size");
+    }
+    msgArrived = false;
+    recvFromSet = false;
+    if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
+        eventCounter++;
+        scheduleEvent();
+    }
+}
+
+void PacketDrillApp::socketDataNotificationArrived(SctpSocket *socket, Message *msg)
+{
+    if (recvFromSet) {
+        Packet* cmsg = new Packet("ReceiveRequest", SCTP_C_RECEIVE);
+        SctpSendReq *cmd = cmsg->addTag<SctpSendReq>();
+        cmd->setSocketId(sctpAssocId);
+        cmsg->addTag<SocketReq>()->setSocketId(sctpAssocId);
+        cmsg->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::sctp);
+        cmd->setSid(0);
+        send(cmsg, "socketOut");       //send to SCTP
+        recvFromSet = false;
+    }
+    if (sctpSocket.getState() == SctpSocket::CLOSED) {
+        sctpSocket.abort();
+        abortSent = true;
+    }
+    if (!abortSent)
+        msgArrived = true;
+}
+
+void PacketDrillApp::socketAvailable(SctpSocket *socket, Indication *indication)
+{
+    SctpSocket *newSocket = new SctpSocket(indication);
+    newSocket->setOutputGate(gate("socketOut"));
+    newSocket->setCallback(this);
+    socketMap.addSocket(newSocket);
+    int newSocketId = newSocket->getSocketId();
+    sctpAssocId = newSocketId;
+    EV_INFO << "Sending accept socket id request ..." << endl;
+    socket->acceptSocket(newSocketId);
+    delete indication;
+}
+
+void PacketDrillApp::socketEstablished(SctpSocket *socket, unsigned long int buffer)
+{
+    EV_INFO << "SCTP_I_ESTABLISHED" << endl;
+}
+
+void PacketDrillApp::socketOptionsArrived(SctpSocket *socket, Indication *indication)
+{
+    sctpSocket.setUserOptions((SocketOptions*)(indication->getContextPointer()));
+    socketOptionsArrived_ = true;
+    if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
+        eventCounter++;
+        scheduleEvent();
+    }
+    delete indication;
+}
+
+void PacketDrillApp::socketPeerClosed(SctpSocket *socket) {}
+
+void PacketDrillApp::socketClosed(SctpSocket *socket)
+{
+    delete socketMap.removeSocket(socket);
+}
+
+void PacketDrillApp::socketFailure(SctpSocket *socket, int code)
+{
+    delete socketMap.removeSocket(socket);
+}
+
+void PacketDrillApp::socketStatusArrived(SctpSocket *socket, SctpStatusReq *status) { }
+void PacketDrillApp::socketDeleted(SctpSocket *socket) {}
+void PacketDrillApp::sendRequestArrived(SctpSocket *socket) {}
+void PacketDrillApp::msgAbandonedArrived(SctpSocket *socket) {}
+void PacketDrillApp::shutdownReceivedArrived(SctpSocket *socket) {}
+void PacketDrillApp::sendqueueFullArrived(SctpSocket *socket) {}
+void PacketDrillApp::sendqueueAbatedArrived(SctpSocket *socket, unsigned long int buffer) {}
+void PacketDrillApp::addressAddedArrived(SctpSocket *socket, L3Address localAddr, L3Address remoteAddr) {}
+
+void PacketDrillApp::socketDataArrived(TunSocket *socket, Packet *packet)
+{
+    // received from tunnel interface
+    if (outboundPackets->getLength() == 0) {
+        cEvent *nextMsg = getSimulation()->getScheduler()->guessNextEvent();
+        if (nextMsg) {
+            if ((simTime() + par("latency")) < nextMsg->getArrivalTime()) {
+                delete (PacketDrillInfo *)packet->getContextPointer();
+                delete packet;
+                throw cTerminationException("Packetdrill error: Packet arrived at the wrong time");
+            } else {
+                PacketDrillInfo *info = new PacketDrillInfo();
+                info->setLiveTime(getSimulation()->getSimTime());
+                packet->setContextPointer(info);
+                receivedPackets->insert(packet);
+            }
+        }
+    } else {
+        Packet *ipv4Packet = check_and_cast<Packet *>(outboundPackets->pop());
+       // const auto& ipv4Header = ipv4Packet->peekAtFront<Ipv4Header>();
+        Packet *liveIpv4Packet = packet;
+       // const auto& liveIpv4Header = liveIpv4Packet->peekAtFront<Ipv4Header>();
+        PacketDrillInfo *info = (PacketDrillInfo *)ipv4Packet->getContextPointer();
+        if (verifyTime(static_cast<eventTime_t>(info->getTimeType()), info->getScriptTime(),
+                info->getScriptTimeEnd(), info->getOffset(), getSimulation()->getSimTime(), "outbound packet")
+                == STATUS_ERR) {
+            throw cTerminationException("Packetdrill error: Packet arrived at the wrong time");
+        }
+        if (!compareDatagram(ipv4Packet, liveIpv4Packet)) {
+            throw cTerminationException("Packetdrill error: Datagrams are not the same");
+        }
+        delete info;
+        if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
+            eventCounter++;
+            scheduleEvent();
+        }
+        delete (PacketDrillInfo *)packet->getContextPointer();
+        delete packet;
+    }
+}
+
+void PacketDrillApp::socketClosed(TunSocket *socket)
+{
+    delete socketMap.removeSocket(socket);
+}
+
+void PacketDrillApp::handleMessageWhenUp(cMessage *msg)
 {
     if (msg->isSelfMessage()) {
         handleTimer(msg);
@@ -161,54 +330,12 @@ void PacketDrillApp::handleMessage(cMessage *msg)
     else {
         if (! msg->arrivedOn("socketIn"))
             throw cRuntimeError("Message arrived on unknown gate %s", msg->getArrivalGate()->getFullName());
-        int socketId = -1;
-        if (msg->isPacket()) {
-            auto packet = check_and_cast<Packet *>(msg);
-            socketId = packet->getTag<SocketInd>()->getSocketId();
-        } else {
-            auto indication = check_and_cast<Indication *>(msg);
-            socketId = indication->getTag<SocketInd>()->getSocketId();
+
+        ISocket *socket = socketMap.findSocketFor(msg);
+        if (socket) {
+            socket->processMessage(msg);
         }
-        if (socketId == tunSocketId) {
-        std::cout << __func__ << ":" << __LINE__ << endl;
-            // received from tunnel interface
-            if (outboundPackets->getLength() == 0) {
-                cEvent *nextMsg = getSimulation()->getScheduler()->guessNextEvent();
-                if (nextMsg) {
-                    if ((simTime() + par("latency")) < nextMsg->getArrivalTime()) {
-                        delete (PacketDrillInfo *)msg->getContextPointer();
-                        delete msg;
-                        throw cTerminationException("Packetdrill error: Packet arrived at the wrong time");
-                    } else {
-                        PacketDrillInfo *info = new PacketDrillInfo();
-                        info->setLiveTime(getSimulation()->getSimTime());
-                        msg->setContextPointer(info);
-                        receivedPackets->insert(PK(msg));
-                    }
-                }
-            } else {
-                Packet *ipv4Packet = check_and_cast<Packet *>(outboundPackets->pop());
-               // const auto& ipv4Header = ipv4Packet->peekAtFront<Ipv4Header>();
-                Packet *liveIpv4Packet = check_and_cast<Packet*>(msg);
-               // const auto& liveIpv4Header = liveIpv4Packet->peekAtFront<Ipv4Header>();
-                PacketDrillInfo *info = (PacketDrillInfo *)ipv4Packet->getContextPointer();
-                if (verifyTime(static_cast<eventTime_t>(info->getTimeType()), info->getScriptTime(),
-                        info->getScriptTimeEnd(), info->getOffset(), getSimulation()->getSimTime(), "outbound packet")
-                        == STATUS_ERR) {
-                    throw cTerminationException("Packetdrill error: Packet arrived at the wrong time");
-                }
-                if (!compareDatagram(ipv4Packet, liveIpv4Packet)) {
-                    throw cTerminationException("Packetdrill error: Datagrams are not the same");
-                }
-                delete info;
-                if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
-                    eventCounter++;
-                    scheduleEvent();
-                }
-                delete (PacketDrillInfo *)msg->getContextPointer();
-                delete msg;
-            }
-        } else if (socketId == udpSocketId) {
+        else if (udpSocket.belongsToSocket(msg)) {
             // received from UDP
             PacketDrillEvent *event = check_and_cast<PacketDrillEvent *>(script->getEventList()->get(eventCounter));
             if (verifyTime(event->getTimeType(), event->getEventTime(), event->getEventTimeEnd(),
@@ -216,178 +343,17 @@ void PacketDrillApp::handleMessage(cMessage *msg)
                 delete msg;
                 throw cTerminationException("Packetdrill error: Packet arrived at the wrong time");
             }
-            if (recvFromSet) {
-                recvFromSet = false;
-                msgArrived = false;
-                if (!(PK(msg)->getByteLength() == expectedMessageSize)) {
-                    throw cTerminationException("Packetdrill error: Received data has unexpected size");
-                }
-                if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
-                    eventCounter++;
-                    scheduleEvent();
-                }
-                delete msg;
-            } else {
-                PacketDrillInfo* info = new PacketDrillInfo();
-                info->setLiveTime(getSimulation()->getSimTime());
-                msg->setContextPointer(info);
-                receivedPackets->insert(PK(msg));
-                msgArrived = true;
-                if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
-                    eventCounter++;
-                    scheduleEvent();
-                }
-            }
-        } else if (socketId == tcpConnId) {
-            // received from TCP
-            switch (msg->getKind()) {
-                case TCP_I_ESTABLISHED:
-                    tcpConnId = check_and_cast<Indication *>(msg)->getTag<SocketInd>()->getSocketId();
-                    if (listenSet) {
-                        if (acceptSet) {
-                            tcpSocket.setState(TcpSocket::CONNECTED);
-                            listenSet = false;
-                            acceptSet = false;
-                        } else {
-                            establishedPending = true;
-                        }
-                    } else {
-                        tcpSocket.setState(TcpSocket::CONNECTED);
-                    }
-                    delete msg;
-                    break;
-                case TCP_I_CLOSED:
-                    delete msg;
-                    break;
-                case TCP_I_DATA_NOTIFICATION:
-                    if (recvFromSet)
-                    {
-                        auto *msg = new Request("data request", TCP_C_READ);
-                        TcpCommand *cmd = new TcpCommand();
-                        msg->addTagIfAbsent<SocketReq>()->setSocketId(tcpConnId);
-                        msg->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::tcp);
-                        msg->setControlInfo(cmd);
-                        send(msg, "socketOut");       //send to TCP
-                        recvFromSet = false;
-                        // send a receive request to TCP
-                    }
-                    msgArrived = true;
-                    delete msg;
-                    break;
-                default:
-                    EV_INFO << "Message kind not supported (yet)";
-                    break;
-            }
-        } else if (socketId == sctpAssocId) {
-            // received from SCTP
-            switch (msg->getKind()) {
-                case SCTP_I_SENDSOCKETOPTIONS: {
-                    sctpSocket.setUserOptions((SocketOptions*)(msg->getContextPointer()));
-                    socketOptionsArrived = true;
-                    if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
-                        eventCounter++;
-                        scheduleEvent();
-                    }
-                    delete msg;
-                    return;
-                }
-                case SCTP_I_ESTABLISHED: {
-                    EV_INFO << "SCTP_I_ESTABLISHED" << endl;
-                    if (listenSet) {
-                        sctpAssocId = check_and_cast<Indication *>(msg)->getTag<SocketInd>()->getSocketId();
-                        if (acceptSet) {
-                            sctpSocket.setState(SctpSocket::CONNECTED);
-                            listenSet = false;
-                            acceptSet = false;
-                        } else {
-                            establishedPending = true;
-                        }
-                    } else {
-                        sctpSocket.setState(SctpSocket::CONNECTED);
-                        auto indication = check_and_cast<Indication *>(msg);
-                        auto& tags = getTags(indication);
-                        SctpConnectReq *connectInfo = tags.findTag<SctpConnectReq>();
-                        if (connectInfo) {
-                            sctpAssocId = connectInfo->getSocketId();
-                             sctpSocket.setInboundStreams(connectInfo->getInboundStreams());
-                            sctpSocket.setOutboundStreams(connectInfo->getOutboundStreams());
-                        }
-                    }
-                    break;
-                }
-                case SCTP_I_AVAILABLE: {
-                    Message *message = check_and_cast<Message *>(msg);
-                    auto& intags = getTags(message);
-                    Request *cmsg = new Request("SCTP_C_ACCEPT_SOCKET_ID");
-                    auto& outtags = cmsg->getTags();
-                    auto availableInfo = outtags.addTagIfAbsent<SctpAvailableReq>();
-                    SctpAvailableReq *avInfo = intags.findTag<SctpAvailableReq>();
-                    int newSockId = avInfo->getNewSocketId();
-                    availableInfo->setSocketId(newSockId);
-                    cmsg->setKind(SCTP_C_ACCEPT_SOCKET_ID);
-                    cmsg->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::sctp);
-                    cmsg->addTagIfAbsent<SocketReq>()->setSocketId(newSockId);
-                    sctpAssocId = newSockId;
-                    EV_INFO << "Sending accept socket id request ..." << endl;
-
-                    send(cmsg, "socketOut");
-                    break;
-                }
-                case SCTP_I_DATA_NOTIFICATION: {
-                    if (recvFromSet) {
-                        Packet* cmsg = new Packet("ReceiveRequest", SCTP_C_RECEIVE);
-                        auto& tags = getTags(cmsg);
-                        SctpSendReq *cmd = tags.addTagIfAbsent<SctpSendReq>();
-                        cmd->setSocketId(sctpAssocId);
-                        cmsg->addTagIfAbsent<SocketReq>()->setSocketId(sctpAssocId);
-                        cmsg->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::sctp);
-                        cmd->setSid(0);
-                        send(cmsg, "socketOut");       //send to SCTP
-                        recvFromSet = false;
-                    }
-                    if (sctpSocket.getState() == SctpSocket::CLOSED) {
-                        sctpSocket.abort();
-                        abortSent = true;
-                    }
-                    if (!abortSent)
-                        msgArrived = true;
-                    break;
-                }
-                case SCTP_I_DATA: {
-                    PacketDrillEvent *event = check_and_cast<PacketDrillEvent *>(script->getEventList()->get(eventCounter));
-                    if (verifyTime(event->getTimeType(), event->getEventTime(), event->getEventTimeEnd(),
-                            event->getEventOffset(), getSimulation()->getSimTime(), "inbound packet") == STATUS_ERR)
-                    {
-                        delete msg;
-                        throw cTerminationException("Packetdrill error: Packet arrived at the wrong time");
-                    }
-                    if (!(PK(msg)->getByteLength() == expectedMessageSize)) {
-                        throw cTerminationException("Packetdrill error: Delivered message has wrong size");
-                    }
-                    msgArrived = false;
-                    recvFromSet = false;
-                    if (!eventTimer->isScheduled() && eventCounter < numEvents - 1) {
-                        eventCounter++;
-                        scheduleEvent();
-                    }
-                    break;
-                }
-                case SCTP_I_CLOSED:
-                case SCTP_I_ABORT:
-                case SCTP_I_SEND_STREAMS_RESETTED:
-                case SCTP_I_RCV_STREAMS_RESETTED:
-                case SCTP_I_RESET_REQUEST_FAILED:
-                case SCTP_I_PEER_CLOSED: {
-                    break;
-                }
-                default:
-                    printf("Msg kind %d not implemented\n", msg->getKind());
-                    break;
-            }
-           // delete msg;
-            return;
-        } else {
-           throw cTerminationException("Packetdrill error: Unknown socket");
+            udpSocket.processMessage(msg);
+        }
+        else if (tcpSocket.belongsToSocket(msg)) {
+            tcpSocket.processMessage(msg);
+        }
+        else if (sctpSocket.belongsToSocket(msg)) {
+            sctpSocket.processMessage(msg);
+        }
+        else if (tunSocket.belongsToSocket(msg)) {
+            tunSocket.processMessage(msg);
+            std::cout << __func__ << ":" << __LINE__ << endl;
         }
     }
 }
@@ -428,7 +394,7 @@ void PacketDrillApp::runEvent(PacketDrillEvent* event)
     if (event->getType() == PACKET_EVENT) {
         Packet *pk = event->getPacket()->getInetPacket();
         if (event->getPacket()->getDirection() == DIRECTION_INBOUND) { // < injected packet, will go through the stack bottom up.
-            auto packetByteLength = pk->getByteLength();
+            auto packetByteLength = pk->getDataLength();
             auto ipHeader = pk->removeAtFront<Ipv4Header>();
             // remove lower layer paddings:
             ASSERT(B(ipHeader->getTotalLengthField()) >= ipHeader->getChunkLength());
@@ -456,7 +422,7 @@ void PacketDrillApp::runEvent(PacketDrillEvent* event)
                 sctpHeader->setVTag(peerVTag);
                 int32 noChunks = sctpHeader->getSctpChunksArraySize();
                 for (int32 cc = 0; cc < noChunks; cc++) {
-                    SctpChunk *chunk = const_cast<SctpChunk *>(check_and_cast<const SctpChunk *>(sctpHeader->getSctpChunks(cc)));
+                    SctpChunk *chunk = const_cast<SctpChunk *>(sctpHeader->getSctpChunks(cc));
                     unsigned char chunkType = chunk->getSctpChunkType();
                     switch (chunkType) {
                         case INIT: {
@@ -535,7 +501,7 @@ void PacketDrillApp::runEvent(PacketDrillEvent* event)
             else {
                 // other protocol
             }
-            ipHeader->setTotalLengthField(B(ipHeader->getChunkLength()).get() + pk->getByteLength());
+            ipHeader->setTotalLengthField(ipHeader->getChunkLength() + pk->getDataLength());
             pk->insertAtFront(ipHeader);
             tunSocket.send(pk);
         } else if (event->getPacket()->getDirection() == DIRECTION_OUTBOUND) { // >
@@ -620,7 +586,7 @@ void PacketDrillApp::handleTimer(cMessage *msg)
         case MSGKIND_EVENT: {
             PacketDrillEvent *event = (PacketDrillEvent *)msg->getContextPointer();
             runEvent(event);
-            if ((socketOptionsArrived && !recvFromSet && outboundPackets->getLength() == 0) &&
+            if ((socketOptionsArrived_ && !recvFromSet && outboundPackets->getLength() == 0) &&
                 (!eventTimer->isScheduled() && eventCounter < numEvents - 1)) {
                 eventCounter++;
                 scheduleEvent();
@@ -658,7 +624,7 @@ void PacketDrillApp::closeAllSockets()
     ipv4Header->setDestAddress(localAddress.toIpv4());
     ipv4Header->setIdentification(0);
     ipv4Header->setVersion(4);
-    ipv4Header->setHeaderLength(20);
+    ipv4Header->setHeaderLength(IPv4_MIN_HEADER_LENGTH);
     ipv4Header->setProtocolId(IP_PROT_SCTP);
     ipv4Header->setTimeToLive(32);
     ipv4Header->setMoreFragments(0);
@@ -667,7 +633,7 @@ void PacketDrillApp::closeAllSockets()
     ipv4Header->setTypeOfService(0);
     ipv4Header->setCrcMode(crcMode);
     ipv4Header->setCrc(0);
-    ipv4Header->setTotalLengthField(B(ipv4Header->getChunkLength()).get() + pk->getByteLength());
+    ipv4Header->setTotalLengthField(ipv4Header->getChunkLength() + pk->getDataLength());
     pk->insertAtFront(ipv4Header);
     EV_DETAIL << "Send Abort to cleanup association." << endl;
 
@@ -689,7 +655,7 @@ void PacketDrillApp::runSystemCallEvent(PacketDrillEvent* event, struct syscall_
     char *error = NULL;
     const char *name = syscall->name;
     cQueue *args = new cQueue("systemCallEventQueue");
-    int result = 0;
+    int result = STATUS_OK;
 
     // Evaluate script symbolic expressions to get live numeric args for system calls.
 
@@ -703,35 +669,35 @@ void PacketDrillApp::runSystemCallEvent(PacketDrillEvent* event, struct syscall_
     }
 
     if (!strcmp(name, "socket")) {
-        syscallSocket(syscall, args, &error);
+        result = syscallSocket(syscall, args, &error);
     } else if (!strcmp(name, "bind")) {
-        syscallBind(syscall, args, &error);
+        result = syscallBind(syscall, args, &error);
     } else if (!strcmp(name, "listen")) {
-        syscallListen(syscall, args, &error);
+        result = syscallListen(syscall, args, &error);
     } else if (!strcmp(name, "write") || !strcmp(name, "send")) {
-        syscallWrite(syscall, args, &error);
+        result = syscallWrite(syscall, args, &error);
     } else if (!strcmp(name, "read")) {
-        syscallRead(event, syscall, args, &error);
+        result = syscallRead(event, syscall, args, &error);
     } else if (!strcmp(name, "sendto")) {
-        syscallSendTo(syscall, args, &error);
+        result = syscallSendTo(syscall, args, &error);
     } else if (!strcmp(name, "recvfrom")) {
-        syscallRecvFrom(event, syscall, args, &error);
+        result = syscallRecvFrom(event, syscall, args, &error);
     } else if (!strcmp(name, "close")) {
-        syscallClose(syscall, args, &error);
+        result = syscallClose(syscall, args, &error);
     } else if (!strcmp(name, "shutdown")) {
-        syscallShutdown(syscall, args, &error);
+        result = syscallShutdown(syscall, args, &error);
     } else if (!strcmp(name, "connect")) {
-        syscallConnect(syscall, args, &error);
+        result = syscallConnect(syscall, args, &error);
     } else if (!strcmp(name, "accept")) {
-        syscallAccept(syscall, args, &error);
+        result = syscallAccept(syscall, args, &error);
     } else if (!strcmp(name, "setsockopt")) {
-        syscallSetsockopt(syscall, args, &error);
+        result = syscallSetsockopt(syscall, args, &error);
     } else if (!strcmp(name, "getsockopt")) {
-        syscallGetsockopt(syscall, args, &error);
+        result = syscallGetsockopt(syscall, args, &error);
     } else if (!strcmp(name, "sctp_sendmsg")) {
-        syscallSctpSendmsg(syscall, args, &error);
+        result = syscallSctpSendmsg(syscall, args, &error);
     } else if (!strcmp(name, "sctp_send")) {
-        syscallSctpSend(syscall, args, &error);
+        result = syscallSctpSend(syscall, args, &error);
     } else {
         EV_INFO << "System call %s not known (yet)." << name;
     }
@@ -780,7 +746,7 @@ int PacketDrillApp::syscallSocket(struct syscall_spec *syscall, cQueue *args, ch
             break;
         case IP_PROT_SCTP:
             sctpSocket.setOutputGate(gate("socketOut"));
-            sctpAssocId = sctpSocket.getConnectionId();
+            sctpAssocId = sctpSocket.getSocketId();
             if (sctpSocket.getOutboundStreams() == -1) {
                 sctpSocket.setOutboundStreams(par("outboundStreams"));
             }
@@ -916,7 +882,7 @@ int PacketDrillApp::syscallWrite(struct syscall_spec *syscall, cQueue *args, cha
             break;
         }
         case IP_PROT_SCTP: {
-            Packet* cmsg = new Packet("AppData");
+            Packet* cmsg = new Packet("AppData", SCTP_C_SEND_ORDERED);
             auto applicationData = makeShared<BytesChunk>();
             uint32 sendBytes = syscall->result->getNum();
             std::vector<uint8_t> vec;
@@ -924,18 +890,16 @@ int PacketDrillApp::syscallWrite(struct syscall_spec *syscall, cQueue *args, cha
             for (uint32 i = 0; i < sendBytes; i++)
                 vec[i] = (bytesSent + i) & 0xFF;
             applicationData->setBytes(vec);
+            applicationData->addTag<CreationTimeTag>()->setCreationTime(simTime());
 
-            auto creationTimeTag = applicationData->addTag<CreationTimeTag>();
-            creationTimeTag->setCreationTime(simTime());
-            cmsg->setKind(SCTP_C_SEND_ORDERED);
             cmsg->insertAtBack(applicationData);
-            auto sendCommand = cmsg->addTagIfAbsent<SctpSendReq>();
+            auto sendCommand = cmsg->addTag<SctpSendReq>();
             sendCommand->setLast(true);
             sendCommand->setSocketId(-1);
             sendCommand->setSendUnordered(false);
             sendCommand->setSid(0);
 
-            sctpSocket.sendMsg(cmsg);
+            sctpSocket.send(cmsg);
             break;
         }
         default:
@@ -1056,9 +1020,8 @@ int PacketDrillApp::syscallSetsockopt(struct syscall_spec *syscall, cQueue *args
         }
         case EXPR_SCTP_RESET_STREAMS: {
             struct sctp_reset_streams_expr *rs = exp->getResetStreams();
-            Message *cmsg = new Message("SCTP_C_STREAM_RESET");
-            auto& tags = getTags(cmsg);
-            SctpResetReq *rinfo = tags.addTagIfAbsent<SctpResetReq>();
+            Message *cmsg = new Message("SCTP_C_STREAM_RESET", SCTP_C_STREAM_RESET);
+            SctpResetReq *rinfo = cmsg->addTag<SctpResetReq>();
             rinfo->setSocketId(-1);
             rinfo->setFd(rs->srs_assoc_id->getNum());
             rinfo->setRemoteAddr(sctpSocket.getRemoteAddr());
@@ -1072,7 +1035,6 @@ int PacketDrillApp::syscallSetsockopt(struct syscall_spec *syscall, cQueue *args
                 }
                 qu->clear();
             }
-            cmsg->setKind(SCTP_C_STREAM_RESET);
             if (rs->srs_flags->getNum() == SCTP_STREAM_RESET_OUTGOING) {
                 rinfo->setRequestType(RESET_OUTGOING);
             } else if (rs->srs_flags->getNum() == SCTP_STREAM_RESET_INCOMING) {
@@ -1090,9 +1052,8 @@ int PacketDrillApp::syscallSetsockopt(struct syscall_spec *syscall, cQueue *args
         }
         case EXPR_SCTP_ADD_STREAMS: {
             struct sctp_add_streams_expr *as = exp->getAddStreams();
-            Message *cmsg = new Message("SCTP_C_STREAM_RESET");
-            auto& tags = getTags(cmsg);
-            SctpResetReq *rinfo = tags.addTagIfAbsent<SctpResetReq>();
+            Message *cmsg = new Message("SCTP_C_ADD_STREAMS", SCTP_C_ADD_STREAMS);
+            SctpResetReq *rinfo = cmsg->addTag<SctpResetReq>();
             rinfo->setSocketId(-1);
             rinfo->setFd(as->sas_assoc_id->getNum());
             rinfo->setRemoteAddr(sctpSocket.getRemoteAddr());
@@ -1107,7 +1068,6 @@ int PacketDrillApp::syscallSetsockopt(struct syscall_spec *syscall, cQueue *args
                 rinfo->setRequestType(ADD_OUTGOING);
                 rinfo->setOutstreams(as->sas_outstrms->getNum());
             }
-            cmsg->setKind(SCTP_C_ADD_STREAMS);
             sctpSocket.sendNotification(cmsg);
             delete (as->sas_assoc_id);
             delete (as->sas_instrms);
@@ -1162,14 +1122,12 @@ int PacketDrillApp::syscallSetsockopt(struct syscall_spec *syscall, cQueue *args
                     sctpSocket.setNagle(value? 0 : 1);
                     break;
                 case SCTP_RESET_ASSOC: {
-                    Message *cmsg = new Message("SCTP_C_STREAM_RESET");
-                    auto& tags = getTags(cmsg);
-                    SctpResetReq *rinfo = tags.addTagIfAbsent<SctpResetReq>();
+                    Message *cmsg = new Message("SCTP_C_STREAM_RESET", SCTP_C_RESET_ASSOC);
+                    SctpResetReq *rinfo = cmsg->addTag<SctpResetReq>();
                     rinfo->setSocketId(-1);
                     rinfo->setFd(value);
                     rinfo->setRemoteAddr(sctpSocket.getRemoteAddr());
                     rinfo->setRequestType(SSN_TSN);
-                    cmsg->setKind(SCTP_C_RESET_ASSOC);
                     sctpSocket.sendNotification(cmsg);
                     break;
                 }
@@ -1319,11 +1277,10 @@ int PacketDrillApp::syscallSctpSendmsg(struct syscall_spec *syscall, cQueue *arg
     for (uint32 i = 0; i < sendBytes; i++)
         vec[i] = (bytesSent + i) & 0xFF;
     applicationData->setBytes(vec);
-    auto creationTimeTag = applicationData->addTag<CreationTimeTag>();
-    creationTimeTag->setCreationTime(simTime());
+    applicationData->addTag<CreationTimeTag>()->setCreationTime(simTime());
     cmsg->insertAtBack(applicationData);
 
-    auto sendCommand = cmsg->addTagIfAbsent<SctpSendReq>();
+    auto sendCommand = cmsg->addTag<SctpSendReq>();
     sendCommand->setLast(true);
     sendCommand->setSocketId(sctpAssocId);
     sendCommand->setSid(stream_no);
@@ -1332,7 +1289,7 @@ int PacketDrillApp::syscallSctpSendmsg(struct syscall_spec *syscall, cQueue *arg
         sendCommand->setSendUnordered(true);
     }
 
-    sctpSocket.sendMsg(cmsg);
+    sctpSocket.send(cmsg);
     return STATUS_OK;
 }
 
@@ -1372,11 +1329,10 @@ int PacketDrillApp::syscallSctpSend(struct syscall_spec *syscall, cQueue *args, 
     for (uint32 i = 0; i < sendBytes; i++)
         vec[i] = (bytesSent + i) & 0xFF;
     applicationData->setBytes(vec);
-    auto creationTimeTag = applicationData->addTag<CreationTimeTag>();
-    creationTimeTag->setCreationTime(simTime());
+    applicationData->addTag<CreationTimeTag>()->setCreationTime(simTime());
     cmsg->insertAtBack(applicationData);
 
-    auto sendCommand = cmsg->addTagIfAbsent<SctpSendReq>();
+    auto sendCommand = cmsg->addTag<SctpSendReq>();
     sendCommand->setLast(true);
     sendCommand->setSocketId(-1);
     sendCommand->setSid(sid);
@@ -1384,7 +1340,7 @@ int PacketDrillApp::syscallSctpSend(struct syscall_spec *syscall, cQueue *args, 
     sendCommand->setSsn(ssn);
     sendCommand->setSendUnordered(false);
 
-    sctpSocket.sendMsg(cmsg);
+    sctpSocket.send(cmsg);
     return STATUS_OK;
 }
 
@@ -1414,20 +1370,19 @@ int PacketDrillApp::syscallRead(PacketDrillEvent *event, struct syscall_spec *sy
                 case IP_PROT_TCP: {
                     Request *msg = new Request("dataRequest", TCP_C_READ);
                     TcpCommand *tcpcmd = new TcpCommand();
-                    msg->addTagIfAbsent<SocketReq>()->setSocketId(tcpConnId);
-                    msg->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::tcp);
+                    msg->addTag<SocketReq>()->setSocketId(tcpConnId);
+                    msg->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::tcp);
                     msg->setControlInfo(tcpcmd);
                     send(msg, "socketOut");       //send to TCP
                     break;
                 }
                 case IP_PROT_SCTP: {
                     Packet* pkt = new Packet("dataRequest", SCTP_C_RECEIVE);
-                    auto& tags = getTags(pkt);
-                    SctpSendReq *sctpcmd = tags.addTagIfAbsent<SctpSendReq>();
+                    SctpSendReq *sctpcmd = pkt->addTag<SctpSendReq>();
                     sctpcmd->setSocketId(sctpAssocId);
                     sctpcmd->setSid(0);
-                    pkt->addTagIfAbsent<SocketReq>()->setSocketId(sctpAssocId);
-                    pkt->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::sctp);
+                    pkt->addTag<SocketReq>()->setSocketId(sctpAssocId);
+                    pkt->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::sctp);
                     send(pkt, "socketOut");       //send to SCTP
                     break;
                 }
@@ -1526,8 +1481,8 @@ int PacketDrillApp::syscallClose(struct syscall_spec *syscall, cQueue *args, cha
         case IP_PROT_TCP: {
             Request *msg = new Request("close", TCP_C_CLOSE);
             TcpCommand *cmd = new TcpCommand();
-            msg->addTagIfAbsent<SocketReq>()->setSocketId(tcpConnId);
-            msg->addTagIfAbsent<DispatchProtocolReq>()->setProtocol(&Protocol::tcp);
+            msg->addTag<SocketReq>()->setSocketId(tcpConnId);
+            msg->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::tcp);
             msg->setControlInfo(cmd);
             send(msg, "socketOut");       //send to TCP
             break;
@@ -1572,15 +1527,13 @@ void PacketDrillApp::finish()
 
 PacketDrillApp::~PacketDrillApp()
 {
-    if (eventTimer->isScheduled()) {
-        cancelEvent(eventTimer);
-    }
-    delete eventTimer;
+    cancelAndDelete(eventTimer);
     delete pd;
     delete receivedPackets;
     delete outboundPackets;
     delete config;
     delete script;
+    socketMap.deleteSockets();
 }
 
 // Verify that something happened at the expected time.
@@ -1735,10 +1688,10 @@ bool PacketDrillApp::compareTcpHeader(const Ptr<const TcpHeader>& storedTcp, con
             return true;
         }
         if (storedTcp->getHeaderOptionArraySize() != liveTcp->getHeaderOptionArraySize()) {
-            const TcpOption *liveOption;
-            for (unsigned int i = 0; i < liveTcp->getHeaderOptionArraySize(); i++) {
-                liveOption = liveTcp->getHeaderOption(i);
-            }
+//            const TcpOption *liveOption;
+//            for (unsigned int i = 0; i < liveTcp->getHeaderOptionArraySize(); i++) {
+//                liveOption = liveTcp->getHeaderOption(i);
+//            }
             return false;
         } else {
             const TcpOption *storedOption, *liveOption;
@@ -2244,6 +2197,22 @@ bool PacketDrillApp::compareSackPacket(const SctpSackChunk *storedSackChunk, con
     }
 
     return true;
+}
+
+void PacketDrillApp::handleStartOperation(LifecycleOperation *operation)
+{
+    if (operation != nullptr)
+        throw cRuntimeError("Lifecycle currently not implemented");
+}
+
+void PacketDrillApp::handleStopOperation(LifecycleOperation *operation)
+{
+    throw cRuntimeError("Lifecycle currently not implemented");
+}
+
+void PacketDrillApp::handleCrashOperation(LifecycleOperation *operation)
+{
+    throw cRuntimeError("Lifecycle currently not implemented");
 }
 
 } // namespace INET

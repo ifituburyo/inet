@@ -19,10 +19,9 @@
 #define __INET_BGPCOMMON_H
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/routing/bgpv4/BgpCommon_m.h"
 #include "inet/networklayer/common/InterfaceEntry.h"
 #include "inet/networklayer/ipv4/Ipv4Header_m.h"
+#include "inet/routing/bgpv4/BgpCommon_m.h"
 
 namespace inet {
 
@@ -48,6 +47,18 @@ const unsigned char NEW_SESSION_ESTABLISHED = 92;
 const unsigned char ASLOOP_NO_DETECTED = 93;
 const unsigned char ASLOOP_DETECTED = 94;
 
+static const int BGP_TCP_CONNECT_VALID = 71;
+static const int BGP_TCP_CONNECT_CONFIRM = 72;
+static const int BGP_TCP_CONNECT_FAILED = 73;
+static const int BGP_TCP_CONNECT_OPEN_RCV = 74;
+static const int BGP_TCP_KEEP_ALIVE_RCV = 75;
+
+static const int BGP_RETRY_TIME = 120;
+static const int BGP_HOLD_TIME = 180;
+static const int BGP_KEEP_ALIVE = 60;    // 1/3 of BGP_HOLD_TIME
+static const int NB_SEC_START_EGP_SESSION = 1;
+
+typedef Ipv4Address RouterId;
 typedef Ipv4Address NextHop;
 typedef unsigned short AsId;
 typedef unsigned long SessionId;
@@ -59,6 +70,11 @@ struct SessionInfo
     AsId ASValue = 0;
     Ipv4Address routerID;
     Ipv4Address peerAddr;
+    Ipv4Address myAddr;
+    bool nextHopSelf = false;
+    int localPreference = 0;
+    bool checkConnection = false;
+    int ebgpMultihop = 0;
     InterfaceEntry *linkIntf = nullptr;
     TcpSocket *socket = nullptr;
     TcpSocket *socketListen = nullptr;

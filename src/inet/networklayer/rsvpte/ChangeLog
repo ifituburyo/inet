@@ -1,5 +1,38 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-10-15  Zoltan Bojthe
+
+	Changed RsvpTe base class to RoutingProtocolBase.
+
+2018-08-17  Zoltan Bojthe
+
+	Added namespace qualifier to @signal type parameters.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-01  Zoltan Bojthe
+
+	Added B/b units to length constants and length fields of chunks.
+
+2018-04-25  Andras Varga
+
+	Made RsvpMplsRouter ingress classifier configurable.
+
+2018-04-21  Andras Varga
+
+	Documented fectable.xml format for RsvpClassifier
+
+2018-04-06  Levente Mészáros
+
+	Renamed protocol identifier rsvp to rsvpte.
+	Renamed rsvp_te folder to rsvpte according to INET naming scheme.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-01  Zoltan Bojthe
 
 	Added RsvpProtocolDissector.

@@ -15,27 +15,30 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-
 package inet.applications.tcpapp;
 
 import inet.applications.contract.IApp;
-
 
 //
 // Accepts any number of incoming TCP connections, and discards whatever
 // arrives on them. Compatible with both ~Ipv4 and ~Ipv6.
 //
-simple TcpSinkApp like IApp
+module TcpSinkApp extends TcpServerHostApp
 {
     parameters:
-        string localAddress = default(""); // may be left empty ("")
-        int localPort = default(1000); // port number to listen on
+        serverThreadModuleType = default("inet.applications.tcpapp.TcpSinkAppThread");
+        @class(TcpSinkApp);
         @display("i=block/sink");
-        @signal[packetReceived](type=Packet);
+        @statistic[packetReceived](title="packets received"; source=packetReceived; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none; checkSignals=false);
+        @statistic[endToEndDelay](title="end-to-end delay"; source="dataAge(packetReceived)"; unit=s; record=histogram,weightedHistogram,vector; interpolationmode=none; checkSignals=false);
+}
+
+simple TcpSinkAppThread
+{
+    parameters:
+        @display("i=block/sink");
+        @signal[packetReceived](type=inet::Packet);
         @statistic[packetReceived](title="packets received"; source=packetReceived; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
-        @statistic[endToEndDelay](title="end-to-end delay"; source="dataAge(packetReceived)"; unit=s; record=histogram,vector; interpolationmode=none);
-    gates:
-        input socketIn @labels(TcpCommand/up);
-        output socketOut @labels(TcpCommand/down);
+        @statistic[endToEndDelay](title="end-to-end delay"; source="dataAge(packetReceived)"; unit=s; record=histogram,weightedHistogram,vector; interpolationmode=none);
 }
 

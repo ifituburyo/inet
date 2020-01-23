@@ -15,13 +15,14 @@
 // along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
+#include <algorithm>
+
+#include "inet/common/ModuleAccess.h"
 #include "inet/common/geometry/shape/Cuboid.h"
-#include "inet/common/geometry/shape/polyhedron/Polyhedron.h"
 #include "inet/common/geometry/shape/Prism.h"
 #include "inet/common/geometry/shape/Sphere.h"
-#include "inet/common/ModuleAccess.h"
+#include "inet/common/geometry/shape/polyhedron/Polyhedron.h"
 #include "inet/visualizer/environment/PhysicalEnvironmentCanvasVisualizer.h"
-#include <algorithm>
 
 namespace inet {
 
@@ -37,8 +38,8 @@ void PhysicalEnvironmentCanvasVisualizer::initialize(int stage)
     if (!hasGUI()) return;
     if (stage == INITSTAGE_LOCAL) {
         zIndex = par("zIndex");
-        cCanvas *canvas = visualizerTargetModule->getCanvas();
-        canvasProjection = CanvasProjection::getCanvasProjection(visualizerTargetModule->getCanvas());
+        cCanvas *canvas = visualizationTargetModule->getCanvas();
+        canvasProjection = CanvasProjection::getCanvasProjection(visualizationTargetModule->getCanvas());
         objectsLayer = new cGroupFigure("objectsLayer");
         objectsLayer->setZIndex(zIndex);
         objectsLayer->insertBelow(canvas->getSubmodulesLayer());
@@ -59,8 +60,8 @@ void PhysicalEnvironmentCanvasVisualizer::refreshDisplay() const
         for (auto object : objectsCopy) {
             const ShapeBase *shape = object->getShape();
             const Coord& position = object->getPosition();
-            const EulerAngles& orientation = object->getOrientation();
-            const Rotation rotation(orientation);
+            const Quaternion& orientation = object->getOrientation();
+            const RotationMatrix rotation(orientation.toEulerAngles());
             // cuboid
             const Cuboid *cuboid = dynamic_cast<const Cuboid *>(shape);
             if (cuboid) {
@@ -117,7 +118,7 @@ void PhysicalEnvironmentCanvasVisualizer::refreshDisplay() const
     }
 }
 
-void PhysicalEnvironmentCanvasVisualizer::computeFacePoints(const IPhysicalObject *object, std::vector<std::vector<Coord> >& faces, const Rotation& rotation) const
+void PhysicalEnvironmentCanvasVisualizer::computeFacePoints(const IPhysicalObject *object, std::vector<std::vector<Coord> >& faces, const RotationMatrix& rotation) const
 {
     const Coord& position = object->getPosition();
     for (std::vector<std::vector<Coord> >::const_iterator it = faces.begin(); it != faces.end(); it++)

@@ -232,29 +232,43 @@ AutoTransform *createAutoTransform(Drawable *drawable, AutoTransform::AutoRotate
     return autoTransform;
 }
 
-PositionAttitudeTransform *createPositionAttitudeTransform(const Coord& position, const EulerAngles& orientation)
+PositionAttitudeTransform *createPositionAttitudeTransform(const Coord& position, const Quaternion& orientation)
 {
     auto pat = new PositionAttitudeTransform();
     pat->setPosition(Vec3d(position.x, position.y, position.z));
-    pat->setAttitude(Quat(rad(orientation.alpha).get(), Vec3d(1.0, 0.0, 0.0)) *
-                     Quat(rad(orientation.beta).get(), Vec3d(0.0, 1.0, 0.0)) *
-                     Quat(rad(orientation.gamma).get(), Vec3d(0.0, 0.0, 1.0)));
+    pat->setAttitude(osg::Quat(osg::Vec4d(orientation.v.x, orientation.v.y, orientation.v.z, orientation.s)));
     return pat;
+}
+
+std::string resolveImageResource(const char *imageName, cComponent *context)
+{
+    if (context == nullptr)
+        context = getSimulation()->getContextModule();
+    std::string path;
+    for (auto ext : {"", ".png", ".gif", ".jpg"}) {
+        path = context->resolveResourcePath((std::string(imageName) + ext).c_str());
+        if (!path.empty())
+            return path;
+    }
+    throw cRuntimeError("Image '%s' not found", imageName);
 }
 
 osg::Image* createImage(const char *fileName)
 {
     auto image = osgDB::readImageFile(fileName);
     if (image == nullptr)
-        throw cRuntimeError("Image '%s' not found", fileName);
+        throw cRuntimeError("Cannot load image '%s'", fileName);
     return image;
 }
 
-Texture2D *createTexture(const char *name, bool repeat)
+osg::Image* createImageFromResource(const char *imageName)
 {
-    auto image = createImage(name);
-    if (image == nullptr)
-        throw cRuntimeError("Cannot find image: '%s'", name);
+    return createImage(resolveImageResource(imageName).c_str());
+}
+
+Texture2D *createTexture(const char *fileName, bool repeat)
+{
+    auto image = createImage(fileName);
     auto texture = new Texture2D();
     texture->setImage(image);
     if (repeat) {
@@ -263,6 +277,11 @@ Texture2D *createTexture(const char *name, bool repeat)
         texture->setWrap(Texture2D::WRAP_R, Texture2D::REPEAT);
     }
     return texture;
+}
+
+Texture2D *createTextureFromResource(const char *imageName, bool repeat)
+{
+    return createTexture(resolveImageResource(imageName).c_str(), repeat);
 }
 
 StateSet *createStateSet(const cFigure::Color& color, double opacity, bool cullBackFace)

@@ -25,7 +25,7 @@ package inet.visualizer.base;
 //
 // This module subscribes for interfaceCreated, interfaceDeleted, 
 // interfaceConfigChanged, and interfaceIpv4ConfigChanged on the
-// module determined by the subscriptionModule parameter.
+// module determined by the visualizationSubjectModule parameter.
 //
 // The format string can contain the following directives:
 //  - %N interface name
@@ -36,6 +36,7 @@ package inet.visualizer.base;
 //  - %l IPv4 or IPv6 netmask length
 //  - %g generic address
 //  - %n network address
+//  - %t up or down state
 //  - %i InterfaceEntry::info()
 //  - %s InterfaceEntry::str()
 //  - %\ conditional newline for wired interfaces
@@ -46,8 +47,7 @@ simple InterfaceTableVisualizerBase extends VisualizerBase
 {
     parameters:
         string networkNodeVisualizerModule = default("^.networkNodeVisualizer"); // module path to the network node visualizer module, refers to a sibling submodule by default
-        string subscriptionModule = default("<root>"); // module where the visualizer subscribes for interface changed signals, root module by default
-        
+
         bool displayInterfaceTables = default(false); // display interface table data, disabled by default
         bool displayWiredInterfacesAtConnections = default(true); // specifies where wired interfaces are displayed
         bool displayBackground = default(false); // specifies whether the text should have a background or not
@@ -66,3 +66,4 @@ simple InterfaceTableVisualizerBase extends VisualizerBase
 
         @class(InterfaceTableVisualizerBase);
 }
+

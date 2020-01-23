@@ -5,6 +5,7 @@ placed to the same distance from both the receiver and the sender.
 %#--------------------------------------------------------------------------------------------------------------
 %file: test.ned
 
+import inet.test.moduletest.lib.*;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.networklayer.ipv4.RoutingTableRecorder;
 import inet.node.aodv.AodvRouter;
@@ -65,7 +66,6 @@ network = AODVTest
 record-eventlog = true
 sim-time-limit = 100s
 num-rngs = 3
-tkenv-plugin-path = ../../../etc/plugins
 ned-path = .;../../../../src;../../lib
 
 #omnetpp 5.0 - 5.1 compatibility:
@@ -82,7 +82,7 @@ snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 *.intermediateNodeA.aodv.jitter = 3ms
 *.intermediateNodeB.aodv.jitter = 4ms
 # mobility
-**.mobilityType = "StationaryMobility"
+*.*.mobility.typename = "StationaryMobility"
 **.mobility.constraintAreaMinZ = 0m
 **.mobility.constraintAreaMaxZ = 0m
 **.mobility.constraintAreaMinX = 0m

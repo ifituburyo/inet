@@ -17,17 +17,16 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/transportlayer/sctp/SctpProtocolDissector.h"
-
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
 #include "inet/transportlayer/sctp/SctpHeader.h"
+#include "inet/transportlayer/sctp/SctpProtocolDissector.h"
 
 namespace inet {
 namespace sctp {
 
 Register_Protocol_Dissector(&Protocol::sctp, SctpProtocolDissector);
 
-void SctpProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void SctpProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     //TODO
     callback.startProtocolDataUnit(&Protocol::sctp);

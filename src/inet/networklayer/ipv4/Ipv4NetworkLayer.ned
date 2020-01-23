@@ -19,10 +19,9 @@
 package inet.networklayer.ipv4;
 
 import inet.common.MessageDispatcher;
+import inet.networklayer.configurator.contract.IIpv4NodeConfigurator;
 import inet.networklayer.contract.IArp;
-import inet.networklayer.configurator.ipv4.Ipv4NodeConfigurator;
 import inet.networklayer.contract.INetworkLayer;
-
 
 //
 // Network layer of an IPv4 node.
@@ -31,19 +30,17 @@ import inet.networklayer.contract.INetworkLayer;
 module Ipv4NetworkLayer like INetworkLayer
 {
     parameters:
-        bool proxyARP = default(true);
         bool forwarding = default(false);
         bool multicastForwarding = default(false);
-        string igmpType = default("Igmpv2");
-        string arpType = default("Arp");
         string interfaceTableModule;
+        string displayStringTextFormat = default("%i");
         *.forwarding = forwarding;
         *.multicastForwarding = multicastForwarding;
         *.interfaceTableModule = default(absPath(interfaceTableModule));
         *.routingTableModule = default(absPath(".routingTable"));
         *.arpModule = default(absPath(".arp"));
         *.icmpModule = default(absPath(".icmp"));
-        arp.respondToProxyARP = proxyARP;
+        @class(::inet::Ipv4NetworkLayer);
         @display("i=block/fork");
 
     gates:
@@ -53,7 +50,7 @@ module Ipv4NetworkLayer like INetworkLayer
         output transportOut @labels(Ipv4ControlInfo/up);
 
     submodules:
-        configurator: Ipv4NodeConfigurator {
+        configurator: <default("Ipv4NodeConfigurator")> like IIpv4NodeConfigurator if typename != "" {
             parameters:
                 @display("p=100,100;is=s");
         }
@@ -61,34 +58,37 @@ module Ipv4NetworkLayer like INetworkLayer
             parameters:
                 @display("p=100,200;is=s");
         }
+        natTable: Ipv4NatTable {
+            parameters:
+                @display("p=100,300;is=s");
+        }
         up: MessageDispatcher {
             parameters:
-                @display("p=450,100;b=480,5");
+                @display("p=550,100;b=600,5");
         }
-        igmp: <igmpType> like IIgmp {
+        igmp: <default("Igmpv2")> like IIgmp {
             parameters:
-                @display("p=300,200");
+                @display("p=400,200");
         }
         icmp: Icmp {
             parameters:
-                @display("p=600,200");
+                @display("p=700,200");
         }
         mp: MessageDispatcher {
             parameters:
-                @display("p=450,300;b=480,5");
+                @display("p=550,300;b=600,5");
         }
-        ip: Ipv4 {
+        ip: <default("Ipv4")> like IIpv4 {
             parameters:
-                useProxyARP = true; // as routes with unspecified next-hop addr are quite common
-                @display("p=450,400;q=queue");
+                @display("p=700,400;q=queue");
         }
-        arp: <arpType> like IArp {
+        arp: <default("Arp")> like IArp {
             parameters:
-                @display("p=300,400;q=pendingQueue");
+                @display("p=400,400;q=pendingQueue");
         }
         lp: MessageDispatcher {
             parameters:
-                @display("p=450,500;b=480,5");
+                @display("p=550,500;b=600,5");
         }
 
     connections allowunconnected:
@@ -122,3 +122,4 @@ module Ipv4NetworkLayer like INetworkLayer
         lp.out++ --> { @display("m=s"); } --> ifOut;
         lp.in++ <-- { @display("m=s"); } <-- ifIn;
 }
+

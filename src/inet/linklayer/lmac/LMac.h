@@ -12,11 +12,12 @@
 #ifndef __INET_LMAC_H
 #define __INET_LMAC_H
 
-#include "inet/physicallayer/contract/packetlevel/IRadio.h"
-#include "inet/linklayer/contract/IMacProtocol.h"
-#include "inet/linklayer/common/MacAddress.h"
+#include "inet/queueing/contract/IPacketQueue.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/linklayer/contract/IMacProtocol.h"
 #include "inet/linklayer/lmac/LMacHeader_m.h"
+#include "inet/physicallayer/contract/packetlevel/IRadio.h"
 
 namespace inet {
 
@@ -76,16 +77,15 @@ class INET_API LMac : public MacProtocolBase, public IMacProtocol
         , macState()
         , slotDuration(0)
         , headerLength(b(0))
+        , ctrlFrameLength(b(0))
         , controlDuration(0)
         , myId(0)
         , mySlot(0)
         , numSlots(0)
         , currSlot()
         , reservedMobileSlots(0)
-        , macQueue()
         , radio(nullptr)
         , transmissionState(physicallayer::IRadio::TRANSMISSION_STATE_UNDEFINED)
-        , queueLength(0)
         , wakeup(nullptr)
         , timeout(nullptr)
         , sendData(nullptr)
@@ -111,7 +111,7 @@ class INET_API LMac : public MacProtocolBase, public IMacProtocol
     virtual void handleSelfMessage(cMessage *) override;
 
     /** @brief Handle control messages from lower layer */
-    virtual void receiveSignal(cComponent *source, simsignal_t signalID, long value, cObject *details) override;
+    virtual void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
 
     /** @brief Encapsulate the NetwPkt into an MacPkt */
     virtual void encapsulate(Packet *);
@@ -119,11 +119,8 @@ class INET_API LMac : public MacProtocolBase, public IMacProtocol
 
   protected:
     /** @brief Generate new interface address*/
-    virtual void initializeMacAddress();
-    virtual InterfaceEntry *createInterfaceEntry() override;
+    virtual void configureInterfaceEntry() override;
     virtual void handleCommand(cMessage *msg) {}
-
-    typedef std::list<Packet *> MacQueue;
 
     /** @brief MAC states
      *
@@ -156,8 +153,10 @@ class INET_API LMac : public MacProtocolBase, public IMacProtocol
 
     /** @brief Duration of a slot */
     double slotDuration;
-    /** @brief Length of the header*/
+    /** @brief Length of the header */
     b headerLength;
+    /** @brief Length of the control frames */
+    b ctrlFrameLength;
     /** @brief Duration of teh control time in each slot */
     double controlDuration;
     /** @brief my ID */
@@ -175,19 +174,9 @@ class INET_API LMac : public MacProtocolBase, public IMacProtocol
     /** @brief The first couple of slots are reserved for nodes with special needs to avoid changing slots for them (mobile nodes) */
     int reservedMobileSlots;
 
-    /** @brief The MAC address of the interface. */
-    MacAddress address;
-
-    /** @brief A queue to store packets from upper layer in case another
-       packet is still waiting for transmission..*/
-    MacQueue macQueue;
-
     /** @brief The radio. */
     physicallayer::IRadio *radio;
     physicallayer::IRadio::TransmissionState transmissionState;
-
-    /** @brief length of the queue*/
-    unsigned queueLength;
 
     cMessage *wakeup;
     cMessage *timeout;
@@ -205,10 +194,6 @@ class INET_API LMac : public MacProtocolBase, public IMacProtocol
 
     /** @brief Internal function to attach a signal to the packet */
     void attachSignal(Packet *macPkt);
-
-    virtual void flushQueue();
-
-    virtual void clearQueue();
 };
 
 } // namespace inet

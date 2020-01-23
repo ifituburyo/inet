@@ -19,10 +19,10 @@
 
 package inet.linklayer.acking;
 
+import inet.queueing.contract.IPacketQueue;
 import inet.linklayer.base.MacProtocolBase;
 import inet.linklayer.contract.ILinkLayer;
 import inet.linklayer.contract.IMacProtocol;
-
 
 //
 // This module implements a trivial MAC protocol for use in ~AckingWirelessInterface.
@@ -35,7 +35,7 @@ import inet.linklayer.contract.IMacProtocol;
 //
 // See ~AckingWirelessInterface for rationale and details.
 //
-simple AckingMac extends MacProtocolBase like ILinkLayer, IMacProtocol
+module AckingMac extends MacProtocolBase like ILinkLayer, IMacProtocol
 {
     parameters:
         string address = default("auto");   // MAC address as hex string (12 hex digits), or
@@ -43,14 +43,14 @@ simple AckingMac extends MacProtocolBase like ILinkLayer, IMacProtocol
                                             // a generated MAC address in init stage 0.
         double bitrate @unit(bps);
         int mtu @unit(B) = default(4470B);
-        int headerLength @unit(B) = default(1B);       // AckingMacHeader length
+        int headerLength @unit(B) = default(16B); // AckingMacHeader length
         bool promiscuous = default(false);
         bool fullDuplex = default(true);    // allows transmitting and receiving simultaneously (transceiver radio mode)
         bool useAck = default(true);
         double ackTimeout @unit(s) = default(100ms);
 
         @class(AckingMac);
-        @signal[linkBroken](type=Packet);
+        @signal[linkBroken](type=inet::Packet);
         @statistic[linkBroken](title="link break"; source=linkBroken; record=count; interpolationmode=none);
         @statistic[passedUpPk](title="packets passed to higher layer"; source=packetSentToUpper; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[sentDownPk](title="packets sent to lower layer"; source=packetSentToLower; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
@@ -59,5 +59,10 @@ simple AckingMac extends MacProtocolBase like ILinkLayer, IMacProtocol
         @statistic[packetDropIncorrectlyReceived](title="packet drop: incorrectly received"; source=packetDropReasonIsIncorrectlyReceived(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetDropInterfaceDown](title="packet drop: interface down"; source=packetDropReasonIsInterfaceDown(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[packetDropNotAddressedToUs](title="packet drop: not addressed to us"; source=packetDropReasonIsNotAddressedToUs(packetDropped); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
+    submodules:
+        queue: <default("DropTailQueue")> like IPacketQueue {
+            parameters:
+                @display("p=100,100;q=l2queue");
+        }
 }
 

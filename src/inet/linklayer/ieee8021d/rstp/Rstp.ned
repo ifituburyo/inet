@@ -17,6 +17,7 @@
 //
 
 package inet.linklayer.ieee8021d.rstp;
+
 import inet.linklayer.contract.ISpanningTree;
 
 //
@@ -36,7 +37,7 @@ import inet.linklayer.contract.ISpanningTree;
 // They can be set using ~L2NetworkConfigurator. Port state is kept in the switch's
 // ~InterfaceTable.
 //
-// @see L2NetworkConfigurator, InterfaceTable
+// @see ~L2NetworkConfigurator, ~InterfaceTable
 //
 simple Rstp like ISpanningTree
 {
@@ -55,7 +56,7 @@ simple Rstp like ISpanningTree
 
         // The migrate time is the time after which a non-assigned port becomes designated. This time is equal to 6 sec by default,
         // but you can tune the time to be between 4 and 30 sec.
-        double migrateTime @unit ("s")= default(3s);
+        double migrateTime @unit(s)= default(3s);
 
         // The topology change while time is the time while a port will send TC=true (Topology Change Notification)
         double tcWhileTime @unit(s) = default(6s);
@@ -82,3 +83,4 @@ simple Rstp like ISpanningTree
         input relayIn;
         output relayOut;
 }
+

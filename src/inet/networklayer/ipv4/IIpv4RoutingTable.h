@@ -21,10 +21,9 @@
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-
+#include "inet/networklayer/contract/IRoutingTable.h"
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 #include "inet/networklayer/ipv4/Ipv4Route.h"    // not strictly required, but most clients will need it anyway
-#include "inet/networklayer/contract/IRoutingTable.h"
 
 namespace inet {
 
@@ -53,8 +52,6 @@ class INET_API IIpv4RoutingTable : public IRoutingTable
 
     /** @name Interfaces */
     //@{
-    virtual void configureInterfaceForIpv4(InterfaceEntry *ie) = 0;
-
     /**
      * Returns an interface given by its address. Returns nullptr if not found.
      */

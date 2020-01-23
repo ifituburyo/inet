@@ -17,11 +17,10 @@
 // @author: Zoltan Bojthe
 //
 
-#include "inet/linklayer/bmac/BMacProtocolPrinter.h"
-
 #include "inet/common/packet/printer/PacketPrinter.h"
 #include "inet/common/packet/printer/ProtocolPrinterRegistry.h"
 #include "inet/linklayer/bmac/BMacHeader_m.h"
+#include "inet/linklayer/bmac/BMacProtocolPrinter.h"
 
 namespace inet {
 
@@ -29,7 +28,7 @@ Register_Protocol_Printer(&Protocol::bmac, BMacProtocolPrinter);
 
 void BMacProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol *protocol, const cMessagePrinter::Options *options, Context& context) const
 {
-    if (auto header = dynamicPtrCast<const BMacHeader>(chunk)) {
+    if (auto header = dynamicPtrCast<const BMacHeaderBase>(chunk)) {
         context.sourceColumn << header->getSrcAddr();
         context.destinationColumn << header->getDestAddr();
         context.infoColumn << "(Acking MAC) " << chunk;        //TODO

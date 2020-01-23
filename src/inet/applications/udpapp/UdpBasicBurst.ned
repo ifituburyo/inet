@@ -118,16 +118,23 @@ simple UdpBasicBurst like IApp
         volatile double sleepDuration @unit(s); // time between bursts (zero allowed)
         volatile double sendInterval @unit(s); // time between messages during bursts; usually a random value, e.g. 0.1s+uniform(-0.001s,0.001s); zero not allowed
         double delayLimit @unit(s) = default(0s); // maximum accepted delay for a packet; packets with a bigger delay are discarded (dropped), zero value means no limit
-        @signal[packetSent](type=Packet);
-        @signal[packetReceived](type=Packet);
-        @signal[packetDropped](type=Packet);
-        @signal[outOfOrderPk](type=Packet);
+        int timeToLive = default(-1); // if not -1, set the TTL (IPv4) or Hop Limit (IPv6) field of sent packets to this value
+        bool dontFragment = default(false); // if true, asks IP to not fragment the message during routing
+        int dscp = default(-1); // if not -1, set the DSCP field (on IPv4/IPv6) of sent packets to this value
+        int tos = default(-1); // if not -1, set the Type Of Service (IPv4) / Traffic Class (IPv6) field of sent packets to this value
+        @display("i=block/app");
+        @lifecycleSupport;
+        double stopOperationExtraTime @unit(s) = default(-1s);    // extra time after lifecycle stop operation finished
+        double stopOperationTimeout @unit(s) = default(2s);    // timeout value for lifecycle stop operation
+        @signal[packetSent](type=inet::Packet);
+        @signal[packetReceived](type=inet::Packet);
+        @signal[packetDropped](type=inet::Packet);
+        @signal[outOfOrderPk](type=inet::Packet);
         @statistic[packetSent](title="packets sent"; source=packetSent; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[packetReceived](title="packets received"; source=packetReceived; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[dropPk](title="packets dropped"; source=packetDropped; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[outOfOrderPk](title="packets received out of order"; source=outOfOrderPk; record=count,"sum(packetBytes)","vector(packetBytes)"; interpolationmode=none);
         @statistic[endToEndDelay](title="delay"; source="dataAge(packetReceived)"; unit=s; record=histogram,vector; interpolationmode=none);
-        @display("i=block/app");
     gates:
         input socketIn @labels(UdpControlInfo/up);
         output socketOut @labels(UdpControlInfo/down);

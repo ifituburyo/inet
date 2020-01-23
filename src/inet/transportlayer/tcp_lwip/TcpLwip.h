@@ -23,12 +23,11 @@
 #include <map>
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/common/lifecycle/ILifecycle.h"
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/common/packet/Message.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/common/L3Address.h"
-#include "inet/transportlayer/common/CRC_m.h"
+#include "inet/transportlayer/common/CrcMode_m.h"
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
 #include "inet/transportlayer/tcp_common/TcpCrcInsertionHook.h"
 #include "lwip/lwip_tcp.h"
@@ -52,7 +51,7 @@ class TcpLwipSendQueue;
  * Encapsulates a Network Simulation Cradle (NSC) instance.
  */
 
-class INET_API TcpLwip : public cSimpleModule, public LwipTcpStackIf, public ILifecycle
+class INET_API TcpLwip : public cSimpleModule, public LwipTcpStackIf, public LifecycleUnsupported
 {
   public:
     TcpLwip();
@@ -129,9 +128,6 @@ class INET_API TcpLwip : public cSimpleModule, public LwipTcpStackIf, public ILi
     // send a connection established msg to application layer
     //void sendEstablishedMsg(TcpLwipConnection& connP);
 
-    // ILifeCycle:
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
-
   public:
     LwipTcpLayer *getLwipTcpLayer() { return pLwipTcpLayerM; }
 
@@ -157,15 +153,12 @@ class INET_API TcpLwip : public cSimpleModule, public LwipTcpStackIf, public ILi
     // network interface:
     struct netif netIf;
 
-  public:
-    bool recordStatisticsM;    // output vectors on/off
-
   protected:
     LwipTcpLayer *pLwipTcpLayerM;
     bool isAliveM;
     Packet *pCurTcpSegM;
     TcpCrcInsertion crcInsertion;
-    CrcMode crcMode = static_cast<CrcMode>(-1);
+    CrcMode crcMode = CRC_MODE_UNDEFINED;
 };
 
 } // namespace tcp

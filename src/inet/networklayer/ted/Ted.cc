@@ -15,17 +15,15 @@
 #include <algorithm>
 
 #include "inet/common/INETDefs.h"
-
-#include "inet/networklayer/ted/Ted.h"
-
-#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
-#include "inet/common/Simsignals.h"
-#include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
-#include "inet/networklayer/contract/IInterfaceTable.h"
-#include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/common/ModuleAccess.h"
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
+#include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
+#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
+#include "inet/networklayer/ted/Ted.h"
 
 namespace inet {
 
@@ -43,28 +41,23 @@ Ted::~Ted()
 
 void Ted::initialize(int stage)
 {
-    cSimpleModule::initialize(stage);
-
-    if (stage == INITSTAGE_ROUTING_PROTOCOLS) {
+    RoutingProtocolBase::initialize(stage);
+    // TODO: INITSTAGE
+    if (stage == INITSTAGE_LOCAL) {
         maxMessageId = 0;
 
         WATCH_VECTOR(ted);
 
         rt = getModuleFromPar<IIpv4RoutingTable>(par("routingTableModule"), this);
         ift = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
-        routerId = rt->getRouterId();
-        ASSERT(!routerId.isUnspecified());
-
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
-        if (isOperational)
-            initializeTED();
     }
 }
 
 void Ted::initializeTED()
 {
+    routerId = rt->getRouterId();
+    ASSERT(!routerId.isUnspecified());
+
     //
     // Extract initial TED contents from the routing table.
     //
@@ -85,8 +78,7 @@ void Ted::initializeTED()
         // preconfigured static host routes in routing table.
         //
         // find bandwidth of the link
-        cGate *g = getParentModule()->gate(ie->getNodeOutputGateId());
-        ASSERT(g);
+        cGate *g = CHK(getParentModule()->gate(ie->getNodeOutputGateId()));
         double linkBandwidth = g->getChannel()->getNominalDatarate();
 
         // find destination node for current interface
@@ -106,28 +98,24 @@ void Ted::initializeTED()
         if (!destRt) // switch, hub, bus, accesspoint, etc
             continue;
         Ipv4Address destRouterId = destRt->getRouterId();
-        IInterfaceTable *destIft = L3AddressResolver().findInterfaceTableOf(destNode);
-        ASSERT(destIft);
-        InterfaceEntry *destIe = destIft->getInterfaceByNodeInputGateId(g->getId());
-        ASSERT(destIe);
+        IInterfaceTable *destIft = L3AddressResolver().interfaceTableOf(destNode);
+        InterfaceEntry *destIe = CHK(destIft->findInterfaceByNodeInputGateId(g->getId()));
 
         //
         // fill in and insert TED entry
         //
         TeLinkStateInfo entry;
         entry.advrouter = routerId;
-        ASSERT(ie->ipv4Data());
-        entry.local = ie->ipv4Data()->getIPAddress();
+        entry.local = ie->getProtocolData<Ipv4InterfaceData>()->getIPAddress();
         entry.linkid = destRouterId;
-        ASSERT(destIe->ipv4Data());
-        entry.remote = destIe->ipv4Data()->getIPAddress();
+        entry.remote = destIe->getProtocolData<Ipv4InterfaceData>()->getIPAddress();
         entry.MaxBandwidth = linkBandwidth;
         for (int j = 0; j < 8; j++)
             entry.UnResvBandwidth[j] = entry.MaxBandwidth;
         entry.state = true;
 
         // use g->getChannel()->par("delay") for shortest delay calculation
-        entry.metric = ie->ipv4Data()->getMetric();
+        entry.metric = ie->getProtocolData<Ipv4InterfaceData>()->getMetric();
 
         EV_INFO << "metric set to=" << entry.metric << endl;
 
@@ -141,21 +129,21 @@ void Ted::initializeTED()
     // extract list of local interface addresses into interfaceAddrs[]
     for (int i = 0; i < ift->getNumInterfaces(); i++) {
         InterfaceEntry *ie = ift->getInterface(i);
-        InterfaceEntry *ie2 = rt->getInterfaceByAddress(ie->ipv4Data()->getIPAddress());
+        InterfaceEntry *ie2 = rt->getInterfaceByAddress(ie->getProtocolData<Ipv4InterfaceData>()->getIPAddress());
         if (ie2 != ie)
             throw cRuntimeError("MPLS models assume interfaces to have unique addresses, "
                                 "but address of '%s' (%s) is not unique",
-                    ie->getInterfaceName(), ie->ipv4Data()->getIPAddress().str().c_str());
+                    ie->getInterfaceName(), ie->getProtocolData<Ipv4InterfaceData>()->getIPAddress().str().c_str());
         if (!ie->isLoopback())
-            interfaceAddrs.push_back(ie->ipv4Data()->getIPAddress());
+            interfaceAddrs.push_back(ie->getProtocolData<Ipv4InterfaceData>()->getIPAddress());
     }
 
     rebuildRoutingTable();
 }
 
-void Ted::handleMessage(cMessage *msg)
+void Ted::handleMessageWhenUp(cMessage *msg)
 {
-    ASSERT(false);
+    throw cRuntimeError("Message not allowed");
 }
 
 std::ostream& operator<<(std::ostream& os, const TeLinkStateInfo& info)
@@ -487,26 +475,21 @@ Ipv4Address Ted::getPeerByLocalAddress(Ipv4Address localInf)
     return ted[index].linkid;
 }
 
-bool Ted::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void Ted::handleStartOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER)
-            initializeTED();
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
-            ted.clear();
-            interfaceAddrs.clear();
-        }
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH) {
-            ted.clear();
-            interfaceAddrs.clear();
-        }
-    }
-    return true;
+    initializeTED();
+}
+
+void Ted::handleStopOperation(LifecycleOperation *operation)
+{
+    ted.clear();
+    interfaceAddrs.clear();
+}
+
+void Ted::handleCrashOperation(LifecycleOperation *operation)
+{
+    ted.clear();
+    interfaceAddrs.clear();
 }
 
 } // namespace inet

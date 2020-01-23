@@ -16,17 +16,16 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#include <stdexcept>
 #include <algorithm>
-
-#include "inet/networklayer/configurator/ipv4/HostAutoConfigurator.h"
-
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
-#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
-#include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
+#include "inet/networklayer/configurator/ipv4/HostAutoConfigurator.h"
+#include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
+#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
 
 namespace inet {
 
@@ -34,10 +33,13 @@ Define_Module(HostAutoConfigurator);
 
 void HostAutoConfigurator::initialize(int stage)
 {
-    cSimpleModule::initialize(stage);
-
-    if (stage == INITSTAGE_NETWORK_LAYER_2) {
-        setupNetworkLayer();
+    OperationalBase::initialize(stage);
+    if (stage == INITSTAGE_LOCAL) {
+        interfaceTable = getModuleFromPar<IInterfaceTable>(par("interfaceTableModule"), this);
+    }
+    else if (stage == INITSTAGE_NETWORK_INTERFACE_CONFIGURATION) {
+        for (int i = 0; i < interfaceTable->getNumInterfaces(); i++)
+            interfaceTable->getInterface(i)->addProtocolData<Ipv4InterfaceData>();
     }
 }
 
@@ -45,7 +47,7 @@ void HostAutoConfigurator::finish()
 {
 }
 
-void HostAutoConfigurator::handleMessage(cMessage *apMsg)
+void HostAutoConfigurator::handleMessageWhenUp(cMessage *apMsg)
 {
 }
 
@@ -72,16 +74,11 @@ void HostAutoConfigurator::setupNetworkLayer()
     if (!routingTable)
         throw cRuntimeError("No routing table found");
 
-    // get our interface table
-    IInterfaceTable *ift = L3AddressResolver().interfaceTableOf(host);
-    if (!ift)
-        throw cRuntimeError("No interface table found");
-
     // look at all interface table entries
     cStringTokenizer interfaceTokenizer(interfaces.c_str());
     const char *ifname;
     while ((ifname = interfaceTokenizer.nextToken()) != nullptr) {
-        InterfaceEntry *ie = ift->getInterfaceByName(ifname);
+        InterfaceEntry *ie = interfaceTable->findInterfaceByName(ifname);
         if (!ie)
             throw cRuntimeError("No such interface '%s'", ifname);
 
@@ -93,20 +90,21 @@ void HostAutoConfigurator::setupNetworkLayer()
 
         EV_INFO << "interface " << ifname << " gets " << myAddress.str() << "/" << netmask.str() << std::endl;
 
-        ie->ipv4Data()->setIPAddress(myAddress);
-        ie->ipv4Data()->setNetmask(netmask);
+        auto ipv4Data = ie->getProtocolData<Ipv4InterfaceData>();
+        ipv4Data->setIPAddress(myAddress);
+        ipv4Data->setNetmask(netmask);
         ie->setBroadcast(true);
 
         // associate interface with default multicast groups
-        ie->ipv4Data()->joinMulticastGroup(Ipv4Address::ALL_HOSTS_MCAST);
-        ie->ipv4Data()->joinMulticastGroup(Ipv4Address::ALL_ROUTERS_MCAST);
+        ipv4Data->joinMulticastGroup(Ipv4Address::ALL_HOSTS_MCAST);
+        ipv4Data->joinMulticastGroup(Ipv4Address::ALL_ROUTERS_MCAST);
 
         // associate interface with specified multicast groups
         cStringTokenizer interfaceTokenizer(mcastGroups.c_str());
         const char *mcastGroup_s;
         while ((mcastGroup_s = interfaceTokenizer.nextToken()) != nullptr) {
             Ipv4Address mcastGroup(mcastGroup_s);
-            ie->ipv4Data()->joinMulticastGroup(mcastGroup);
+            ipv4Data->joinMulticastGroup(mcastGroup);
         }
     }
 }

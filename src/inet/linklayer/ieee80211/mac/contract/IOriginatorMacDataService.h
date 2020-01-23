@@ -18,7 +18,7 @@
 #ifndef __INET_IORIGINATORMACDATASERVICE_H
 #define __INET_IORIGINATORMACDATASERVICE_H
 
-#include "inet/linklayer/ieee80211/mac/queue/Ieee80211Queue.h"
+#include "inet/queueing/contract/IPacketQueue.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -26,9 +26,13 @@ namespace ieee80211 {
 class INET_API IOriginatorMacDataService
 {
     public:
+        static simsignal_t packetFragmentedSignal;
+        static simsignal_t packetAggregatedSignal;
+
+    public:
         virtual ~IOriginatorMacDataService() { }
 
-        virtual std::vector<Packet *> *extractFramesToTransmit(PendingQueue *pendingQueue) = 0;
+        virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *pendingQueue) = 0;
 };
 
 } // namespace ieee80211

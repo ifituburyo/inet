@@ -31,10 +31,9 @@
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-
+#include "inet/common/lifecycle/ILifecycle.h"
 #include "inet/networklayer/contract/ipv4/Ipv4Address.h"
 #include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
-#include "inet/common/lifecycle/ILifecycle.h"
 
 namespace inet {
 
@@ -94,7 +93,6 @@ class INET_API Ipv4RoutingTable : public cSimpleModule, public IIpv4RoutingTable
 
     // local addresses cache (to speed up isLocalAddress())
     typedef std::set<Ipv4Address> AddressSet;
-    mutable AddressSet localAddresses;
     // JcM add: to handle the local broadcast address
     mutable AddressSet localBroadcastAddresses;
 
@@ -110,9 +108,6 @@ class INET_API Ipv4RoutingTable : public cSimpleModule, public IIpv4RoutingTable
     MulticastRouteVector multicastRoutes;    // Multicast route array, sorted by netmask desc, origin asc, metric asc
 
   protected:
-    // set Ipv4 address etc on local loopback
-    virtual void configureLoopbackForIpv4();
-
     // set router Id
     virtual void configureRouterId();
 
@@ -187,13 +182,16 @@ class INET_API Ipv4RoutingTable : public cSimpleModule, public IIpv4RoutingTable
 
     /** @name Interfaces */
     //@{
-    virtual void configureInterfaceForIpv4(InterfaceEntry *ie) override;
-
     /**
      * Returns an interface given by its address. Returns nullptr if not found.
      */
     virtual InterfaceEntry *getInterfaceByAddress(const Ipv4Address& address) const override;
     //@}
+
+    /**
+     * AdminDist on/off
+     */
+    virtual bool isAdminDistEnabled() const override { return useAdminDist; }
 
     /**
      * Ipv4 forwarding on/off
@@ -374,7 +372,7 @@ class INET_API Ipv4RoutingTable : public cSimpleModule, public IIpv4RoutingTable
     /**
      * ILifecycle method
      */
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual bool handleOperationStage(LifecycleOperation *operation, IDoneCallback *doneCallback) override;
 
     virtual L3Address getRouterIdAsGeneric() const override { return getRouterId(); }
     virtual bool isLocalAddress(const L3Address& dest) const override { return isLocalAddress(dest.toIpv4()); }

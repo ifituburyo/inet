@@ -23,7 +23,6 @@
 #include "inet/networklayer/contract/IInterfaceTable.h"
 
 namespace inet {
-
 namespace DiffservUtil {
 
 // colors for naming the output of meters
@@ -33,12 +32,6 @@ enum Color { GREEN, YELLOW, RED };
  * Returns true, if the string is empty (nullptr or "");
  */
 inline bool isEmpty(const char *str) { return !str || !(*str); }
-
-/**
- * Returns the value of the named attribute of the XML element,
- * or throws an exception if not found.
- */
-const char *getRequiredAttribute(cXMLElement *element, const char *attrName);
 
 /**
  * Parses the information rate parameter (bits/sec).
@@ -93,13 +86,6 @@ std::string colorToString(int color);
  * Returns -1, if the interface entry not found.
  */
 double getInterfaceDatarate(IInterfaceTable *ift, cSimpleModule *interfaceModule);
-
-/**
- * Returns the IP datagram encapsulated inside packet, or
- * the packet itself if it is an Ipv4/Ipv6 datagram.
- * Returns nullptr, if there is no IP datagram in the packet.
- */
-cPacket *findIPDatagramInPacket(cPacket *packet);
 
 /**
  * Returns the color of the packet.

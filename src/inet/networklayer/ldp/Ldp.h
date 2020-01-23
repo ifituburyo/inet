@@ -16,19 +16,17 @@
 #ifndef __INET_LDP_H
 #define __INET_LDP_H
 
-#include <string>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #include "inet/common/INETDefs.h"
-
+#include "inet/common/socket/SocketMap.h"
 #include "inet/networklayer/ldp/LdpPacket_m.h"
-#include "inet/transportlayer/contract/udp/UdpSocket.h"
-#include "inet/transportlayer/contract/tcp/TcpSocket.h"
-#include "inet/transportlayer/contract/tcp/TcpSocketMap.h"
 #include "inet/networklayer/mpls/IIngressClassifier.h"
-#include "inet/common/lifecycle/ILifecycle.h"
-#include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/routing/base/RoutingProtocolBase.h"
+#include "inet/transportlayer/contract/tcp/TcpSocket.h"
+#include "inet/transportlayer/contract/udp/UdpSocket.h"
 
 namespace inet {
 
@@ -39,11 +37,11 @@ namespace inet {
 #define LDP_USER_TRAFFIC     100     // label switched user traffic
 
 // base header: version, length, LSR ID, Label space
-#define LDP_BASEHEADER_BYTES  10
+const B LDP_BASEHEADER_BYTES = B(10);
 
 // FIXME: the length below is just a guess. TBD find lengths for individual TLVs
 // making up different LDP packet types, and determine length for each packet type
-#define LDP_HEADER_BYTES  (LDP_BASEHEADER_BYTES+20)
+const B LDP_HEADER_BYTES = LDP_BASEHEADER_BYTES + B(20);
 
 class IInterfaceTable;
 class IIpv4RoutingTable;
@@ -53,7 +51,7 @@ class Ted;
 /**
  * LDP (rfc 3036) protocol implementation.
  */
-class INET_API Ldp : public cSimpleModule, public TcpSocket::CallbackInterface, public IIngressClassifier, public cListener, public ILifecycle
+class INET_API Ldp : public RoutingProtocolBase, public TcpSocket::ReceiveQueueBasedCallback, public UdpSocket::ICallback, public IIngressClassifier, public cListener
 {
   public:
 
@@ -119,7 +117,6 @@ class INET_API Ldp : public cSimpleModule, public TcpSocket::CallbackInterface, 
     //
     // other variables:
     //
-    NodeStatus *nodeStatus = nullptr;
     IInterfaceTable *ift = nullptr;
     IIpv4RoutingTable *rt = nullptr;
     LibTable *lt = nullptr;
@@ -128,7 +125,7 @@ class INET_API Ldp : public cSimpleModule, public TcpSocket::CallbackInterface, 
     UdpSocket udpSocket;    // for receiving Hello
     std::vector<UdpSocket> udpSockets;    // for sending Hello, one socket for each multicast interface
     TcpSocket serverSocket;    // for listening on LDP_PORT
-    TcpSocketMap socketMap;    // holds TCP connections with peers
+    SocketMap socketMap;    // holds TCP connections with peers
 
     // hello timeout message
     cMessage *sendHelloMsg = nullptr;
@@ -178,41 +175,50 @@ class INET_API Ldp : public cSimpleModule, public TcpSocket::CallbackInterface, 
 
     virtual void announceLinkChange(int tedlinkindex);
 
-    virtual bool isNodeUp();
-
   public:
     Ldp();
     virtual ~Ldp();
 
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    // lifecycle
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void handleMessageWhenUp(cMessage *msg) override;
 
     virtual void sendHelloTo(Ipv4Address dest);
     virtual void openTCPConnectionToPeer(int peerIndex);
 
     virtual void processLDPHello(Packet *msg);
     virtual void processHelloTimeout(cMessage *msg);
-    virtual void processMessageFromTCP(cMessage *msg);
-    virtual void processLDPPacketFromTCP(Packet *packet);
+    virtual void processLdpPacketFromTcp(Ptr<const LdpPacket>& ldpPacket);
 
-    virtual void processLABEL_MAPPING(Packet *packet);
-    virtual void processLABEL_REQUEST(Packet *packet);
-    virtual void processLABEL_RELEASE(Packet *packet);
-    virtual void processLABEL_WITHDRAW(Packet *packet);
-    virtual void processNOTIFICATION(Packet *packet);
+    virtual void processLABEL_MAPPING(Ptr<const LdpPacket>& ldpPacket);
+    virtual void processLABEL_REQUEST(Ptr<const LdpPacket>& ldpPacket);
+    virtual void processLABEL_RELEASE(Ptr<const LdpPacket>& ldpPacket);
+    virtual void processLABEL_WITHDRAW(Ptr<const LdpPacket>& ldpPacket);
+    virtual void processNOTIFICATION(Ptr<const LdpPacket>& ldpPacket, bool rescheduled);
 
-    /** @name TcpSocket::CallbackInterface callback methods */
+    /** @name TcpSocket::ICallback callback methods */
     //@{
-    virtual void socketEstablished(int connId, void *yourPtr) override;
-    virtual void socketDataArrived(int connId, void *yourPtr, Packet *msg, bool urgent) override;
-    virtual void socketPeerClosed(int connId, void *yourPtr) override;
-    virtual void socketClosed(int connId, void *yourPtr) override;
-    virtual void socketFailure(int connId, void *yourPtr, int code) override;
-    virtual void socketStatusArrived(int connId, void *yourPtr, TcpStatusInfo *status) override { delete status; }
+    virtual void socketDataArrived(TcpSocket *socket) override;
+    virtual void socketAvailable(TcpSocket *socket, TcpAvailableInfo *availableInfo) override;
+    virtual void socketEstablished(TcpSocket *socket) override;
+    virtual void socketPeerClosed(TcpSocket *socket) override;
+    virtual void socketClosed(TcpSocket *socket) override;
+    virtual void socketFailure(TcpSocket *socket, int code) override;
+    virtual void socketStatusArrived(TcpSocket *socket, TcpStatusInfo *status) override { }
+    virtual void socketDeleted(TcpSocket *socket) override {}   //TODO
+    //@}
+
+    /** @name UdpSocket::ICallback methods */
+    //@{
+    virtual void socketDataArrived(UdpSocket *socket, Packet *packet) override;
+    virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) override;
+    virtual void socketClosed(UdpSocket *socket) override;
     //@}
 
     // IIngressClassifier

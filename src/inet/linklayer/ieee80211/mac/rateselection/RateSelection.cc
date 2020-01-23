@@ -19,8 +19,8 @@
 #include "inet/common/Simsignals.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
-#include "inet/physicallayer/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/ieee80211/mode/IIeee80211Mode.h"
+#include "inet/physicallayer/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
@@ -35,12 +35,12 @@ void RateSelection::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         getContainingNicModule(this)->subscribe(modesetChangedSignal, this);
     }
-    else if (stage == INITSTAGE_LINK_LAYER_2) {
+    else if (stage == INITSTAGE_LINK_LAYER) {
         dataOrMgmtRateControl = dynamic_cast<IRateControl*>(getModuleByPath(par("rateControlModule")));
         double multicastFrameBitrate = par("multicastFrameBitrate");
         multicastFrameMode = (multicastFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(multicastFrameBitrate));
         double dataFrameBitrate = par("dataFrameBitrate");
-        dataFrameMode = (dataFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(dataFrameBitrate));
+        dataFrameMode = (dataFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(dataFrameBitrate), Hz(par("dataFrameBandwidth")), par("dataFrameNumSpatialStreams"));
         double mgmtFrameBitrate = par("mgmtFrameBitrate");
         mgmtFrameMode = (mgmtFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(mgmtFrameBitrate));
         double controlFrameBitrate = par("controlFrameBitrate");
@@ -156,7 +156,7 @@ const IIeee80211Mode* RateSelection::computeMode(Packet *packet, const Ptr<const
 
 void RateSelection::receiveSignal(cComponent* source, simsignal_t signalID, cObject* obj, cObject* details)
 {
-    Enter_Method("receiveModeSetChangeNotification");
+    Enter_Method_Silent("receiveSignal");
     if (signalID == modesetChangedSignal) {
         modeSet = check_and_cast<Ieee80211ModeSet*>(obj);
         fastestMandatoryMode = modeSet->getFastestMandatoryMode();

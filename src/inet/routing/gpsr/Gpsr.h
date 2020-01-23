@@ -22,16 +22,15 @@
 
 #include "inet/common/INETDefs.h"
 #include "inet/common/geometry/common/Coord.h"
-#include "inet/common/lifecycle/ILifecycle.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/networklayer/contract/IL3AddressType.h"
 #include "inet/networklayer/contract/INetfilter.h"
 #include "inet/networklayer/contract/IRoutingTable.h"
-#include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/routing/base/RoutingProtocolBase.h"
+#include "inet/routing/gpsr/Gpsr_m.h"
 #include "inet/routing/gpsr/PositionTable.h"
 #include "inet/transportlayer/udp/UdpHeader_m.h"
-#include "inet/routing/gpsr/Gpsr_m.h"
 
 namespace inet {
 
@@ -46,7 +45,7 @@ namespace inet {
 // TODO: implement position piggybacking that is all packets should carry the position of the sender, all packets act as a beacon and reset beacon timer
 // TODO: implement promiscuous mode, all receivers should process all packets with respect to neighbor positions
 // KLUDGE: implement position registry protocol instead of using a global variable
-class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener, public NetfilterBase::HookBase
+class INET_API Gpsr : public RoutingProtocolBase, public cListener, public NetfilterBase::HookBase
 {
   protected:
     // GPSR parameters
@@ -59,7 +58,6 @@ class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener,
 
     // context
     cModule *host = nullptr;
-    NodeStatus *nodeStatus = nullptr;
     IMobility *mobility = nullptr;
     IL3AddressType *addressType = nullptr;
     IInterfaceTable *interfaceTable = nullptr;
@@ -84,7 +82,7 @@ class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener,
     // module interface
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     void initialize(int stage) override;
-    void handleMessage(cMessage *message) override;
+    void handleMessageWhenUp(cMessage *message) override;
 
   protected:
     // handling messages
@@ -100,8 +98,8 @@ class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener,
     void processPurgeNeighborsTimer();
 
     // handling UDP packets
-    void sendUDPPacket(Packet *packet);
-    void processUDPPacket(Packet *packet);
+    void sendUdpPacket(Packet *packet);
+    void processUdpPacket(Packet *packet);
 
     // handling beacons
     const Ptr<GpsrBeacon> createBeacon();
@@ -111,7 +109,7 @@ class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener,
     // handling packets
     virtual GpsrOption *createGpsrOption(L3Address destination);
     int computeOptionLength(GpsrOption *gpsrOption);
-    void setGpsrOptionOnNetworkDatagram(Packet *packet, const Ptr<const NetworkHeaderBase>& networkHeader);
+    void setGpsrOptionOnNetworkDatagram(Packet *packet, const Ptr<const NetworkHeaderBase>& networkHeader, GpsrOption *gpsrOption);
 
     // returns nullptr if not found
     GpsrOption *findGpsrOptionInNetworkDatagramForUpdate(const Ptr<NetworkHeaderBase>& networkHeader);
@@ -122,7 +120,6 @@ class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener,
     const GpsrOption *getGpsrOptionFromNetworkDatagram(const Ptr<const NetworkHeaderBase>& networkHeader) const;
 
     // configuration
-    bool isNodeUp() const;
     void configureInterfaces();
 
     // position
@@ -148,12 +145,12 @@ class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener,
     std::vector<L3Address> getPlanarNeighborsCounterClockwise(double startAngle) const;
 
     // next hop
-    L3Address findNextHop(const Ptr<const NetworkHeaderBase>& networkHeader, const L3Address& destination);
-    virtual L3Address findGreedyRoutingNextHop(const Ptr<const NetworkHeaderBase>& networkHeader, const L3Address& destination);
-    virtual L3Address findPerimeterRoutingNextHop(const Ptr<const NetworkHeaderBase>& networkHeader, const L3Address& destination);
+    L3Address findNextHop(const L3Address& destination, GpsrOption *gpsrOption);
+    virtual L3Address findGreedyRoutingNextHop(const L3Address& destination, GpsrOption *gpsrOption);
+    virtual L3Address findPerimeterRoutingNextHop(const L3Address& destination, GpsrOption *gpsrOption);
 
     // routing
-    Result routeDatagram(Packet *datagram);
+    Result routeDatagram(Packet *datagram, GpsrOption *gpsrOption);
 
     // netfilter
     virtual Result datagramPreRoutingHook(Packet *datagram) override;
@@ -163,7 +160,9 @@ class INET_API Gpsr : public cSimpleModule, public ILifecycle, public cListener,
     virtual Result datagramLocalOutHook(Packet *datagram) override;
 
     // lifecycle
-    virtual bool handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback) override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 
     // notification
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;

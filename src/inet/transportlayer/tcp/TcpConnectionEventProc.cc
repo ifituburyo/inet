@@ -16,17 +16,17 @@
 //
 
 #include <string.h>
+
 #include "inet/applications/common/SocketTag_m.h"
-#include "inet/transportlayer/tcp/Tcp.h"
-#include "inet/transportlayer/tcp/TcpConnection.h"
-#include "inet/transportlayer/tcp_common/TcpHeader.h"
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
-#include "inet/transportlayer/tcp/TcpSendQueue.h"
-#include "inet/transportlayer/tcp/TcpReceiveQueue.h"
+#include "inet/transportlayer/tcp/Tcp.h"
 #include "inet/transportlayer/tcp/TcpAlgorithm.h"
+#include "inet/transportlayer/tcp/TcpConnection.h"
+#include "inet/transportlayer/tcp/TcpReceiveQueue.h"
+#include "inet/transportlayer/tcp/TcpSendQueue.h"
+#include "inet/transportlayer/tcp_common/TcpHeader.h"
 
 namespace inet {
-
 namespace tcp {
 
 //
@@ -175,9 +175,27 @@ void TcpConnection::process_READ_REQUEST(TcpEventCode& event, TcpCommand *tcpCom
     while ((dataMsg = receiveQueue->extractBytesUpTo(state->rcv_nxt)) != nullptr)
     {
         dataMsg->setKind(TCP_I_DATA);
-        dataMsg->addTagIfAbsent<SocketInd>()->setSocketId(socketId);
+        dataMsg->addTag<SocketInd>()->setSocketId(socketId);
         sendToApp(dataMsg);
     }
+}
+
+void TcpConnection::process_OPTIONS(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg)
+{
+    ASSERT(event == TCP_E_SETOPTION);
+
+    if (auto cmd = dynamic_cast<TcpSetTimeToLiveCommand *>(tcpCommand))
+        ttl = cmd->getTtl();
+    else if (auto cmd = dynamic_cast<TcpSetTosCommand *>(tcpCommand)) {
+        tos = cmd->getTos();
+    }
+    else if (auto cmd = dynamic_cast<TcpSetDscpCommand *>(tcpCommand)) {
+        dscp = cmd->getDscp();
+    }
+    else
+        throw cRuntimeError("Unknown subclass of TcpSetOptionCommand received from app: %s", tcpCommand->getClassName());
+    delete tcpCommand;
+    delete msg;
 }
 
 void TcpConnection::process_CLOSE(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg)
@@ -187,8 +205,6 @@ void TcpConnection::process_CLOSE(TcpEventCode& event, TcpCommand *tcpCommand, c
 
     switch (fsm.getState()) {
         case TCP_S_INIT:
-            throw cRuntimeError(tcpMain, "Error processing command CLOSE: connection not open");
-
         case TCP_S_LISTEN:
             // Nothing to do here
             break;
@@ -215,8 +231,7 @@ void TcpConnection::process_CLOSE(TcpEventCode& event, TcpCommand *tcpCommand, c
                 tcpAlgorithm->restartRexmitTimer();
                 state->snd_max = ++state->snd_nxt;
 
-                if (unackedVector)
-                    unackedVector->record(state->snd_max - state->snd_una);
+                emit(unackedSignal, state->snd_max - state->snd_una);
 
                 // state transition will automatically take us to FIN_WAIT_1 (or LAST_ACK)
             }
@@ -269,6 +284,13 @@ void TcpConnection::process_ABORT(TcpEventCode& event, TcpCommand *tcpCommand, c
     }
 }
 
+void TcpConnection::process_DESTROY(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg)
+{
+    delete tcpCommand;
+    delete msg;
+    //TODO should we send a RST or not?
+}
+
 void TcpConnection::process_STATUS(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg)
 {
     delete tcpCommand;    // but reuse msg for reply
@@ -318,6 +340,5 @@ void TcpConnection::process_QUEUE_BYTES_LIMIT(TcpEventCode& event, TcpCommand *t
 }
 
 } // namespace tcp
-
 } // namespace inet
 

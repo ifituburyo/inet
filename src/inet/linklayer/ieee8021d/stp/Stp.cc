@@ -18,6 +18,8 @@
 // Authors: ANSA Team, Benjamin Martin Seregi
 //
 
+#include "inet/common/IProtocolRegistrationListener.h"
+#include "inet/common/ProtocolTag_m.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/linklayer/ethernet/EtherFrame_m.h"
@@ -42,6 +44,10 @@ void Stp::initialize(int stage)
         tick = new cMessage("STP_TICK", 0);
         WATCH(bridgeAddress);
     }
+    else if (stage == INITSTAGE_LINK_LAYER) {
+        registerService(Protocol::stp, nullptr, gate("relayIn"));
+        registerProtocol(Protocol::stp, gate("relayOut"), nullptr);
+    }
 }
 
 Stp::~Stp()
@@ -57,22 +63,22 @@ void Stp::initPortTable()
     }
 }
 
-void Stp::handleMessage(cMessage *msg)
+void Stp::handleMessageWhenUp(cMessage *msg)
 {
-    if (!isOperational) {
-        EV << "Message '" << msg << "' arrived when module status is down, dropped it\n";
-        delete msg;
-        return;
-    }
-
     if (!msg->isSelfMessage()) {
         Packet *packet = check_and_cast<Packet*>(msg);
-        const auto& bpdu = packet->peekAtFront<Bpdu>();
+        const auto& bpdu = packet->peekAtFront<BpduBase>();
 
-        if (bpdu->getBpduType() == CONFIG_BDPU)
-            handleBPDU(packet, bpdu);
-        else if (bpdu->getBpduType() == TCN_BPDU)
-            handleTCN(packet, bpdu);
+        switch (bpdu->getBpduType()) {
+            case BPDU_CFG:
+                handleBPDU(packet, CHK(dynamicPtrCast<const BpduCfg>(bpdu)));
+                break;
+            case BPDU_TCN:
+                handleTCN(packet, CHK(dynamicPtrCast<const BpduTcn>(bpdu)));
+                break;
+            default:
+                throw cRuntimeError("unknown BPDU TYPE: %d", bpdu->getBpduType());
+        }
     }
     else {
         if (msg == tick) {
@@ -84,7 +90,7 @@ void Stp::handleMessage(cMessage *msg)
     }
 }
 
-void Stp::handleBPDU(Packet *packet, const Ptr<const Bpdu>& bpdu)
+void Stp::handleBPDU(Packet *packet, const Ptr<const BpduCfg>& bpdu)
 {
     int arrivalGate = packet->getTag<InterfaceInd>()->getInterfaceId();
     Ieee8021dInterfaceData *port = getPortInterfaceData(arrivalGate);
@@ -128,9 +134,9 @@ void Stp::handleBPDU(Packet *packet, const Ptr<const Bpdu>& bpdu)
     delete packet;
 }
 
-void Stp::handleTCN(Packet *packet, const Ptr<const Bpdu>& tcn)
+void Stp::handleTCN(Packet *packet, const Ptr<const BpduTcn>& tcn)
 {
-    EV_INFO << "Topology Change Notification BDPU " << tcn << " arrived." << endl;
+    EV_INFO << "Topology Change Notification BPDU " << tcn << " arrived." << endl;
     topologyChangeNotification = true;
 
     int arrivalGate = packet->getTag<InterfaceInd>()->getInterfaceId();
@@ -145,9 +151,12 @@ void Stp::handleTCN(Packet *packet, const Ptr<const Bpdu>& tcn)
     if (!isRoot) {
         Packet *outPacket = new Packet(packet->getName());
         outPacket->insertAtBack(tcn);
-        outPacket->addTagIfAbsent<InterfaceReq>()->setInterfaceId(rootInterfaceId);
-        outPacket->addTagIfAbsent<MacAddressReq>()->setSrcAddress(srcAddress);
-        outPacket->addTagIfAbsent<MacAddressReq>()->setDestAddress(destAddress);
+        outPacket->addTag<InterfaceReq>()->setInterfaceId(rootInterfaceId);
+        auto macAddressReq = outPacket->addTag<MacAddressReq>();
+        macAddressReq->setSrcAddress(bridgeAddress);
+        macAddressReq->setDestAddress(destAddress);
+        outPacket->addTag<PacketProtocolTag>()->setProtocol(&Protocol::stp);
+        outPacket->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::ethernetMac);
         send(outPacket, "relayOut");
     }
     delete packet;
@@ -156,13 +165,16 @@ void Stp::handleTCN(Packet *packet, const Ptr<const Bpdu>& tcn)
 void Stp::generateBPDU(int interfaceId, const MacAddress& address, bool tcFlag, bool tcaFlag)
 {
     Packet *packet = new Packet("BPDU");
-    const auto& bpdu = makeShared<Bpdu>();
-    packet->addTagIfAbsent<MacAddressReq>()->setDestAddress(address);
-    packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(interfaceId);
+    const auto& bpdu = makeShared<BpduCfg>();
+    auto macAddressReq = packet->addTag<MacAddressReq>();
+    macAddressReq->setSrcAddress(bridgeAddress);
+    macAddressReq->setDestAddress(address);
+    packet->addTag<InterfaceReq>()->setInterfaceId(interfaceId);
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::stp);
+    packet->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::ethernetMac);
 
-    bpdu->setProtocolIdentifier(0);
-    bpdu->setProtocolVersionIdentifier(0);
-    bpdu->setBpduType(0);    // 0 if configuration BPDU
+    bpdu->setProtocolIdentifier(SPANNING_TREE_PROTOCOL);
+    bpdu->setProtocolVersionIdentifier(SPANNING_TREE);
 
     bpdu->setBridgeAddress(bridgeAddress);
     bpdu->setBridgePriority(bridgePriority);
@@ -198,16 +210,17 @@ void Stp::generateTCN()
         if (getPortInterfaceData(rootInterfaceId)->getRole() == Ieee8021dInterfaceData::ROOT) {
             // exist root port to notifying
             topologyChangeNotification = false;
-            Packet *packet = new Packet("BPDU");
-            const auto& tcn = makeShared<Bpdu>();
-            tcn->setProtocolIdentifier(0);
-            tcn->setProtocolVersionIdentifier(0);
+            Packet *packet = new Packet("BPDU-TCN");
+            const auto& tcn = makeShared<BpduTcn>();
+            tcn->setProtocolIdentifier(SPANNING_TREE_PROTOCOL);
+            tcn->setProtocolVersionIdentifier(SPANNING_TREE);
 
-            // 1 if Topology Change Notification BPDU
-            tcn->setBpduType(1);
-
-            packet->addTagIfAbsent<MacAddressReq>()->setDestAddress(MacAddress::STP_MULTICAST_ADDRESS);
-            packet->addTagIfAbsent<InterfaceReq>()->setInterfaceId(rootInterfaceId);
+            auto macAddressReq = packet->addTag<MacAddressReq>();
+            macAddressReq->setSrcAddress(bridgeAddress);
+            macAddressReq->setDestAddress(MacAddress::STP_MULTICAST_ADDRESS);
+            packet->addTag<InterfaceReq>()->setInterfaceId(rootInterfaceId);
+            packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::stp);
+            packet->addTag<DispatchProtocolReq>()->setProtocol(&Protocol::ethernetMac);
 
             packet->insertAtBack(tcn);
             EV_INFO << "The topology has changed. Sending Topology Change Notification BPDU " << tcn << " to the Root Switch." << endl;
@@ -216,7 +229,7 @@ void Stp::generateTCN()
     }
 }
 
-bool Stp::isSuperiorBPDU(int interfaceId, const Ptr<const Bpdu>& bpdu)
+bool Stp::isSuperiorBPDU(int interfaceId, const Ptr<const BpduCfg>& bpdu)
 {
     Ieee8021dInterfaceData *port = getPortInterfaceData(interfaceId);
     Ieee8021dInterfaceData *xBpdu = new Ieee8021dInterfaceData();
@@ -253,9 +266,9 @@ bool Stp::isSuperiorBPDU(int interfaceId, const Ptr<const Bpdu>& bpdu)
     return true;
 }
 
-void Stp::setSuperiorBPDU(int interfaceId, const Ptr<const Bpdu>& bpdu)
+void Stp::setSuperiorBPDU(int interfaceId, const Ptr<const BpduCfg>& bpdu)
 {
-    // BDPU is out-of-date
+    // BPDU is out-of-date
     if (bpdu->getMessageAge() >= bpdu->getMaxAge())
         return;
 
@@ -276,11 +289,11 @@ void Stp::setSuperiorBPDU(int interfaceId, const Ptr<const Bpdu>& bpdu)
     portData->setAge(0);
 }
 
-void Stp::generateHelloBDPUs()
+void Stp::generateHelloBPDUs()
 {
-    EV_INFO << "It is hello time. Root switch sending hello BDPUs on all its ports." << endl;
+    EV_INFO << "It is hello time. Root switch sending hello BPDUs on all its ports." << endl;
 
-    // send hello BDPUs on all ports
+    // send hello BPDUs on all ports
     for (unsigned int i = 0; i < numPorts; i++) {
         int interfaceId = ifTable->getInterface(i)->getInterfaceId();
         generateBPDU(interfaceId);
@@ -289,7 +302,7 @@ void Stp::generateHelloBDPUs()
 
 void Stp::handleTick()
 {
-    // hello BDPU timer
+    // hello BPDU timer
     if (isRoot)
         helloTime = helloTime + 1;
     else
@@ -326,7 +339,7 @@ void Stp::checkTimers()
     if (helloTime >= currentHelloTime) {
         // only the root switch can generate Hello BPDUs
         if (isRoot)
-            generateHelloBDPUs();
+            generateHelloBPDUs();
 
         helloTime = 0;
     }
@@ -508,11 +521,11 @@ void Stp::selectRootPort()
     desPorts.clear();
     unsigned int xRootIdx = 0;
     int result;
-    Ieee8021dInterfaceData *best = ifTable->getInterface(0)->ieee8021dData();
+    Ieee8021dInterfaceData *best = ifTable->getInterface(0)->getProtocolData<Ieee8021dInterfaceData>();
     Ieee8021dInterfaceData *currentPort = nullptr;
 
     for (unsigned int i = 0; i < numPorts; i++) {
-        currentPort = ifTable->getInterface(i)->ieee8021dData();
+        currentPort = ifTable->getInterface(i)->getProtocolData<Ieee8021dInterfaceData>();
         currentPort->setRole(Ieee8021dInterfaceData::NOTASSIGNED);
         result = comparePorts(currentPort, best);
         if (result > 0) {
@@ -530,7 +543,7 @@ void Stp::selectRootPort()
         }
     }
 
-    int xRootInterfaceId = ifTable->getInterface(xRootIdx)->getInterfaceId();
+    unsigned int xRootInterfaceId = ifTable->getInterface(xRootIdx)->getInterfaceId();
     if (rootInterfaceId != xRootInterfaceId) {
         EV_DETAIL << "Port=" << xRootInterfaceId << " selected as root port." << endl;
         topologyChangeNotification = true;
@@ -560,7 +573,7 @@ void Stp::selectDesignatedPorts()
 
     for (unsigned int i = 0; i < numPorts; i++) {
         InterfaceEntry *ie = ifTable->getInterface(i);
-        Ieee8021dInterfaceData *portData = ie->ieee8021dData();
+        Ieee8021dInterfaceData *portData = ie->getProtocolData<Ieee8021dInterfaceData>();
         ASSERT(portData != nullptr);
 
         if (portData->getRole() == Ieee8021dInterfaceData::ROOT || portData->getRole() == Ieee8021dInterfaceData::DISABLED)
@@ -597,7 +610,7 @@ void Stp::setAllDesignated()
     desPorts.clear();
     for (unsigned int i = 0; i < numPorts; i++) {
         InterfaceEntry *ie = ifTable->getInterface(i);
-        Ieee8021dInterfaceData *portData = ie->ieee8021dData();
+        Ieee8021dInterfaceData *portData = ie->getProtocolData<Ieee8021dInterfaceData>();
         ASSERT(portData != nullptr);
         if (portData->getRole() == Ieee8021dInterfaceData::DISABLED)
             continue;

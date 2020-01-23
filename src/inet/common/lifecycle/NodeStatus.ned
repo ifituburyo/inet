@@ -29,6 +29,7 @@ simple NodeStatus
     parameters:
         //TODO @signal, @statistic
         string initialStatus = default("UP"); // initial status of the network node
-        @display("i=block/cogwheel");
-        @signal[nodeStatusChanged](type=NodeStatus);
+        @display("i=block/cogwheel;is=s");
+        @signal[nodeStatusChanged](type=inet::NodeStatus);
 }
+

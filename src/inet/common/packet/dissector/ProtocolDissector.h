@@ -16,8 +16,8 @@
 #ifndef __INET_PROTOCOLDISSECTOR_H_
 #define __INET_PROTOCOLDISSECTOR_H_
 
-#include "inet/common/packet/Packet.h"
 #include "inet/common/Protocol.h"
+#include "inet/common/packet/Packet.h"
 
 namespace inet {
 
@@ -69,13 +69,13 @@ class INET_API ProtocolDissector : public cObject
     /**
      * Dissects the packet according to the protocol implemented by this ProtocolDissector.
      */
-    virtual void dissect(Packet *packet, ICallback& callback) const = 0;
+    virtual void dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const = 0;
 };
 
-class INET_API DefaultDissector : public ProtocolDissector
+class INET_API DefaultProtocolDissector : public ProtocolDissector
 {
   public:
-    virtual void dissect(Packet *packet, ICallback& callback) const override;
+    virtual void dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const override;
 };
 
 } // namespace

@@ -34,6 +34,7 @@ enum SapCode;
 //
 packet EthernetSignal
 {
+    bool srcMacFullDuplex;  // meta-info, for detecting model misconfiguration 
 }
 
 //
@@ -41,6 +42,7 @@ packet EthernetSignal
 //
 packet EthernetJamSignal extends EthernetSignal
 {
+    srcMacFullDuplex = false;
     long abortedPkTreeID = 0;  // this field stores the packetTreeId of the aborted packet
 }
 
@@ -50,7 +52,8 @@ packet EthernetJamSignal extends EthernetSignal
 //
 packet EthernetFilledIfgSignal extends EthernetSignal
 {
-    bitLength = INTERFRAME_GAP_BITS;
+    srcMacFullDuplex = false;
+    bitLength = b(INTERFRAME_GAP_BITS).get();
 }
 
 //
@@ -63,6 +66,6 @@ packet EthernetFilledIfgSignal extends EthernetSignal
 //
 class EthernetPhyHeader extends FieldsChunk
 {
-    chunkLength = B(PREAMBLE_BYTES + SFD_BYTES);
-    bool srcMacFullDuplex;  // meta-info, for detecting model misconfiguration 
+    chunkLength = PREAMBLE_BYTES + SFD_BYTES;
 }
+

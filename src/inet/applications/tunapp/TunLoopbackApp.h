@@ -18,23 +18,20 @@
 #ifndef __INET_TUNLOOPBACKAPP_H
 #define __INET_TUNLOOPBACKAPP_H
 
+#include "inet/common/lifecycle/LifecycleUnsupported.h"
 #include "inet/linklayer/tun/TunSocket.h"
 
 namespace inet {
 
-class INET_API TunLoopbackApp : public cSimpleModule
+class INET_API TunLoopbackApp : public cSimpleModule, public LifecycleUnsupported
 {
     protected:
-        const char *tunInterface;
+        const char *tunInterface = nullptr;
 
-        unsigned int packetsSent;
-        unsigned int packetsReceived;
+        unsigned int packetsSent = 0;
+        unsigned int packetsReceived = 0;
 
         TunSocket tunSocket;
-
-    public:
-        TunLoopbackApp();
-        virtual ~TunLoopbackApp();
 
     protected:
         void initialize(int stage) override;

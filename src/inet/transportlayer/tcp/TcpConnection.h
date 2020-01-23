@@ -21,7 +21,6 @@
 #define __INET_TCPCONNECTION_H
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/networklayer/common/L3Address.h"
 #include "inet/transportlayer/tcp/Tcp.h"
 #include "inet/transportlayer/tcp_common/TcpHeader.h"
@@ -89,9 +88,11 @@ enum TcpEventCode {
     TCP_E_SEND,
     TCP_E_CLOSE,
     TCP_E_ABORT,
+    TCP_E_DESTROY,
     TCP_E_STATUS,
     TCP_E_QUEUE_BYTES_LIMIT,
     TCP_E_READ,
+    TCP_E_SETOPTION,
 
     // TPDU types
     TCP_E_RCV_DATA,
@@ -117,7 +118,6 @@ enum TcpEventCode {
 //@{
 #define TCP_TIMEOUT_CONN_ESTAB        75  // 75 seconds
 #define TCP_TIMEOUT_FIN_WAIT_2        600  // 10 minutes
-#define TCP_TIMEOUT_2MSL              240  // 2 * 2 minutes
 #define TCP_TIMEOUT_SYN_REXMIT        3  // initially 3 seconds
 #define TCP_TIMEOUT_SYN_REXMIT_MAX    240  // 4 mins (will only be used with SYN+ACK: with SYN CONN_ESTAB occurs sooner)
 //@}
@@ -126,9 +126,6 @@ enum TcpEventCode {
 #define TCP_MAX_WIN                   65535  // 65535 bytes, largest value (16 bit) for (unscaled) window size
 #define DUPTHRESH                     3  // used for TcpTahoe, TcpReno and SACK (RFC 3517)
 #define MAX_SACK_BLOCKS               60  // will only be used with SACK
-#define TCP_OPTIONS_MAX_SIZE          40  // 40 bytes, 15 * 4 bytes (15 is the largest number in 4 bits length data offset field), TCP_MAX_HEADER_OCTETS - TCP_HEADER_OCTETS = 40
-#define TCP_OPTION_SACK_MIN_SIZE      10  // 10 bytes, option length = 8 * n + 2 bytes (NOP)
-#define TCP_OPTION_TS_SIZE            12  // 12 bytes, option length = 10 bytes + 2 bytes (NOP)
 #define PAWS_IDLE_TIME_THRESH         (24 * 24 * 3600)  // 24 days in seconds (RFC 1323)
 
 typedef std::list<Sack> SackList;
@@ -151,7 +148,7 @@ class INET_API TcpStateVariables : public cObject
   public:
     TcpStateVariables();
     virtual std::string str() const override;
-    virtual std::string detailedInfo() const override;
+    virtual std::string detailedInfo() const OMNETPP5_CODE(override);
 
   public:
     bool active;    // set if the connection was initiated by an active open
@@ -264,6 +261,19 @@ class INET_API TcpStateVariables : public cObject
     uint32 usedRcvBuffer;    // current amount of used bytes in tcp receive queue
     uint32 freeRcvBuffer;    // current amount of free bytes in tcp receive queue
     uint32 tcpRcvQueueDrops;    // number of drops in tcp receive queue
+
+    //ECN
+    bool ecnEchoState;         // indicates if connection is in echo mode (got CE indication from IP and didn't get CWR from sender yet)
+    bool sndCwr;               // set if ECE was handled
+    bool gotEce;               // set if packet with ECE arrived
+    bool gotCeIndication;      // set if CE was set in controlInfo from IP
+    bool ect;                  // set if this connection is ECN Capable (ECT stands for ECN-Capable transport - rfc-3168)
+    bool endPointIsWillingECN; // set if the other end-point is willing to use ECN
+    bool ecnSynSent;           // set if ECN-setup SYN packet was sent
+    bool ecnWillingness;       // set if current host is willing to use ECN
+    bool sndAck;               // set if sending Ack packet, used to set relevant info in controlInfo.
+    bool rexmit;               // set if retransmitting data, used to send not-ECT codepoint (rfc3168, p. 20)
+    simtime_t eceReactionTime; // records the time of the last ECE reaction
 };
 
 /**
@@ -314,12 +324,33 @@ class INET_API TcpStateVariables : public cObject
  * When the CLOSED state is reached, TCP will delete the TcpConnection object.
  *
  */
-class INET_API TcpConnection : public cObject
+class INET_API TcpConnection : public cSimpleModule
 {
   public:
+    static simsignal_t tcpConnectionAddedSignal;
+    static simsignal_t stateSignal;    // FSM state
+    static simsignal_t sndWndSignal;    // snd_wnd
+    static simsignal_t rcvWndSignal;    // rcv_wnd
+    static simsignal_t rcvAdvSignal;    // current advertised window (=rcv_adv)
+    static simsignal_t sndNxtSignal;    // sent seqNo
+    static simsignal_t sndAckSignal;    // sent ackNo
+    static simsignal_t rcvSeqSignal;    // received seqNo
+    static simsignal_t rcvAckSignal;    // received ackNo (=snd_una)
+    static simsignal_t unackedSignal;    // number of bytes unacknowledged
+    static simsignal_t dupAcksSignal;    // current number of received dupAcks
+    static simsignal_t pipeSignal;    // current sender's estimate of bytes outstanding in the network
+    static simsignal_t sndSacksSignal;    // number of sent Sacks
+    static simsignal_t rcvSacksSignal;    // number of received Sacks
+    static simsignal_t rcvOooSegSignal;    // number of received out-of-order segments
+    static simsignal_t rcvNASegSignal;    // number of received not acceptable segments
+    static simsignal_t sackedBytesSignal;    // current number of received sacked bytes
+    static simsignal_t tcpRcvQueueBytesSignal;    // current amount of used bytes in tcp receive queue
+    static simsignal_t tcpRcvQueueDropsSignal;    // number of drops in tcp receive queue
+
     // connection identification by apps: socketId
     int socketId = -1;    // identifies connection within the app
     int getSocketId() const { return socketId; }
+    void setSocketId(int newSocketId) { ASSERT(socketId == -1); socketId = newSocketId; }
 
     int listeningSocketId = -1;    // identifies listening connection within the app
     int getListeningSocketId() const { return listeningSocketId; }
@@ -331,6 +362,11 @@ class INET_API TcpConnection : public cObject
     const L3Address& getRemoteAddr() const { return remoteAddr; }
     int localPort = -1;
     int remotePort = -1;
+
+    // TCP options for this connection
+    int ttl = -1;
+    short dscp = -1;
+    short tos = -1;
 
   protected:
     Tcp *tcpMain = nullptr;    // Tcp module
@@ -362,27 +398,6 @@ class INET_API TcpConnection : public cObject
     cMessage *finWait2Timer = nullptr;
     cMessage *synRexmitTimer = nullptr;    // for retransmitting SYN and SYN+ACK
 
-    // statistics
-    cOutVector *sndWndVector = nullptr;    // snd_wnd
-    cOutVector *rcvWndVector = nullptr;    // rcv_wnd
-    cOutVector *rcvAdvVector = nullptr;    // current advertised window (=rcv_adv)
-    cOutVector *sndNxtVector = nullptr;    // sent seqNo
-    cOutVector *sndAckVector = nullptr;    // sent ackNo
-    cOutVector *rcvSeqVector = nullptr;    // received seqNo
-    cOutVector *rcvAckVector = nullptr;    // received ackNo (=snd_una)
-    cOutVector *unackedVector = nullptr;    // number of bytes unacknowledged
-
-    cOutVector *dupAcksVector = nullptr;    // current number of received dupAcks
-    cOutVector *pipeVector = nullptr;    // current sender's estimate of bytes outstanding in the network
-    cOutVector *sndSacksVector = nullptr;    // number of sent Sacks
-    cOutVector *rcvSacksVector = nullptr;    // number of received Sacks
-    cOutVector *rcvOooSegVector = nullptr;    // number of received out-of-order segments
-    cOutVector *rcvNASegVector = nullptr;    // number of received not acceptable segments
-
-    cOutVector *sackedBytesVector = nullptr;    // current number of received sacked bytes
-    cOutVector *tcpRcvQueueBytesVector = nullptr;    // current amount of used bytes in tcp receive queue
-    cOutVector *tcpRcvQueueDropsVector = nullptr;    // number of drops in tcp receive queue
-
   protected:
     /** @name FSM transitions: analysing events and executing state transitions */
     //@{
@@ -402,9 +417,11 @@ class INET_API TcpConnection : public cObject
     virtual void process_SEND(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg);
     virtual void process_CLOSE(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg);
     virtual void process_ABORT(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg);
+    virtual void process_DESTROY(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg);
     virtual void process_STATUS(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg);
     virtual void process_QUEUE_BYTES_LIMIT(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg);
     virtual void process_READ_REQUEST(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg);
+    virtual void process_OPTIONS(TcpEventCode& event, TcpCommand *tcpCommand, cMessage *msg);
     //@}
 
     /** @name Processing TCP segment arrivals. Invoked from processTCPSegment(). */
@@ -420,6 +437,7 @@ class INET_API TcpConnection : public cObject
      */
     virtual TcpEventCode process_RCV_SEGMENT(Packet *packet, const Ptr<const TcpHeader>& tcpseg, L3Address src, L3Address dest);
     virtual TcpEventCode processSegmentInListen(Packet *packet, const Ptr<const TcpHeader>& tcpseg, L3Address src, L3Address dest);
+    virtual TcpEventCode processSynInListen(Packet *packet, const Ptr<const TcpHeader>& tcpseg, L3Address srcAddr, L3Address destAddr);
     virtual TcpEventCode processSegmentInSynSent(Packet *packet, const Ptr<const TcpHeader>& tcpseg, L3Address src, L3Address dest);
     virtual TcpEventCode processSegment1stThru8th(Packet *packet, const Ptr<const TcpHeader>& tcpseg);
     virtual TcpEventCode processRstInSynReceived(const Ptr<const TcpHeader>& tcpseg);
@@ -445,6 +463,8 @@ class INET_API TcpConnection : public cObject
 
     /** Utility: clone a listening connection. Used for forking. */
     virtual TcpConnection *cloneListeningConnection();
+
+    virtual void initClonedConnection(TcpConnection *listenerConn);
 
     /** Utility: creates send/receive queues and tcpAlgorithm */
     virtual void initConnection(TcpOpenCommand *openCmd);
@@ -528,15 +548,14 @@ class INET_API TcpConnection : public cObject
     virtual void signalConnectionTimeout();
 
     /** Utility: start a timer */
-    void scheduleTimeout(cMessage *msg, simtime_t timeout)
-    { tcpMain->scheduleAt(simTime() + timeout, msg); }
+    void scheduleTimeout(cMessage *msg, simtime_t timeout) { scheduleAt(simTime() + timeout, msg); }
 
   protected:
     /** Utility: cancel a timer */
-    cMessage *cancelEvent(cMessage *msg) { return tcpMain->cancelEvent(msg); }
+    // cMessage *cancelEvent(cMessage *msg) { return tcpMain->cancelEvent(msg); }
 
     /** Utility: send IP packet */
-    static void sendToIP(Packet *pkt, const Ptr<TcpHeader>& tcpseg, L3Address src, L3Address dest);
+    virtual void sendToIP(Packet *pkt, const Ptr<TcpHeader>& tcpseg, L3Address src, L3Address dest);
 
     /** Utility: sends packet to application */
     virtual void sendToApp(cMessage *msg);
@@ -581,16 +600,14 @@ class INET_API TcpConnection : public cObject
     virtual void updateWndInfo(const Ptr<const TcpHeader>& tcpseg, bool doAlways = false);
 
   public:
+    TcpConnection() {}
+    TcpConnection(const TcpConnection& other) {}    //FIXME kludge
+    void initialize() {}
+
     /**
      * The "normal" constructor.
      */
-    TcpConnection(Tcp *mod, int socketId);
-
-    /**
-     * Note: this default ctor is NOT used to create live connections, only
-     * temporary ones so that TCPMain can invoke their segmentArrivalWhileClosed().
-     */
-    TcpConnection(Tcp *mod);
+    void initConnection(Tcp *mod, int socketId);
 
     /**
      * Destructor.
@@ -643,6 +660,8 @@ class INET_API TcpConnection : public cObject
      * connection structure must be deleted by the caller (TCP).
      */
     virtual bool processAppCommand(cMessage *msg);
+
+    virtual void handleMessage(cMessage *msg);
 
     /**
      * For SACK TCP. RFC 3517, page 3: "This routine returns whether the given

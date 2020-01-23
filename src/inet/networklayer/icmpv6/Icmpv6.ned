@@ -15,16 +15,10 @@
 // License along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 
-
-
 package inet.networklayer.icmpv6;
 
 //
 // ICMPv6 implementation.
-//
-// To send an ICMPv6 Echo Request, send any message to port pingIn with ~IPv6ControlInfo
-// attached. The message will be used as ping payload (encapsulated into an ~ICMPv6Message).
-// When an ICMPv6 Echo Reply is received, the payload message will be sent to pingOut.
 //
 // @see ~Ipv6, ~Ipv6RoutingTable, ~Ipv6NeighbourDiscovery
 //#FIXME gate descriptions needed...

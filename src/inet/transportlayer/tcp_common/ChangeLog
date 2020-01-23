@@ -1,5 +1,73 @@
 ====== inet-4.x ======
 
+2020-01-08  ------ inet-4.2.0 released ------
+
+2019-11-11  Levente Mészáros
+
+	Added missing @packetData annotation to TcpOption.
+
+2019-09-30  Marcel Marek
+
+	Added simplified version of TCP/IP ECN mechanism.
+
+	The mechanism is activated by setting ecnEnabled = true in .ini file. It
+	uses normal ECN-setup SYN and SYN-ACK  to establish a TCP flow. Sets
+	ECT(0) only on non-ACK packets.
+
+	Adds ECE and CWR flags to TCP header. Each packet marked with IP ECN CE
+	is echoed back with TCP ECE set
+	(allowing multiple packets be echoed back within the same window).
+
+2019-09-17  Zoltan Bojthe
+
+	Simplified serializing empty data part.
+
+2019-08-26  Zoltan Bojthe
+
+	Fixed CRC calculation for empty payload.
+
+2019-01-28  ------ inet-4.1.0 released ------
+
+2018-12-10  Zoltan Bojthe
+
+	Changed tcp CRC calculation function to static, and get crcMode from TCP header.
+
+2018-11-28  Levente Mészáros
+
+	Fixed protocol detection by port number in TCP/UDP.
+
+2018-10-19  Levente Mészáros
+
+	Extended TcpProtocolDissector to use tcpprotocol protocol group.
+
+2018-06-27  ------ inet-4.0.0 released ------
+
+2018-06-25  Zoltan Bojthe
+
+	CRC insertion calculates CRC only when crcMode is CRC_COMPUTED.
+
+2018-06-18  Zoltan Bojthe
+
+	CrcInsertion doesn't calculate CRC for fragmented packets and forwarded packets.
+
+2018-06-01  Zoltan Bojthe
+
+	Added B/b units to length constants and length fields of chunks.
+
+2018-05-25  Zoltan Bojthe
+
+	Removed @clone(->dup()) KLUDGEs from MSG files for owned pointers.
+
+2018-05-10  Zoltan Bojthe
+
+	Moved header serializers to the corresponding protocol folders.
+
+2018-03-09  Zoltan Bojthe
+
+	Optimized CRC calculation.
+
+2018-04-13  ------ inet-3.99.3 released ------
+
 2018-03-07  Zoltan Bojthe
 
 	Added TcpProtocolPrinter.
@@ -29,6 +97,7 @@
 	    ITCP -> ITcp
 	    TCPCommand -> TcpCommand
 	    TCPIPchecksum -> TcpIpChecksum
+	    TCP -> Tcp
 	    TCPOption -> TcpOption
 	    TCPOptionEnd -> TcpOptionEnd
 	    TCPOptionMaxSegmentSize -> TcpOptionMaxSegmentSize
@@ -81,6 +150,10 @@
 
 	Replaced "int foo @enum(FooEnum)" to FooEnum foo.
 
+2017-11-13  Zoltan Bojthe
+
+	Converted TCPOptionNumbers to enum, default CRC case was missed.
+
 2017-06-28  Zoltan Bojthe
 
 	Switched to using pointer array in MSG files for TCPOption.
@@ -111,6 +184,13 @@
 
 	Removed unused parts from TcpHeader.
 
+2017-02-22  Levente Mészáros
+
+	Ported serialization of TCP options.
+
+2017-02-21  Levente Mészáros
+
+	Ported TcpHeaderSerializer to new API.
 2017-01-25  Zoltan Bojthe
 
 	Renamed TCPSegment to TcpHeader.
@@ -139,20 +219,20 @@
 
 2017-02-17  Rudolf Hornig
 
-    build: removed OMNeT 5.0 compatibility code
+	build: removed OMNeT 5.0 compatibility code
 
 2016-12-23  Rudolf Hornig
 
-    build: removed deprecation warings
+	build: removed deprecation warings
 
 2016-10-20  Rudolf Hornig
 
-    refactoring: removed compatibility macros required for OMNeT++ 4.x builds
-    + warning fixes
+	refactoring: removed compatibility macros required for OMNeT++ 4.x builds
+	+ warning fixes
 
 2016-08-03  Zoltan Bojthe
 
-    MSG: @fieldNameSuffix("_var") removed when @omitGetVerb(true) not used
+	MSG: @fieldNameSuffix("_var") removed when @omitGetVerb(true) not used
 
 2016-06-15  ------ inet-3.4.0 released ------
 

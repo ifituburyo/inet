@@ -17,13 +17,13 @@
 
 #include "inet/applications/base/ApplicationPacket_m.h"
 #include "inet/applications/tcpapp/TcpSessionApp.h"
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/ModuleAccess.h"
-#include "inet/common/packet/chunk/ByteCountChunk.h"
-#include "inet/common/packet/chunk/BytesChunk.h"
-#include "inet/common/packet/Packet.h"
 #include "inet/common/TagBase_m.h"
 #include "inet/common/TimeTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
 
 namespace inet {
@@ -60,49 +60,31 @@ void TcpSessionApp::initialize(int stage)
             commands.push_back(Command(tSend, sendBytes));
         if (commands.size() == 0)
             throw cRuntimeError("sendScript is empty");
-    }
-    else if (stage == INITSTAGE_APPLICATION_LAYER) {
         timeoutMsg = new cMessage("timer");
-        nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-
-        if (isNodeUp()) {
-            timeoutMsg->setKind(MSGKIND_CONNECT);
-            scheduleAt(tOpen, timeoutMsg);
-        }
     }
 }
 
-bool TcpSessionApp::isNodeUp()
+void TcpSessionApp::handleStartOperation(LifecycleOperation *operation)
 {
-    return !nodeStatus || nodeStatus->getState() == NodeStatus::UP;
+    if (simTime() <= tOpen) {
+        timeoutMsg->setKind(MSGKIND_CONNECT);
+        scheduleAt(tOpen, timeoutMsg);
+    }
 }
 
-bool TcpSessionApp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
+void TcpSessionApp::handleStopOperation(LifecycleOperation *operation)
 {
-    Enter_Method_Silent();
-    if (dynamic_cast<NodeStartOperation *>(operation)) {
-        if (static_cast<NodeStartOperation::Stage>(stage) == NodeStartOperation::STAGE_APPLICATION_LAYER) {
-            if (simTime() <= tOpen) {
-                timeoutMsg->setKind(MSGKIND_CONNECT);
-                scheduleAt(tOpen, timeoutMsg);
-            }
-        }
-    }
-    else if (dynamic_cast<NodeShutdownOperation *>(operation)) {
-        if (static_cast<NodeShutdownOperation::Stage>(stage) == NodeShutdownOperation::STAGE_APPLICATION_LAYER) {
-            cancelEvent(timeoutMsg);
-            if (socket.getState() == TcpSocket::CONNECTED || socket.getState() == TcpSocket::CONNECTING || socket.getState() == TcpSocket::PEER_CLOSED)
-                close();
-            // TODO: wait until socket is closed
-        }
-    }
-    else if (dynamic_cast<NodeCrashOperation *>(operation)) {
-        if (static_cast<NodeCrashOperation::Stage>(stage) == NodeCrashOperation::STAGE_CRASH)
-            cancelEvent(timeoutMsg);
-    }
-    else
-        throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
+    cancelEvent(timeoutMsg);
+    if (socket.isOpen())
+        close();
+    delayActiveOperationFinish(par("stopOperationTimeout"));
+}
+
+void TcpSessionApp::handleCrashOperation(LifecycleOperation *operation)
+{
+    cancelEvent(timeoutMsg);
+    if (operation->getRootModule() != getContainingNode(this))
+        socket.destroy();
 }
 
 void TcpSessionApp::handleTimer(cMessage *msg)
@@ -112,7 +94,7 @@ void TcpSessionApp::handleTimer(cMessage *msg)
             if (activeOpen)
                 connect(); // sending will be scheduled from socketEstablished()
             else
-                ; //TODO
+                throw cRuntimeError("TODO");
             break;
 
         case MSGKIND_SEND:
@@ -146,7 +128,6 @@ void TcpSessionApp::sendData()
 
 Packet *TcpSessionApp::createDataPacket(long sendBytes)
 {
-    Packet *packet = new Packet("data1");
     const char *dataTransferMode = par("dataTransferMode");
     Ptr<Chunk> payload;
     if (!strcmp(dataTransferMode, "bytecount")) {
@@ -168,15 +149,15 @@ Packet *TcpSessionApp::createDataPacket(long sendBytes)
     }
     else
         throw cRuntimeError("Invalid data transfer mode: %d", dataTransferMode);
-    auto creationTimeTag = payload->addTag<CreationTimeTag>();
-    creationTimeTag->setCreationTime(simTime());
+    payload->addTag<CreationTimeTag>()->setCreationTime(simTime());
+    Packet *packet = new Packet("data1");
     packet->insertAtBack(payload);
     return packet;
 }
 
-void TcpSessionApp::socketEstablished(int connId, void *ptr)
+void TcpSessionApp::socketEstablished(TcpSocket *socket)
 {
-    TcpAppBase::socketEstablished(connId, ptr);
+    TcpAppBase::socketEstablished(socket);
 
     ASSERT(commandIndex == 0);
     timeoutMsg->setKind(MSGKIND_SEND);
@@ -184,20 +165,22 @@ void TcpSessionApp::socketEstablished(int connId, void *ptr)
     scheduleAt(std::max(tSend, simTime()), timeoutMsg);
 }
 
-void TcpSessionApp::socketDataArrived(int connId, void *ptr, Packet *msg, bool urgent)
+void TcpSessionApp::socketDataArrived(TcpSocket *socket, Packet *msg, bool urgent)
 {
-    TcpAppBase::socketDataArrived(connId, ptr, msg, urgent);
+    TcpAppBase::socketDataArrived(socket, msg, urgent);
 }
 
-void TcpSessionApp::socketClosed(int connId, void *ptr)
+void TcpSessionApp::socketClosed(TcpSocket *socket)
 {
-    TcpAppBase::socketClosed(connId, ptr);
+    TcpAppBase::socketClosed(socket);
     cancelEvent(timeoutMsg);
+    if (operationalState == State::STOPPING_OPERATION && !this->socket.isOpen())
+        startActiveOperationExtraTimeOrFinish(par("stopOperationExtraTime"));
 }
 
-void TcpSessionApp::socketFailure(int connId, void *ptr, int code)
+void TcpSessionApp::socketFailure(TcpSocket *socket, int code)
 {
-    TcpAppBase::socketFailure(connId, ptr, code);
+    TcpAppBase::socketFailure(socket, code);
     cancelEvent(timeoutMsg);
 }
 
@@ -233,7 +216,7 @@ void TcpSessionApp::parseScript(const char *script)
             s++;
 
         // add command
-        EV_DEBUG << " add command (" << tSend << "s, " << "B)\n";
+        EV_DEBUG << " add command (" << tSend << "s, " << numBytes << "B)\n";
         commands.push_back(Command(tSend, numBytes));
 
         // skip delimiter
@@ -263,6 +246,8 @@ void TcpSessionApp::finish()
 
 void TcpSessionApp::refreshDisplay() const
 {
+    TcpAppBase::refreshDisplay();
+
     std::ostringstream os;
     os << TcpSocket::stateName(socket.getState()) << "\nsent: " << bytesSent << " bytes\nrcvd: " << bytesRcvd << " bytes";
     getDisplayString().setTagArg("t", 0, os.str().c_str());

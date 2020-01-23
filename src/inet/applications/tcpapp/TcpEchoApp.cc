@@ -19,7 +19,7 @@
 #include "inet/applications/tcpapp/TcpEchoApp.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
-#include "inet/common/lifecycle/NodeOperations.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/packet/Packet_m.h"
 #include "inet/transportlayer/contract/tcp/TcpCommand_m.h"
 
@@ -66,6 +66,8 @@ void TcpEchoApp::sendDown(Packet *msg)
 
 void TcpEchoApp::refreshDisplay() const
 {
+    ApplicationBase::refreshDisplay();
+
     char buf[160];
     sprintf(buf, "threads: %d\nrcvd: %ld bytes\nsent: %ld bytes", socketMap.size(), bytesRcvd, bytesSent);
     getDisplayString().setTagArg("t", 0, buf);
@@ -74,6 +76,8 @@ void TcpEchoApp::refreshDisplay() const
 
 void TcpEchoApp::finish()
 {
+    TcpServerHostApp::finish();
+
     recordScalar("bytesRcvd", bytesRcvd);
     recordScalar("bytesSent", bytesSent);
 }
@@ -88,14 +92,13 @@ void TcpEchoAppThread::dataArrived(Packet *rcvdPkt, bool urgent)
     int64_t rcvdBytes = rcvdPkt->getByteLength();
     echoAppModule->bytesRcvd += rcvdBytes;
 
-    if (echoAppModule->echoFactor > 0) {
-        Packet *outPkt = new Packet(rcvdPkt->getName());
+    if (echoAppModule->echoFactor > 0 && sock->getState() == TcpSocket::CONNECTED) {
+        Packet *outPkt = new Packet(rcvdPkt->getName(), TCP_C_SEND);
         // reverse direction, modify length, and send it back
-        outPkt->setKind(TCP_C_SEND);
         int socketId = rcvdPkt->getTag<SocketInd>()->getSocketId();
-        outPkt->addTagIfAbsent<SocketReq>()->setSocketId(socketId);
+        outPkt->addTag<SocketReq>()->setSocketId(socketId);
 
-        long outByteLen = rcvdPkt->getByteLength() * echoAppModule->echoFactor;
+        long outByteLen = rcvdBytes * echoAppModule->echoFactor;
 
         if (outByteLen < 1)
             outByteLen = 1;

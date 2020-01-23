@@ -20,16 +20,13 @@ package inet.examples.inet.udpclientserver;
 
 import inet.common.misc.NetAnimTrace;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
-import inet.networklayer.configurator.generic.GenericNetworkConfigurator;
 import inet.node.inet.StandardHost;
 import ned.DatarateChannel;
-
 
 network UdpClientServer
 {
     parameters:
         double per = default(0);
-        @display("bgb=232,193");
     types:
         channel C extends DatarateChannel
         {
@@ -40,30 +37,30 @@ network UdpClientServer
     submodules:
         client1: StandardHost {
             parameters:
-                @display("p=53,67;i=device/pc3");
+                @display("p=250,100;i=device/pc3");
         }
         server: StandardHost {
             parameters:
-                @display("p=181,67;i=device/pc2");
+                @display("p=400,100;i=device/pc2");
         }
         unavserver: StandardHost {
             parameters:
-                @display("p=281,67;i=device/pc2");
+                @display("p=250,200;i=device/pc2");
         }
         unavserver2: StandardHost {
             parameters:
-                @display("p=361,67;i=device/pc2");
+                @display("p=400,200;i=device/pc2");
         }
         configurator: Ipv4NetworkConfigurator {
             parameters:
-                @display("p=53,134");
+                @display("p=100,100;is=s");
         }
-//        configurator: GenericNetworkConfigurator {
+//        configurator: NextHopNetworkConfigurator {
 //            parameters:
 //                @display("p=53,134");
 //        }
         netAnimTrace: NetAnimTrace {
-            @display("p=184,142");
+            @display("p=100,200;is=s");
         }
     connections allowunconnected:
         client1.pppg++ <--> C <--> server.pppg++;

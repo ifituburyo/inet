@@ -19,6 +19,7 @@
 #define __INET_TCPAPPBASE_H
 
 #include "inet/common/INETDefs.h"
+#include "inet/applications/base/ApplicationBase.h"
 #include "inet/transportlayer/contract/tcp/TcpSocket.h"
 
 namespace inet {
@@ -29,7 +30,7 @@ namespace inet {
  *
  * It needs the following NED parameters: localAddress, localPort, connectAddress, connectPort.
  */
-class INET_API TcpAppBase : public cSimpleModule, public TcpSocket::CallbackInterface
+class INET_API TcpAppBase : public ApplicationBase, public TcpSocket::ICallback
 {
   protected:
     TcpSocket socket;
@@ -48,7 +49,7 @@ class INET_API TcpAppBase : public cSimpleModule, public TcpSocket::CallbackInte
   protected:
     virtual void initialize(int stage) override;
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
-    virtual void handleMessage(cMessage *msg) override;
+    virtual void handleMessageWhenUp(cMessage *msg) override;
     virtual void finish() override;
     virtual void refreshDisplay() const override;
 
@@ -57,14 +58,17 @@ class INET_API TcpAppBase : public cSimpleModule, public TcpSocket::CallbackInte
     virtual void close();
     virtual void sendPacket(Packet *pkt);
 
-    /* TcpSocket::CallbackInterface callback methods */
     virtual void handleTimer(cMessage *msg) = 0;
-    virtual void socketEstablished(int connId, void *yourPtr) override;
-    virtual void socketDataArrived(int connId, void *yourPtr, Packet *msg, bool urgent) override;
-    virtual void socketPeerClosed(int connId, void *yourPtr) override;
-    virtual void socketClosed(int connId, void *yourPtr) override;
-    virtual void socketFailure(int connId, void *yourPtr, int code) override;
-    virtual void socketStatusArrived(int connId, void *yourPtr, TcpStatusInfo *status) override { delete status; }
+
+    /* TcpSocket::ICallback callback methods */
+    virtual void socketDataArrived(TcpSocket *socket, Packet *msg, bool urgent) override;
+    virtual void socketAvailable(TcpSocket *socket, TcpAvailableInfo *availableInfo) override { socket->accept(availableInfo->getNewSocketId()); }
+    virtual void socketEstablished(TcpSocket *socket) override;
+    virtual void socketPeerClosed(TcpSocket *socket) override;
+    virtual void socketClosed(TcpSocket *socket) override;
+    virtual void socketFailure(TcpSocket *socket, int code) override;
+    virtual void socketStatusArrived(TcpSocket *socket, TcpStatusInfo *status) override { }
+    virtual void socketDeleted(TcpSocket *socket) override {}
 };
 
 } // namespace inet

@@ -17,8 +17,8 @@ output-scalar-file = "${resultdir}/${configname}-${runnumber}.sca"
 output-vector-file = "${resultdir}/${configname}-${runnumber}.vec"
 snapshot-file = "${resultdir}/${configname}-${runnumber}.sna"
 
-network=TestIGMPNetwork
-**.igmpType = "Igmpv3"
+network = inet.test.moduletest.lib.TestIGMPNetwork
+**.igmp.typename = "Igmpv3"
 **.IPForward = true
 **.multicastForwarding = true
 

@@ -18,11 +18,10 @@
 #ifndef __INET_IEEE80211MODESET_H
 #define __INET_IEEE80211MODESET_H
 
-#include "inet/physicallayer/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/common/DelayedInitializer.h"
+#include "inet/physicallayer/ieee80211/mode/IIeee80211Mode.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
@@ -60,10 +59,10 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     bool containsMode(const IIeee80211Mode *mode) const { return findModeIndex(mode) != -1; }
     bool getIsMandatory(const IIeee80211Mode *mode) const;
 
-    const IIeee80211Mode *findMode(bps bitrate, Hz bandwidth = Hz(NaN)) const;
-    const IIeee80211Mode *findMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN)) const;
-    const IIeee80211Mode *getMode(bps bitrate, Hz bandwidth = Hz(NaN)) const;
-    const IIeee80211Mode *getMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN)) const;
+    const IIeee80211Mode *findMode(bps bitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
+    const IIeee80211Mode *findMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
+    const IIeee80211Mode *getMode(bps bitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
+    const IIeee80211Mode *getMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
     const IIeee80211Mode *getSlowestMode() const;
     const IIeee80211Mode *getFastestMode() const;
     const IIeee80211Mode *getSlowerMode(const IIeee80211Mode *mode) const;
@@ -89,7 +88,6 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
 };
 
 } // namespace physicallayer
-
 } // namespace inet
 
 #endif // ifndef __INET_IEEE80211MODESET_H

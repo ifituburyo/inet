@@ -15,22 +15,19 @@
 *                                                                         *
 ***************************************************************************/
 
-#include "inet/transportlayer/rtp/Rtcp.h"
-
-#include "inet/networklayer/contract/ipv4/Ipv4Address.h"
-#include "inet/common/lifecycle/LifecycleOperation.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/lifecycle/NodeStatus.h"
+#include "inet/networklayer/contract/ipv4/Ipv4Address.h"
+#include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
+#include "inet/transportlayer/contract/udp/UdpSocket.h"
+#include "inet/transportlayer/rtp/Rtcp.h"
 #include "inet/transportlayer/rtp/RtcpPacket_m.h"
 #include "inet/transportlayer/rtp/RtpInnerPacket_m.h"
 #include "inet/transportlayer/rtp/RtpParticipantInfo.h"
 #include "inet/transportlayer/rtp/RtpReceiverInfo.h"
 #include "inet/transportlayer/rtp/RtpSenderInfo.h"
-#include "inet/transportlayer/contract/udp/UdpControlInfo_m.h"
-#include "inet/transportlayer/contract/udp/UdpSocket.h"
 
 namespace inet {
-
 namespace rtp {
 
 Define_Module(Rtcp);
@@ -55,9 +52,9 @@ void Rtcp::initialize(int stage)
         _participantInfos.setName("ParticipantInfos");
     }
     else if (stage == INITSTAGE_TRANSPORT_LAYER) {
-        bool isOperational;
-        NodeStatus *nodeStatus = dynamic_cast<NodeStatus *>(findContainingNode(this)->getSubmodule("status"));
-        isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
+        cModule *node = findContainingNode(this);
+        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
+        bool isOperational = (!nodeStatus) || nodeStatus->getState() == NodeStatus::UP;
         if (!isOperational)
             throw cRuntimeError("This module doesn't support starting in node DOWN state");
     }
@@ -517,15 +514,6 @@ void Rtcp::calculateAveragePacketSize(int size)
     _averagePacketSize = sumPacketSize / (double)(++_packetsCalculated);
 }
 
-bool Rtcp::handleOperationStage(LifecycleOperation *operation, int stage, IDoneCallback *doneCallback)
-{
-    Enter_Method_Silent();
-
-    throw cRuntimeError("Unsupported lifecycle operation '%s'", operation->getClassName());
-    return true;
-}
-
 } // namespace rtp
-
 } // namespace inet
 

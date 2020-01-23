@@ -53,6 +53,8 @@ class INET_API Ipv6Route : public cObject, public IRoute
         dEIGRPExternal = 170,
         dBGPInternal = 200,
         dDHCPlearned = 254,
+        dBABEL = 125,
+        dLISP = 210,
         dUnknown = 255
     };
 
@@ -94,7 +96,7 @@ class INET_API Ipv6Route : public cObject, public IRoute
     virtual ~Ipv6Route() { delete _protocolData; }
 
     virtual std::string str() const override;
-    virtual std::string detailedInfo() const override;
+    virtual std::string detailedInfo() const OMNETPP5_CODE(override);
 
     /** To be called by the routing table when this route is added or removed from it */
     virtual void setRoutingTable(Ipv6RoutingTable *rt) { _rt = rt; }
@@ -103,7 +105,7 @@ class INET_API Ipv6Route : public cObject, public IRoute
     void setNextHop(const Ipv6Address& nextHop) { if (_nextHop != nextHop) { _nextHop = nextHop; changed(F_NEXTHOP); } }
     void setExpiryTime(simtime_t expiryTime) { if (expiryTime != _expiryTime) { _expiryTime = expiryTime; changed(F_EXPIRYTIME); } }
     void setMetric(int metric) override { if (_metric != metric) { _metric = metric; changed(F_METRIC); } }
-    void setAdminDist(unsigned int adminDist) { if (_adminDist != adminDist) { _adminDist = adminDist; changed(F_ADMINDIST); } }
+    void setAdminDist(unsigned int adminDist) override { if (_adminDist != adminDist) { _adminDist = adminDist; changed(F_ADMINDIST); } }
 
     const Ipv6Address& getDestPrefix() const { return _destPrefix; }
     virtual int getPrefixLength() const override { return _prefixLength; }
@@ -119,6 +121,7 @@ class INET_API Ipv6Route : public cObject, public IRoute
     virtual void setNextHop(const L3Address& nextHop) override { if (_nextHop != nextHop.toIpv6()) { _nextHop = nextHop.toIpv6(); changed(F_NEXTHOP); } }
     virtual void setSource(cObject *source) override { if (_source != source) { _source = source; changed(F_SOURCE); } }
     virtual void setSourceType(SourceType type) override { if (_sourceType != type) { _sourceType = type; changed(F_TYPE); } }
+    const char* getSourceTypeAbbreviation() const;
     virtual L3Address getDestinationAsGeneric() const override { return getDestPrefix(); }    //TODO rename Ipv6 method
     virtual L3Address getNextHopAsGeneric() const override { return getNextHop(); }
     virtual InterfaceEntry *getInterface() const override { return _interfacePtr; }

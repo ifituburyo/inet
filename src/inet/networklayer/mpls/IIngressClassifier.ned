@@ -12,14 +12,14 @@
 // See the GNU Lesser General Public License for more details.
 //
 
-
 package inet.networklayer.mpls;
 
 //
-// Prototype for ingress packet classifiers for MPLS.
+// Module interface for ingress packet classifiers for MPLS.
 //
 moduleinterface IIngressClassifier
 {
     parameters:
         @display("i=block/classifier");
 }
+

@@ -16,7 +16,7 @@
 //
 
 #include "inet/common/ModuleAccess.h"
-#include "RecipientAckPolicy.h"
+#include "inet/linklayer/ieee80211/mac/recipient/RecipientAckPolicy.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -62,7 +62,10 @@ bool RecipientAckPolicy::isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>&
 simtime_t RecipientAckPolicy::computeAckDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const
 {
     if (header->getMoreFragments()) {
-        simtime_t duration = ceil(header->getDuration() - modeSet->getSifsTime() - computeAckDuration(packet, header));
+        auto duration = header->getDurationField() - modeSet->getSifsTime() - computeAckDuration(packet, header);
+        duration = ceil(duration, SimTime(1, SIMTIME_US));
+        if (duration < 0)
+            EV_WARN << "ACK duration field would be negative, returning 0 instead.\n";
         return duration < 0 ? 0 : duration;
     }
     return 0;

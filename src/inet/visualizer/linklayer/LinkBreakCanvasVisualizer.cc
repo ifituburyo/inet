@@ -30,13 +30,19 @@ LinkBreakCanvasVisualizer::LinkBreakCanvasVisualization::LinkBreakCanvasVisualiz
 {
 }
 
+LinkBreakCanvasVisualizer::~LinkBreakCanvasVisualizer()
+{
+    if (displayLinkBreaks)
+        removeAllLinkBreakVisualizations();
+}
+
 void LinkBreakCanvasVisualizer::initialize(int stage)
 {
     LinkBreakVisualizerBase::initialize(stage);
     if (!hasGUI()) return;
     if (stage == INITSTAGE_LOCAL) {
         zIndex = par("zIndex");
-        auto canvas = visualizerTargetModule->getCanvas();
+        auto canvas = visualizationTargetModule->getCanvas();
         canvasProjection = CanvasProjection::getCanvasProjection(canvas);
         linkBreakGroup = new cGroupFigure("link breaks");
         linkBreakGroup->setZIndex(zIndex);
@@ -56,7 +62,7 @@ void LinkBreakCanvasVisualizer::refreshDisplay() const
         auto figure = linkBreakVisualization->figure;
         figure->setPosition((transmitterPosition + receiverPosition) / 2);
     }
-    visualizerTargetModule->getCanvas()->setAnimationSpeed(linkBreakVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
+    visualizationTargetModule->getCanvas()->setAnimationSpeed(linkBreakVisualizations.empty() ? 0 : fadeOutAnimationSpeed, this);
 }
 
 const LinkBreakVisualizerBase::LinkBreakVisualization *LinkBreakCanvasVisualizer::createLinkBreakVisualization(cModule *transmitter, cModule *receiver) const

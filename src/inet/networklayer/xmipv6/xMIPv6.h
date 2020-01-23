@@ -23,14 +23,13 @@
 #ifndef __INET_XMIPV6_H
 #define __INET_XMIPV6_H
 
-#include <vector>
 #include <map>
+#include <vector>
 
 #include "inet/common/INETDefs.h"
-
 #include "inet/networklayer/contract/ipv6/Ipv6Address.h"
-#include "inet/networklayer/xmipv6/BindingUpdateList.h"
 #include "inet/networklayer/ipv6tunneling/Ipv6Tunneling.h"
+#include "inet/networklayer/xmipv6/BindingUpdateList.h"
 #include "inet/networklayer/xmipv6/MobilityHeader_m.h"    // for HAOpt & RH2
 
 namespace inet {
@@ -237,7 +236,7 @@ class INET_API xMIPv6 : public cSimpleModule
     xMIPv6::BuTransmitIfEntry *fetchBUTransmitIfEntry(InterfaceEntry *ie, const Ipv6Address& dest);
 
     /**
-     * Append an Ipv6ControlInfo object to the Mobility Messages (BU, BA etc) and send it out to the Ipv6 Module
+     * Append tags to the Mobility Messages (BU, BA etc) and send it out to the Ipv6 Module
      */
     void sendMobilityMessageToIPv6Module(Packet *msg, const Ipv6Address& destAddr,
             const Ipv6Address& srcAddr = Ipv6Address::UNSPECIFIED_ADDRESS, int interfaceId = -1,

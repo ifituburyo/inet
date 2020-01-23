@@ -29,7 +29,7 @@ namespace inet {
 /**
  * Consumes and prints packets received from the Udp module. See NED for more info.
  */
-class INET_API UdpSink : public ApplicationBase
+class INET_API UdpSink : public ApplicationBase, public UdpSocket::ICallback
 {
   protected:
     enum SelfMsgKinds { START = 1, STOP };
@@ -40,7 +40,6 @@ class INET_API UdpSink : public ApplicationBase
     simtime_t startTime;
     simtime_t stopTime;
     cMessage *selfMsg = nullptr;
-
     int numReceived = 0;
 
   public:
@@ -58,12 +57,16 @@ class INET_API UdpSink : public ApplicationBase
     virtual void finish() override;
     virtual void refreshDisplay() const override;
 
+    virtual void socketDataArrived(UdpSocket *socket, Packet *packet) override;
+    virtual void socketErrorArrived(UdpSocket *socket, Indication *indication) override;
+    virtual void socketClosed(UdpSocket *socket) override;
+
     virtual void processStart();
     virtual void processStop();
 
-    virtual bool handleNodeStart(IDoneCallback *doneCallback) override;
-    virtual bool handleNodeShutdown(IDoneCallback *doneCallback) override;
-    virtual void handleNodeCrash() override;
+    virtual void handleStartOperation(LifecycleOperation *operation) override;
+    virtual void handleStopOperation(LifecycleOperation *operation) override;
+    virtual void handleCrashOperation(LifecycleOperation *operation) override;
 };
 
 } // namespace inet

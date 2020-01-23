@@ -16,14 +16,14 @@
 //
 
 #include "inet/common/packet/dissector/ProtocolDissectorRegistry.h"
-#include "inet/physicallayer/shortcut/ShortcutPhyProtocolDissector.h"
 #include "inet/physicallayer/shortcut/ShortcutPhyHeader_m.h"
+#include "inet/physicallayer/shortcut/ShortcutPhyProtocolDissector.h"
 
 namespace inet {
 
 Register_Protocol_Dissector(&Protocol::shortcutPhy, ShortcutPhyProtocolDissector);
 
-void ShortcutPhyProtocolDissector::dissect(Packet *packet, ICallback& callback) const
+void ShortcutPhyProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     const auto& header = packet->popAtFront<ShortcutPhyHeader>();
     callback.startProtocolDataUnit(&Protocol::shortcutPhy);

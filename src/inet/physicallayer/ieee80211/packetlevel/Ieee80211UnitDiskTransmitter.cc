@@ -18,12 +18,11 @@
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/physicallayer/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/contract/packetlevel/RadioControlInfo_m.h"
-#include "inet/physicallayer/unitdisk/UnitDiskTransmission.h"
 #include "inet/physicallayer/ieee80211/packetlevel/Ieee80211UnitDiskTransmission.h"
 #include "inet/physicallayer/ieee80211/packetlevel/Ieee80211UnitDiskTransmitter.h"
+#include "inet/physicallayer/unitdisk/UnitDiskTransmission.h"
 
 namespace inet {
-
 namespace physicallayer {
 
 Define_Module(Ieee80211UnitDiskTransmitter);
@@ -35,6 +34,7 @@ Ieee80211UnitDiskTransmitter::Ieee80211UnitDiskTransmitter() :
 
 void Ieee80211UnitDiskTransmitter::initialize(int stage)
 {
+    Ieee80211TransmitterBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         communicationRange = m(par("communicationRange"));
         interferenceRange = m(par("interferenceRange"));
@@ -63,8 +63,8 @@ const ITransmission *Ieee80211UnitDiskTransmitter::createTransmission(const IRad
     IMobility *mobility = transmitter->getAntenna()->getMobility();
     const Coord startPosition = mobility->getCurrentPosition();
     const Coord endPosition = mobility->getCurrentPosition();
-    const EulerAngles startOrientation = mobility->getCurrentAngularPosition();
-    const EulerAngles endOrientation = mobility->getCurrentAngularPosition();
+    const Quaternion startOrientation = mobility->getCurrentAngularPosition();
+    const Quaternion endOrientation = mobility->getCurrentAngularPosition();
     const simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
     const simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
     const simtime_t dataDuration = duration - headerDuration - preambleDuration;
@@ -72,6 +72,5 @@ const ITransmission *Ieee80211UnitDiskTransmitter::createTransmission(const IRad
 }
 
 } // namespace physicallayer
-
 } // namespace inet
 

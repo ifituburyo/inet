@@ -20,7 +20,7 @@
 
 #include "inet/common/INETDefs.h"
 #include "inet/common/INETMath.h"
-#include "IIndicatorFigure.h"
+#include "inet/common/figures/IIndicatorFigure.h"
 
 namespace inet {
 
@@ -37,6 +37,7 @@ class INET_API IndicatorLabelFigure : public cLabelFigure, public IIndicatorFigu
 
   public:
     explicit IndicatorLabelFigure(const char *name = nullptr) : cLabelFigure(name) {}
+    virtual const Point getSize() const override { return getBounds().getSize(); }
     virtual void setValue(int series, simtime_t timestamp, double value) override;
     virtual const char *getTextFormat() const { return textFormat.c_str(); }
     virtual void setTextFormat(const char *textFormat) { this->textFormat = textFormat; refresh(); }
