@@ -25,7 +25,7 @@
 
 #include "inet/common/INETDefs.h"
 
-#include "inet/mobility/static/StationaryMobility.h"
+#include "inet/mobility/base/StationaryMobilityBase.h"
 
 
 namespace inet {
@@ -36,7 +36,7 @@ namespace inet {
  * @ingroup mobility
  * @author Florian Meyer
  */
-class INET_API StaticBinaryTreeMobility : public inet::StationaryMobility
+class INET_API StaticBinaryTreeMobility : public StationaryMobilityBase
 {
   protected:
     /** @brief Initializes the position according to the mobility model. */
