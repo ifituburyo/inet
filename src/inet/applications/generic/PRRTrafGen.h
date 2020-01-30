@@ -56,8 +56,8 @@ class PRRTrafGen : public inet::IpvxTrafGen, public omnetpp::cIListener
     virtual void handleMessage(omnetpp::cMessage *msg) override;
 
     virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, bool b, omnetpp::cObject *details) override {}
-    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, long l, omnetpp::cObject *details) override {}
-    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, unsigned long l, omnetpp::cObject *details) override {}
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, intval_t l, omnetpp::cObject *details) override {}
+    virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, uintval_t l, omnetpp::cObject *details) override {}
     virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, double d, omnetpp::cObject *details) override {}
     virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, const omnetpp::SimTime& t, omnetpp::cObject *details) override {}
     virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, const char *s, omnetpp::cObject *details) override {}
