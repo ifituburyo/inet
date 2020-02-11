@@ -25,8 +25,7 @@ module Ieee802154NarrowbandScalarRadio extends Ieee802154NarrowbandRadio
     parameters:
         transmitter.typename = default("Ieee802154NarrowbandScalarTransmitter");
         receiver.typename = default("Ieee802154NarrowbandScalarReceiver");
-
-
+	
         centerFrequency = 2450 MHz;
 
         // B_20dB ATmega256RFR2 (page 564)
@@ -47,27 +46,42 @@ module Ieee802154NarrowbandScalarRadio extends Ieee802154NarrowbandRadio
         transmitter.preambleDuration = (4*8/4) * 16 us;
 
         // RSSI sensitivity (ATmega256RFR2, page 566)
+        // Note that a busy channel is also reported if
+        // a reception was started and for this the signal
+        // only has to be larger than the sensitivity.
         receiver.energyDetection = default(-90dBm);
 
-        // Receiver sensitivity (ATmega256RFR2, page 565)
-        // TODO That is not quite true, because sensitivity
-        //      is defined as the input signal power that yields
-        //      a PER < 1% for a PSDU of 20 octets, but INET handles it
-        //      as minimum reception power.
-        receiver.sensitivity = default(-100dBm);
-
-        // There is no fixed boundary, because of the
-        // DSSS and the capture effect. Taking the sensitivity minus some
-        // arbitrary value as an approximate guess.
-        receiver.minInterferencePower = default(-120dBm);
-
         // Minimum SNIR
-        // -8 dB results into 98% PER for a PSDU of 20 octets
-        receiver.snirThreshold = default(-8 dB);
+        // -3.3 dB SNIR results in 98% PER for a PSDU of 20 octets.
+        // Use this as cut-off since in theory,
+        // there is no fixed boundary.
+        // The PSDU excludes preamble, SFD and PHR, but the latter
+        // two are also relevant for the PER, so the total length
+        // for the calculation is 22 octets.
+        receiver.snirThreshold = default(-3.3 dB);
+
+        // Receiver sensitivity
+        // While, e.g. in the datasheet of the ATmega256RFR2,
+        // the sensitivity is specified as the input signal power
+        // resulting in 1% PER, the sensitivity in INET is
+        // in fact the minimum reception power.
+        // So we use the same cut-off as for the SNIR of 98%.
+        // -100.44 dBm - 3.3 dB = -103.74 dBm
+        receiver.sensitivity = default(-103.74dBm);
+
+        // Minimum interference power
+        // Also very weak signals can in principle influence the
+        // SNIR. However, the physcial layer of IEEE 802.15.4
+        // is quite robust against interference:
+        // For a signal power of -100 dBm an interfering signal
+        // of -103.74 dBm = 4.23e-14 W is increasing the noise
+        // power from -100.44 dBm = 9.04e-14 W to
+        // 13.27e-14 W = -98.77 dBm. This results in a PER
+        // of 26% instead of 1%.
+        receiver.minInterferencePower = default(-103.74dBm);
 
         // TX Output power (typ. 3.5 dBm, ATmega256RFR2, page 564)
         transmitter.power = default(2.24mW);
 
         @class(FlatRadioBase);
-        //@class(Ieee802154NarrowbandRadio);
 }

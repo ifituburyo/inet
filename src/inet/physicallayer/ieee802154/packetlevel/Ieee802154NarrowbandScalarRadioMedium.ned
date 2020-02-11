@@ -47,6 +47,7 @@ module Ieee802154NarrowbandScalarRadioMedium extends RadioMedium
         // so with a specified sensitivity of -100 dBm this results
         // in a noise power of -100.44 dBm.
         backgroundNoise.power = default(-100.44dBm);
-        backgroundNoise.dimensions = default("time");
+        //backgroundNoise.dimensions = default("time");
+        backgroundNoise.bandwidth = default(2.8 MHz);
 }
 
